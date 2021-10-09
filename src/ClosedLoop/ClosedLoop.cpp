@@ -20,7 +20,7 @@
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
 
-static uint8_t rateRequested;							// The sampling rate
+static uint16_t rateRequested;							// The sampling rate
 static uint8_t modeRequested;							// The sampling mode(immediate or on next move)
 static uint32_t filterRequested;						// A filter for what data is collected
 static DriverId deviceRequested;						// The driver being sampled
@@ -33,20 +33,9 @@ static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 
 static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned int size) noexcept
 {
-	// Create default filename if one is not provided
-	if (filename.IsEmpty())
-	{
-		const time_t time = reprap.GetPlatform().GetDateTime();
-		tm timeInfo;
-		gmtime_r(&time, &timeInfo);
-		filename.printf("0:/sys/closed-loop/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
-						(unsigned int) deviceRequested.boardAddress,
-						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-	}
-
 	// Create the file
 	FileStore * const f = MassStorage::OpenFile(filename.c_str(), OpenMode::write, size);
-	if (f == nullptr) {return false;}
+	if (f == nullptr) { return false; }
 
 	// Write the header line
 	{
@@ -87,68 +76,41 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 {
 	// Check what the user wants - record or report
 	// Record - A number of samples (Snn) is given to record
-	// Report - Samples (Snn) is not given, and we are already recording
+	// Report - Samples (Snn) is not given
 	bool recording = false;
 	uint32_t parsedS;
-	gb.TryGetUIValue('S', parsedS, recording);
-
-	// If the user is requesting a recording, check if one is already happening
-	if (recording && closedLoopFile != nullptr)
-	{
-		CloseDataCollectionFile();
-		reply.copy("Closed loop data is already being collected");
-		return GCodeResult::error;
-	}
-
-	// If the user is requesting a report, check if a recording is happening
-	if (!recording && closedLoopFile == nullptr)
-	{
-		reply.copy("Closed loop data is not being collected");
-		return GCodeResult::warning;
-	}
-
-	// If we are reporting, deal with that
+	gb.TryGetLimitedUIValue('S', parsedS, recording, MaxSamples + 1);
 	if (!recording)
 	{
-		reply.printf("Collecting sample: %d/%d", (int) expectedRemoteSampleNumber, (int) numSamplesRequested);
-		return GCodeResult::ok;
+		// No S parameter was given so this is a request for the recording status
+		if (closedLoopFile == nullptr)
+		{
+			reply.copy("Closed loop data is not being collected");
+			return GCodeResult::warning;							// looks like the closed loop plugin relies on this being a warning
+		}
+		else
+		{
+			reply.printf("Collecting sample: %u/%u", expectedRemoteSampleNumber, (unsigned int)numSamplesRequested);
+			return GCodeResult::ok;
+		}
 	}
 
-	// We are recording, parse the additional parameters
+	// If we get here then the user is requesting a recording
+	if (closedLoopFile != nullptr)									// check if one is already happening
+	{
+		CloseDataCollectionFile();
+		reply.copy("Closed loop data is already being collected; the file will now be closed");
+		return GCodeResult::error;
+	}
+
+	// Parse the additional parameters
 	bool seen = false;
-	uint32_t parsedA, parsedD, parsedR, parsedV;
+	uint32_t parsedA = 0, parsedD = 0, parsedR = 0, parsedV = 0;
 
-	gb.TryGetUIValue('A', parsedA, seen);
-	if (!seen) {parsedA = 0;}
-
-	seen = false;
+	gb.TryGetLimitedUIValue('A', parsedA, seen, 2);					// valid collection modes are 0 and 1
 	gb.TryGetUIValue('D', parsedD, seen);
-	if (!seen) {parsedD = 0;}
-
-	seen = false;
-	gb.TryGetUIValue('R', parsedR, seen);
-	if (!seen) {parsedR = 100;}
-
-	seen = false;
+	gb.TryGetLimitedUIValue('R', parsedR, seen, std::numeric_limits<uint16_t>::max() + 1);
 	gb.TryGetUIValue('V', parsedV, seen);
-	if (!seen) {parsedV = 0;}
-
-	// Validate the parameters
-	if (!driverId.IsRemote())	// Check the chosen drive is a closed loop drive - The expansion board does this also, so we just need to check that the driver is remote.
-	{
-		reply.printf("Drive is not in closed loop mode (driverId.IsRemote() = %d)", driverId.IsRemote());
-		return GCodeResult::error;
-	}
-	if (parsedS > MaxSamples)
-	{
-		reply.printf("Maximum number of samples that can be collected is %d", MaxSamples);
-		return GCodeResult::error;
-	}
-	if (parsedA > 1)
-	{
-		reply.printf("Mode (A) can be either 0 or 1 - A%d is invalid", (int) parsedA);
-		return GCodeResult::error;
-	}
 
 	// Validation passed - store the values
 	modeRequested = parsedA;
@@ -159,16 +121,28 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	numSamplesRequested = parsedS;
 
 	// Estimate how large the file will be
-	const uint32_t preallocSize = 1000;	//TODO! numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
+	const unsigned int numVariables = Bitmap<uint32_t>(filterRequested).CountSetBits() + 1;		// 1 extra for time stamp
+	const uint32_t preallocSize = numSamplesRequested * ((numVariables * 9) + 4);
 
 	// Create the file
-	String<MaxFilenameLength> closedLoopFileName;
+	String<StringLength50> tempFilename;
 	if (gb.Seen('F'))
 	{
-		String<StringLength50> tempFilename;
 		gb.GetQuotedString(tempFilename.GetRef(), false);
-		MassStorage::CombineName(closedLoopFileName.GetRef(), "0:/sys/closed-loop/", tempFilename.c_str());
 	}
+	else
+	{
+		// Create default filename as none was provided
+		const time_t time = reprap.GetPlatform().GetDateTime();
+		tm timeInfo;
+		gmtime_r(&time, &timeInfo);
+		tempFilename.printf("0:/sys/closed-loop/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
+						(unsigned int) deviceRequested.boardAddress,
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+	}
+
+	String<MaxFilenameLength> closedLoopFileName;
+	MassStorage::CombineName(closedLoopFileName.GetRef(), "0:/sys/closed-loop/", tempFilename.c_str());
 	OpenDataCollectionFile(closedLoopFileName, preallocSize);
 
 	// If no samples have been requested, return with an info message
@@ -197,30 +171,46 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 	FileStore * const f = closedLoopFile;
 	if (f != nullptr)
 	{
-		unsigned int numSamples = msg.numSamples;
-		const size_t variableCount = msg.GetVariableCount();
-
-		while (numSamples != 0)
+		if (msg.firstSampleNumber != expectedRemoteSampleNumber)
 		{
-			// Compile the data
-			String<StringLength500> currentLine;
-			size_t sampleIndex = msg.numSamples - numSamples;
-			currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
-			for (size_t i=0; i < variableCount; i++)
-			{
-				currentLine.catf(",%f", (double) msg.data[sampleIndex*variableCount + i]);
-			}
-			currentLine.cat("\n");
-
-			// Write the data
-			f->Write(currentLine.c_str());
-
-			// Increment the working variables
-			expectedRemoteSampleNumber++;
-			numSamples--;
+			f->Write("Data lost\n");
+			CloseDataCollectionFile();
 		}
+		else
+		{
+			unsigned int numSamples = msg.numSamples;
+			const size_t variableCount = msg.GetVariableCount();
 
-		if (msg.lastPacket) {CloseDataCollectionFile();}
+			while (numSamples != 0)
+			{
+				// Compile the data
+				String<StringLength256> currentLine;
+				size_t sampleIndex = msg.numSamples - numSamples;
+				//TODO use more intelligent formatting depending on the data type, to reduce the amount of data written
+				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
+				for (size_t i = 0; i < variableCount; i++)
+				{
+					currentLine.catf(",%.5f", (double)msg.data[sampleIndex*variableCount + i]);
+				}
+				currentLine.cat("\n");
+
+				// Write the data
+				f->Write(currentLine.c_str());
+
+				// Increment the working variables
+				expectedRemoteSampleNumber++;
+				numSamples--;
+			}
+
+			if (msg.lastPacket)
+			{
+				if (msg.overflowed)
+				{
+					f->Write("Buffer overflowed\n");
+				}
+				CloseDataCollectionFile();
+			}
+		}
 	}
 }
 

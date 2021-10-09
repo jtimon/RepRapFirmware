@@ -9,6 +9,8 @@
 
 #if HAS_LINUX_INTERFACE
 
+#include "LinuxInterface.h"
+
 #include <Storage/CRC32.h>
 #include <algorithm>
 
@@ -800,7 +802,6 @@ bool DataTransfer::IsReady() noexcept
 		uint32_t startTime = millis();
 		while (!digitalRead(SbcSSPin))			// transfer is complete if SS is high
 		{
-			RTOSIface::Yield();
 			if (millis() - startTime > SpiTransferTimeout)
 			{
 				StatefulTransferReset(true);
@@ -986,7 +987,7 @@ bool DataTransfer::IsReady() noexcept
 			break;
 		}
 	}
-	else if (millis() - lastTransferTime > SpiTransferTimeout)
+	else if (!reprap.GetLinuxInterface().IsWritingIap() && millis() - lastTransferTime > SpiTransferTimeout)
 	{
 		// Reset failed transfers automatically after a certain period of time
 		ResetTransfer();

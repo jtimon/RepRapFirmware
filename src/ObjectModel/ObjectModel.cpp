@@ -136,6 +136,10 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	case TypeCode::Port:
 		iopVal->AppendPinName(str);
 		break;
+
+	case TypeCode::UniqueId:
+		uniqueIdVal->AppendCharsToString(str);
+		break;
 	}
 }
 
@@ -198,23 +202,39 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 	// While updating firmware on expansion/tool boards we sometimes get a null board type string here, so allow for that
 	if (sVal != nullptr)
 	{
-		const char *const p = strchr(sVal, '|');
-		const size_t indexOfDivider = (p == nullptr) ? strlen(sVal) : p - sVal;
+		// Split the string into three field separate by vertical bar. These are board short name, firmware version, and firmware date.
+		const char * p = strchr(sVal, '|');
+		const size_t indexOfDivider1 = (p == nullptr) ? strlen(sVal) : p - sVal;
+		if (p != nullptr)
+		{
+			p = strchr(p + 1, '|');
+		}
+		const size_t indexOfDivider2 = (p == nullptr) ? strlen(sVal) : p - sVal;
 
 		switch((ExpansionDetail)param)
 		{
 		case ExpansionDetail::shortName:
-			rslt.catn(sVal, indexOfDivider);
+			rslt.catn(sVal, indexOfDivider1);
 			break;
 
 		case ExpansionDetail::firmwareVersion:
-			rslt.cat((p == nullptr) ? "unknown" : sVal + indexOfDivider + 1);
+			if (indexOfDivider2 > indexOfDivider1)
+			{
+				rslt.catn(sVal + indexOfDivider1 + 1, indexOfDivider2 - indexOfDivider1 - 1);
+			}
 			break;
 
 		case ExpansionDetail::firmwareFileName:
 			rslt.cat("Duet3Firmware_");
-			rslt.catn(sVal, indexOfDivider);
+			rslt.catn(sVal, indexOfDivider1);
 			rslt.cat(".bin");
+			break;
+
+		case ExpansionDetail::firmwareDate:
+			if (strlen(sVal) > indexOfDivider2)
+			{
+				rslt.cat(sVal + indexOfDivider2 + 1);
+			}
 			break;
 
 		default:
@@ -727,7 +747,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		break;
 
 	case TypeCode::Special:
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
 		switch ((ExpressionValue::SpecialType)val.param)
 		{
 		case ExpressionValue::SpecialType::sysDir:
@@ -743,6 +763,12 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 	case TypeCode::Port:
 		ReportPinNameAsJson(buf, val);
+		break;
+
+	case TypeCode::UniqueId:
+		buf->cat('"');
+		val.uniqueIdVal->AppendCharsToBuffer(buf);
+		buf->cat('"');
 		break;
 
 	case TypeCode::ObjectModel_tc:
@@ -889,7 +915,7 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 }
 
 // Get the value of an object
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException)
+ExpressionValue ObjectModel::GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException)
 decrease(strlen(idString))	// recursion variant
 {
 	if (classDescriptor == nullptr)
@@ -976,7 +1002,7 @@ decrease(strlen(idString))	// recursion variant
 			return val;
 		case '.':
 			context.CheckStack(StackUsage::GetObjectValue_withTable);
-			return val.omVal->GetObjectValue(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
+			return val.omVal->GetObjectValueUsingTableNumber(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
 		case '^':
 			throw context.ConstructParseException("object is not an array");
 		default:

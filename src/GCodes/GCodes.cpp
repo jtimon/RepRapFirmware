@@ -341,7 +341,7 @@ bool GCodes::WaitingForAcknowledgement() const noexcept
 
 // Return the current position of the file being printed in bytes.
 // Unlike other methods returning file positions it never returns noFilePosition
-FilePosition GCodes::GetPrintingFilePosition() const noexcept
+FilePosition GCodes::GetFilePosition() const noexcept
 {
 #if HAS_LINUX_INTERFACE
 	if (!reprap.UsingLinuxInterface())
@@ -351,20 +351,25 @@ FilePosition GCodes::GetPrintingFilePosition() const noexcept
 		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 		if (!fileBeingPrinted.IsLive())
 		{
-			return 0;
+			return noFilePosition;
 		}
 #endif
 	}
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
-	const FilePosition pos = (fileGCode->IsDoingFileMacro())
+	return (fileGCode->IsDoingFileMacro())
 			? printFilePositionAtMacroStart						// the position before we started executing the macro
 				: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
-
-	return (pos == noFilePosition) ? 0 : pos;
 #else
-	return 0;
+	return noFilePosition;
 #endif
+}
+
+// Return the current position of the file being printed in bytes or noFilePosition if unknown
+FilePosition GCodes::GetPrintingFilePosition() const noexcept
+{
+	const FilePosition pos = GetFilePosition();
+	return (pos != noFilePosition) ? pos : 0;
 }
 
 // Start running the config file
@@ -930,8 +935,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			pauseRestorePoint.filePos = GetPrintingFilePosition();
-			while (fileGCode->IsDoingFileMacro())						// must call this after GetPrintingFilePosition because it changes IsDoingFileMacro
+			pauseRestorePoint.filePos = GetFilePosition();
+			while (fileGCode->IsDoingFileMacro())						// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				pausedInMacro = true;
 				fileGCode->PopState();
@@ -1059,10 +1064,15 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 		}
 
 		// Prepare notification for the Linux side
-		FilePosition reportedFilePosition = pausedInMacro ? printFilePositionAtMacroStart : gb.GetFilePosition();
-		reprap.GetLinuxInterface().SetPauseReason(reportedFilePosition, pauseReason);
+		reprap.GetLinuxInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
 	}
 #endif
+
+	if (pauseRestorePoint.filePos == noFilePosition)
+	{
+		// Make sure we expose usable values (which noFilePosition is not)
+		pauseRestorePoint.filePos = 0;
+	}
 
 	if (msg != nullptr)
 	{
@@ -1154,7 +1164,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;
 		pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
 
-		pauseRestorePoint.filePos = GetPrintingFilePosition();
+		pauseRestorePoint.filePos = GetFilePosition();
 		pauseRestorePoint.proportionDone = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -1178,6 +1188,11 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.moveCoords[axis] = moveState.currentUserPosition[axis];
 	}
 
+	if (pauseRestorePoint.filePos == noFilePosition)
+	{
+		// Make sure we expose usable values (which noFilePosition is not)
+		pauseRestorePoint.filePos = 0;
+	}
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 	pauseState = PauseState::paused;
@@ -4043,12 +4058,6 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS
 			return GCodeResult::error;
 		}
 
-		if (Filament::IsInUse(filamentName.c_str()))
-		{
-			reply.copy("One filament type can be only assigned to a single tool");
-			return GCodeResult::error;
-		}
-
 		SafeStrncpy(filamentToLoad, filamentName.c_str(), ARRAY_SIZE(filamentToLoad));
 		gb.SetState(GCodeState::loadingFilament);
 
@@ -4495,7 +4504,7 @@ void GCodes::SetAllAxesNotHomed() noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 
 // Write the config-override file returning true if an error occurred
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept

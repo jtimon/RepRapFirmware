@@ -30,6 +30,7 @@ Licence: GPL
 #include <Fans/FansManager.h>
 #include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
+#include "UniqueId.h"
 #include <Storage/FileStore.h>
 #include <Storage/FileData.h>
 #include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
@@ -444,7 +445,7 @@ public:
 	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
-	void EnableDrivers(size_t axisOrExtruder) noexcept;
+	void EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept;
 	void EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept;
 	void DisableAllDrivers() noexcept;
 	void DisableDrivers(size_t axisOrExtruder) noexcept;
@@ -526,7 +527,7 @@ public:
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const noexcept { return zProbeOnFilter; }
 	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const noexcept{ return zProbeOffFilter; }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const noexcept;
 #endif
 
@@ -627,8 +628,8 @@ public:
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
 #if MCU_HAS_UNIQUE_ID
+	const UniqueId& GetUniqueId() const noexcept { return uniqueId; }
 	uint32_t Random() noexcept;
-	const char *GetUniqueIdString() const noexcept { return uniqueIdChars; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -653,7 +654,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void OnProcessingCanMessage();										// called when we start processing any CAN message except for regular messages e.g. time sync
+	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
 #endif
 
 protected:
@@ -694,9 +695,7 @@ private:
 
 	// Board and processor
 #if MCU_HAS_UNIQUE_ID
-	void ReadUniqueId();
-	uint32_t uniqueId[5];
-	char uniqueIdChars[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
+	UniqueId uniqueId;
 #endif
 
 	BoardType board;
@@ -807,7 +806,7 @@ private:
 	float axisMinima[MaxAxes];
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
 #endif
 
@@ -906,7 +905,7 @@ private:
 #endif
 };
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
 
 // Where the htm etc files are
 inline const char* Platform::GetWebDir() const noexcept

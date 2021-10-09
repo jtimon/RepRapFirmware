@@ -22,7 +22,7 @@ public:
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
 	bool SupportsAutoCalibration() const noexcept override { return true; }
-	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
+	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept override;
 	void SetCalibrationDefaults() noexcept override { Init(); }
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
@@ -39,6 +39,10 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
+#endif
+#if DUAL_CAN
+	static GCodeResult ReadODrive3Encoder(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	static GCodeResult SetODrive3TorqueMode(DriverId driver, float torque, const StringRef& reply) noexcept;
 #endif
 
 protected:
@@ -57,11 +61,9 @@ private:
 	void Init() noexcept;
 	void Recalc() noexcept;
 	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const noexcept;		// Calculate the square of the line length from a spool from a Cartesian coordinate
-	void InverseTransform(float La, float Lb, float Lc, float machinePos[3]) const noexcept;
+	void ForwardTransform(float a, float b, float c, float d, float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
-	floatc_t ComputeDerivative(unsigned int deriv, float La, float Lb, float Lc) const noexcept;	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
-	void Adjust(size_t numFactors, const floatc_t v[]) noexcept;									// Perform 3-, 6- or 9-factor adjustment
 	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging
 
 	float anchors[HANGPRINTER_AXES][3];				// XYZ coordinates of the anchors
@@ -75,13 +77,66 @@ private:
 	// Derived parameters
 	float k0[HANGPRINTER_AXES], spoolRadiiSq[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES];
 	float printRadiusSquared;
-	float Da2, Db2, Dc2;
-	float Xab, Xbc, Xca;
-	float Yab, Ybc, Yca;
-	float Zab, Zbc, Zca;
-	float P, Q, R, P2, U, A;
 
-	bool doneAutoCalibration;							// True if we have done auto calibration
+#if DUAL_CAN
+	// Some CAN helpers
+	struct ODriveAnswer {
+		bool valid = false;
+		float value = 0.0;
+	};
+	static ODriveAnswer GetODrive3EncoderEstimate(DriverId driver, bool makeReference, const StringRef& reply, bool subtractReference) THROWS(GCodeException);
+	static GCodeResult SetODrive3TorqueModeInner(DriverId driver, float torque, const StringRef& reply) noexcept;
+	static GCodeResult SetODrive3PosMode(DriverId driver, const StringRef& reply) noexcept;
+#endif
+};
+
+// Protocol copied from ODrive Firmware source:
+// https://github.com/odriverobotics/ODrive/blob/0256229b229255551c183afc0df390111ae1fa52/Firmware/communication/can/can_simple.hpp
+// and
+// https://github.com/odriverobotics/ODrive/blob/0256229b229255551c183afc0df390111ae1fa52/GUI/src/assets/odriveEnums.json
+class CANSimple {
+	public:
+	enum {
+		MSG_CO_NMT_CTRL = 0x000,       // CANOpen NMT Message REC
+		MSG_ODRIVE_HEARTBEAT,
+		MSG_ODRIVE_ESTOP,
+		MSG_GET_MOTOR_ERROR,  // Errors
+		MSG_GET_ENCODER_ERROR,
+		MSG_GET_SENSORLESS_ERROR,
+		MSG_SET_AXIS_NODE_ID,
+		MSG_SET_AXIS_REQUESTED_STATE,
+		MSG_SET_AXIS_STARTUP_CONFIG,
+		MSG_GET_ENCODER_ESTIMATES,
+		MSG_GET_ENCODER_COUNT,
+		MSG_SET_CONTROLLER_MODES,
+		MSG_SET_INPUT_POS,
+		MSG_SET_INPUT_VEL,
+		MSG_SET_INPUT_TORQUE,
+		MSG_SET_VEL_LIMIT,
+		MSG_START_ANTICOGGING,
+		MSG_SET_TRAJ_VEL_LIMIT,
+		MSG_SET_TRAJ_ACCEL_LIMITS,
+		MSG_SET_TRAJ_INERTIA,
+		MSG_GET_IQ,
+		MSG_GET_SENSORLESS_ESTIMATES,
+		MSG_RESET_ODRIVE,
+		MSG_GET_VBUS_VOLTAGE,
+		MSG_CLEAR_ERRORS,
+		MSG_CO_HEARTBEAT_CMD = 0x700,  // CANOpen NMT Heartbeat  SEND
+	};
+	static const int32_t CONTROL_MODE_VOLTAGE_CONTROL = 0;
+	static const int32_t CONTROL_MODE_TORQUE_CONTROL = 1;
+	static const int32_t CONTROL_MODE_VELOCITY_CONTROL = 2;
+	static const int32_t CONTROL_MODE_POSITION_CONTROL = 3;
+	static const int32_t INPUT_MODE_INACTIVE = 0;
+	static const int32_t INPUT_MODE_PASSTHROUGH = 1;
+	static const int32_t INPUT_MODE_VEL_RAMP = 2;
+	static const int32_t INPUT_MODE_POS_FILTER = 3;
+	static const int32_t INPUT_MODE_MIX_CHANNELS = 4;
+	static const int32_t INPUT_MODE_TRAP_TRAJ = 5;
+	static const int32_t INPUT_MODE_TORQUE_RAMP = 6;
+	static const int32_t INPUT_MODE_MIRROR = 7;
+	static const int32_t INPUT_MODE_TUNING = 8;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_HANGPRINTERKINEMATICS_H_ */

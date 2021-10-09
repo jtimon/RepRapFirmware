@@ -38,10 +38,11 @@ Mutex LinuxInterface::gcodeReplyMutex;
 #if LPC17xx
 constexpr size_t SBCTaskStackWords = 820;
 #elif defined(DEBUG)
-constexpr size_t SBCTaskStackWords = 1000;			// debug builds use more stack
+constexpr size_t SBCTaskStackWords = 1200;			// debug builds use more stack
 #else
-constexpr size_t SBCTaskStackWords = 1000;
+constexpr size_t SBCTaskStackWords = 1000;			// increased from 820 so that we can evaluate "abs(move.calibration.initial.deviation - move.calibration.final.deviation) < 0.000"
 #endif
+
 constexpr uint32_t LinuxYieldTimeout = 10;
 
 static TASKMEM Task<SBCTaskStackWords> *sbcTask;
@@ -54,7 +55,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 LinuxInterface::LinuxInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
-	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), iapWritePointer(IAP_IMAGE_START),
+	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), writingIap(false), iapWritePointer(IAP_IMAGE_START),
 	waitingForFileChunk(false), fileMutex(), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
 #ifdef TRACK_FILE_CODES
 	, fileCodesRead(0), fileCodesHandled(0), fileMacrosRunning(0), fileMacrosClosing(0)
@@ -76,7 +77,7 @@ void LinuxInterface::Init() noexcept
 #endif
 
 		transfer.Init();
-		sbcTask = new Task<SBCTaskStackWords>;
+		sbcTask = new Task<SBCTaskStackWords>();
 		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
 		iapRamAvailable = &_estack - Tasks::GetHeapTop();
 	}
@@ -101,7 +102,7 @@ void LinuxInterface::Spin() noexcept
 	transfer.InitFromTask();
 	transfer.StartNextTransfer();
 
-	bool writingIap = false, isReady = false, hadReset = false, skipNextDelay = false;
+	bool isReady = false, hadReset = false, skipNextDelay = false;
 	for (;;)
 	{
 		if (hadReset)
@@ -890,46 +891,46 @@ void LinuxInterface::Spin() noexcept
 				}
 			}
 
-			// Check if we can wait a short moment to reduce CPU load on the SBC
-			if (!writingIap && !skipNextDelay && numEvents < numMaxEvents &&
-				!waitingForFileChunk && !fileOperationPending && fileOperation == FileOperation::none)
-			{
-				delaying = true;
-				if (!TaskBase::Take(MassStorage::AnyFileOpen() ? maxFileOpenDelay : maxDelayBetweenTransfers))
-				{
-					delaying = false;
-				}
-			}
-			numEvents = 0;
-			skipNextDelay = false;
-
-			// Send code replies and generic messages
-			if (!gcodeReply.IsEmpty())
-			{
-				MutexLocker lock(gcodeReplyMutex);
-				while (!gcodeReply.IsEmpty())
-				{
-					const MessageType type = gcodeReply.GetFirstItemType();
-					OutputBuffer *buffer = gcodeReply.GetFirstItem();			// this may be null
-					if (!transfer.WriteCodeReply(type, buffer))					// this handles the null case too
-					{
-						break;
-					}
-					gcodeReply.SetFirstItem(buffer);							// this does a pop if buffer is null
-				}
-			}
-
-			// Notify DSF about the available buffer space
-			if (!codeBufferAvailable || sendBufferUpdate)
-			{
-				TaskCriticalSectionLocker locker;
-
-				const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
-				sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
-			}
-
 			if (!writingIap)					// it's not safe to access other resources once we have started writing the IAP
 			{
+				// Check if we can wait a short moment to reduce CPU load on the SBC
+				if (!skipNextDelay && numEvents < numMaxEvents && !waitingForFileChunk &&
+					!fileOperationPending && fileOperation == FileOperation::none)
+				{
+					delaying = true;
+					if (!TaskBase::Take(MassStorage::AnyFileOpen() ? maxFileOpenDelay : maxDelayBetweenTransfers))
+					{
+						delaying = false;
+					}
+				}
+				numEvents = 0;
+				skipNextDelay = false;
+
+				// Send code replies and generic messages
+				if (!gcodeReply.IsEmpty())
+				{
+					MutexLocker lock(gcodeReplyMutex);
+					while (!gcodeReply.IsEmpty())
+					{
+						const MessageType type = gcodeReply.GetFirstItemType();
+						OutputBuffer *buffer = gcodeReply.GetFirstItem();			// this may be null
+						if (!transfer.WriteCodeReply(type, buffer))					// this handles the null case too
+						{
+							break;
+						}
+						gcodeReply.SetFirstItem(buffer);							// this does a pop if buffer is null
+					}
+				}
+
+				// Notify DSF about the available buffer space
+				if (!codeBufferAvailable || sendBufferUpdate)
+				{
+					TaskCriticalSectionLocker locker;
+
+					const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+					sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
+				}
+
 				// Get another chunk of the file being requested
 				if (waitingForFileChunk &&
 					!fileChunkRequestSent && transfer.WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
@@ -1120,75 +1121,74 @@ void LinuxInterface::Spin() noexcept
 			// Start the next transfer and wait for it to complete
 			transfer.StartNextTransfer();
 		}
-		else if (isConnected && !writingIap && (!transfer.IsConnected() || hadReset))
-		{
-			isConnected = false;
-			numDisconnects++;
-			if (!hadReset)
-			{
-				numTimeouts++;
-			}
-			// Turn off all the heaters as soon as we can.
-			reprap.GetHeat().SwitchOffAll(true);
-			reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
-
-			rxPointer = txPointer = txEnd = 0;
-			sendBufferUpdate = true;
-			iapWritePointer = IAP_IMAGE_START;
-
-			if (!requestedFileName.IsEmpty())
-			{
-				requestedFileDataLength = -1;
-				requestedFileSemaphore.Give();
-			}
-
-			if (fileOperation != FileOperation::none)
-			{
-				fileOperation = FileOperation::none;
-				fileSemaphore.Give();
-			}
-			MassStorage::InvalidateAllFiles();
-
-			// Don't cache any messages if they cannot be sent
-			{
-				MutexLocker lock(gcodeReplyMutex);
-				gcodeReply.ReleaseAll();
-			}
-
-			// Close all open G-code files
-			for (size_t i = 0; i < NumGCodeChannels; i++)
-			{
-				GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
-				if (gb == nullptr) continue;
-				if (gb->IsWaitingForMacro())
-				{
-					gb->ResolveMacroRequest(true, false);
-				}
-
-				MutexLocker locker(gb->mutex);
-				if (gb->IsMacroRequestPending())
-				{
-					gb->MacroRequestSent();
-				}
-				gb->AbortFile(true, false);
-				gb->MessageAcknowledged(true);
-			}
-
-			// Abort the print (if applicable)
-			printAborted = true;
-
-			// Reset the SPI connection
-			transfer.ResetConnection();
-
-			if (hadReset)
-			{
-				// Let the main task invalidate resources
-				TaskBase::Take(LinuxYieldTimeout);
-			}
-		}
 		else if (!writingIap)
 		{
-			if (isConnected || transfer.IsConnected())
+			if (isConnected && (!transfer.IsConnected() || hadReset))
+			{
+				isConnected = false;
+				numDisconnects++;
+				if (!hadReset)
+				{
+					numTimeouts++;
+				}
+				// Turn off all the heaters
+				reprap.GetHeat().SwitchOffAll(true);
+				reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to Linux\n");
+
+				rxPointer = txPointer = txEnd = 0;
+				sendBufferUpdate = true;
+				iapWritePointer = IAP_IMAGE_START;
+
+				if (!requestedFileName.IsEmpty())
+				{
+					requestedFileDataLength = -1;
+					requestedFileSemaphore.Give();
+				}
+
+				if (fileOperation != FileOperation::none)
+				{
+					fileOperation = FileOperation::none;
+					fileSemaphore.Give();
+				}
+				MassStorage::InvalidateAllFiles();
+
+				// Don't cache any messages if they cannot be sent
+				{
+					MutexLocker lock(gcodeReplyMutex);
+					gcodeReply.ReleaseAll();
+				}
+
+				// Close all open G-code files
+				for (size_t i = 0; i < NumGCodeChannels; i++)
+				{
+					GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
+					if (gb->IsWaitingForMacro())
+					{
+						gb->ResolveMacroRequest(true, false);
+					}
+
+					MutexLocker locker(gb->mutex);
+					if (gb->IsMacroRequestPending())
+					{
+						gb->MacroRequestSent();
+					}
+					gb->AbortFile(true, false);
+					gb->MessageAcknowledged(true);
+				}
+
+				// Abort the print (if applicable)
+				printAborted = true;
+
+				// Reset the SPI connection
+				transfer.ResetConnection();
+
+				if (hadReset)
+				{
+					// Let the main task invalidate resources
+					TaskBase::Take(LinuxYieldTimeout);
+				}
+			}
+			else if (isConnected || transfer.IsConnected())
 			{
 				// Wait for the next SPI transaction to complete or for a timeout to occur
 				TaskBase::Take(SpiConnectionTimeout);
@@ -1198,11 +1198,6 @@ void LinuxInterface::Spin() noexcept
 				// Wait indefinitely for the next transfer
 				TaskBase::Take();
 			}
-		}
-		else
-		{
-			// A transfer is being performed but it has not finished yet
-			RTOSIface::Yield();
 		}
 	}
 }

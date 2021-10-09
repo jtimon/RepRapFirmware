@@ -473,7 +473,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			|| code == 112
 			|| code == 374 || code == 375
 			|| code == 470 || code == 471
-			|| code == 500 || code == 503 || code == 505
+			|| code == 503 || code == 505
 			|| code == 540 || code == 550 || code == 552 || code == 586 || (code >= 587 && code <= 589)
 			|| code == 703
 			|| code == 905 || code == 929 || code == 997 || code == 999
@@ -663,7 +663,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							if (code == 17)
 							{
-								platform.EnableDrivers(axis);
+								platform.EnableDrivers(axis, true);
 							}
 							else
 							{
@@ -690,7 +690,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 							if (code == 17)
 							{
-								platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+								platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]), true);
 							}
 							else
 							{
@@ -721,11 +721,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							for (size_t axis = 0; axis < numTotalAxes; ++axis)
 							{
-								reprap.GetPlatform().EnableDrivers(axis);
+								reprap.GetPlatform().EnableDrivers(axis, true);
 							}
 							for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 							{
-								reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder));
+								reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder), true);
 							}
 						}
 						else
@@ -2455,34 +2455,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (axesMentioned.IsNonEmpty())
 					{
-						if (CheckEnoughAxesHomed(axesMentioned))
+						const bool canMove = !CheckEnoughAxesHomed(axesMentioned);
+						if (!canMove && !absolute)
 						{
 							reply.copy("insufficient axes homed");
 							result = GCodeResult::error;
 							break;
 						}
 
-						// Perform babystepping synchronously with moves
+						// Perform babystepping synchronously with moves. Only move axes that have been flagged as homed.
 						bool haveResidual = false;
 						for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 						{
 							currentBabyStepOffsets[axis] += differences[axis];
 							reprap.MoveUpdated();
-							const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
-							moveState.initialCoords[axis] += amountPushed;
-
-							// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
-							// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-							moveState.coords[axis] += differences[axis];
-							if (amountPushed != differences[axis])
+							if (IsAxisHomed(axis))
 							{
-								haveResidual = true;
+								const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+								moveState.initialCoords[axis] += amountPushed;
+
+								// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+								// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+								moveState.coords[axis] += differences[axis];
+								if (amountPushed != differences[axis])
+								{
+									haveResidual = true;
+								}
 							}
 						}
 
-						if (haveResidual && moveState.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
+						if (canMove && haveResidual && moveState.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
 						{
-							// The pipeline is empty, so execute the babystepping move immediately
+							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults();
 							moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveState.tool = reprap.GetCurrentTool();
@@ -2980,7 +2984,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				//result = buildObjects.HandleM486(gb, reply, outBuf);
 				//break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
 			case 500: // Store parameters in config-override.g
 				result = WriteConfigOverrideFile(gb, reply);
 				break;
