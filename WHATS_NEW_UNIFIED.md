@@ -1,6 +1,7 @@
 Version 3.4.0beta5_1
 ====================
 * Duet3D 3.3beta5
+* Minor changes to M122 p200 format
 
 Version 3.4.0beta4_1
 ====================
