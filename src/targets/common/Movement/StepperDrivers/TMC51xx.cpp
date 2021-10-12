@@ -748,7 +748,7 @@ void Tmc51xxDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 		reply.cat(" no-driver-detected");
 		return;
 	}
-	reply.catf("5160 ");
+	reply.catf(" 5160");
 	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
 	if (lastReadStatus & TMC51xx_RR_OT)
 	{
