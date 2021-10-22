@@ -436,7 +436,7 @@ Platform::Platform() noexcept :
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
-	lastWarningMillis(0),
+	lastDriverPollMillis(0),
 #ifdef DUET3MINI
 	whenLastCanMessageProcessed(0),
 #endif
@@ -465,10 +465,6 @@ void Platform::Init() noexcept
 
 	// Sort out which board we are running on (some firmware builds support more than one board variant)
 	SetBoardType(BoardType::Auto);
-
-#if SAME70
-	DmacManager::Init();
-#endif
 
 #if MCU_HAS_UNIQUE_ID
 	uniqueId.SetFromCurrentBoard();
@@ -797,16 +793,6 @@ void Platform::Init() noexcept
 #endif
 
 	extrusionAncilliaryPwmValue = 0.0;
-
-	// Initialise the configured heaters to just the default bed heater (there are no default chamber heaters)
-	configuredHeaters.Clear();
-
-#if !defined(DUET3) && !defined(DUET3MINI)
-	if (DefaultBedHeater >= 0)
-	{
-		configuredHeaters.SetBit(DefaultBedHeater);
-	}
-#endif
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
@@ -1144,7 +1130,7 @@ void Platform::Spin() noexcept
 	}
 
 	// Check whether the TMC drivers need to be initialised.
-	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numVinOverVoltageEvents
+	// The tick ISR also looks for over-voltage events, but it just disables the drivers without changing driversPowered or numVinOverVoltageEvents
 	if (driversPowered)
 	{
 #if HAS_VOLTAGE_MONITOR
@@ -1187,19 +1173,19 @@ void Platform::Spin() noexcept
 		{
 #if HAS_SMART_DRIVERS
 			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
-			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
+			if (enableValues[nextDriveToPoll] >= 0)					// don't poll driver if it is flagged "no poll"
 			{
-				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(nextDriveToPoll, 0);
+				const StandardDriverStatus stat = SmartDrivers::GetStatus(nextDriveToPoll, true, true);
 				const DriversBitmap mask = DriversBitmap::MakeFromBits(nextDriveToPoll);
-				if (stat & TMC_RR_OT)
+				if (stat.ot)
 				{
 					temperatureShutdownDrivers |= mask;
 				}
-				else if (stat & TMC_RR_OTPW)
+				else if (stat.otpw)
 				{
 					temperatureWarningDrivers |= mask;
 				}
-				if (stat & TMC_RR_S2G)
+				if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
 				{
 					shortToGroundDrivers |= mask;
 				}
@@ -1210,7 +1196,7 @@ void Platform::Spin() noexcept
 
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
 				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
-				if ((stat & TMC_RR_OLA) != 0)
+				if (stat.ola)
 				{
 					if (!openLoadATimer.IsRunning())
 					{
@@ -1229,7 +1215,7 @@ void Platform::Spin() noexcept
 					}
 				}
 
-				if ((stat & TMC_RR_OLB) != 0)
+				if (stat.olb)
 				{
 					if (!openLoadBTimer.IsRunning())
 					{
@@ -1249,7 +1235,7 @@ void Platform::Spin() noexcept
 				}
 
 # if HAS_STALL_DETECT
-				if ((stat & TMC_RR_SG) != 0)
+				if (stat.stall)
 				{
 					if (stalledDrivers.Disjoint(mask))
 					{
@@ -1363,7 +1349,7 @@ void Platform::Spin() noexcept
 		}
 
 		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
-		if (now - lastWarningMillis > MinimumWarningInterval)
+		if (now - lastDriverPollMillis > MinimumWarningInterval)
 		{
 			bool reported = false;
 #if HAS_SMART_DRIVERS
@@ -1469,7 +1455,7 @@ void Platform::Spin() noexcept
 #endif
 			if (reported)
 			{
-				lastWarningMillis = now;
+				lastDriverPollMillis = now;
 			}
 		}
 	}
@@ -1515,7 +1501,7 @@ void Platform::Spin() noexcept
 #endif
 
 #if HAS_MASS_STORAGE
-	// Flush the log file it it is time. This may take some time, so do it last.
+	// Flush the log file if it is time. This may take some time, so do it last.
 	if (logger != nullptr)
 	{
 		logger->Flush(false);
@@ -1929,8 +1915,13 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #if HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
-			driverStatus.cat(',');
-			SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+			driverStatus.cat(", ");
+			const StandardDriverStatus status = SmartDrivers::GetStatus(drive);
+			status.AppendText(driverStatus.GetRef(), 0);
+			if (!status.notPresent)
+			{
+				SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+			}
 		}
 #endif
 		driverStatus.cat('\n');
@@ -2120,13 +2111,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			bool driversOK = true;
 			for (size_t driver = 0; driver < numSmartDrivers; ++driver)
 			{
-				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(driver, 0xFFFFFFFF);
-				if ((stat & (TMC_RR_OT || TMC_RR_OTPW)) != 0)
+				const StandardDriverStatus stat = SmartDrivers::GetStatus(driver, true, false);
+				if (stat.ot || stat.otpw)
 				{
 					buf->lcatf("Driver %u reports over temperature", driver);
 					driversOK = false;
 				}
-				if ((stat & TMC_RR_S2G) != 0)
+				if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
 				{
 					buf->lcatf("Driver %u reports short-to-ground", driver);
 					driversOK = false;
@@ -2585,40 +2576,6 @@ int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 		}
 	}
 	return -1;
-}
-
-void Platform::UpdateConfiguredHeaters() noexcept
-{
-	configuredHeaters.Clear();
-
-	// Check bed heaters
-	for (size_t i = 0; i < MaxBedHeaters; i++)
-	{
-		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
-		if (bedHeater >= 0)
-		{
-			configuredHeaters.SetBit(bedHeater);
-		}
-	}
-
-	// Check chamber heaters
-	for (size_t i = 0; i < MaxChamberHeaters; i++)
-	{
-		const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater(i);
-		if (chamberHeater >= 0)
-		{
-			configuredHeaters.SetBit(chamberHeater);
-		}
-	}
-
-	// Check tool heaters
-	for (size_t heater = 0; heater < MaxHeaters; heater++)
-	{
-		if (reprap.IsHeaterAssignedToTool(heater))
-		{
-			configuredHeaters.SetBit(heater);
-		}
-	}
 }
 
 #if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
@@ -5300,7 +5257,7 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 	msg->SetStandardFields(MaxSmartDrivers);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->data[driver] = SmartDrivers::GetStandardDriverStatus(driver);
+		msg->data[driver] = SmartDrivers::GetStatus(driver);
 	}
 # else
 	msg->SetStandardFields(NumDrivers);

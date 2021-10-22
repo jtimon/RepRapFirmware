@@ -23,6 +23,7 @@ NamedEnum(InputShaperType, uint8_t,
 #endif
 	ei2,
 	ei3,
+	mzv,
 	none,
 	zvd,
 	zvdd,
@@ -48,6 +49,8 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+	OBJECT_MODEL_ARRAY(amplitudes)
+	OBJECT_MODEL_ARRAY(durations)
 
 private:
 	MoveSegment *GetAccelerationSegments(const DDA& dda, PrepParams& params) const noexcept;

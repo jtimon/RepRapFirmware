@@ -11,6 +11,10 @@
 #include <Platform/RepRap.h>
 #include <Movement/Move.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 // Unless we set the option to compare filament on all type of move, we reject readings if the last retract or reprime move wasn't completed
 // well before the start bit was received. This is because those moves have high accelerations and decelerations, so the measurement delay
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
@@ -72,8 +76,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RotatingMagnetFilamentMonitor)
 
 #endif
 
-RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int extruder, unsigned int monitorType) noexcept
-	: Duet3DFilamentMonitor(extruder, monitorType),
+RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
+	: Duet3DFilamentMonitor(drv, monitorType, did),
 	  mmPerRev(DefaultMmPerRev),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
@@ -186,10 +190,22 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 				}
 				if (sensorError)
 				{
-					reply.cat("error");
-					if (lastErrorCode != 0)
+					reply.cat("error: ");
+					// Translate the common error codes to text
+					switch (lastErrorCode)
 					{
-						reply.catf(" %u", lastErrorCode);
+					case 6:
+						reply.cat("no magnet detected");
+						break;
+					case 7:
+						reply.cat("magnet too weak");
+						break;
+					case 8:
+						reply.cat("magnet too strong");
+						break;
+					default:
+						reply.catf("%u", lastErrorCode);
+						break;
 					}
 				}
 				else if (HaveCalibrationData())
@@ -238,7 +254,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 			//  Data word:			0S00 00pp pppppppp		S = switch open, pppppppppp = 10-bit filament position
 			//  Error word:			1000 0000 00000000
 			//
-			// Version 2 sensor (this firmware):
+			// Version 2 sensor
 			//  Data word:			P00S 10pp pppppppp		S = switch open, ppppppppppp = 10-bit filament position
 			//  Error word:			P010 0000 0000eeee		eeee = error code
 			//	Version word:		P110 0000 vvvvvvvv		vvvvvvvv = sensor/firmware version, at least 2
@@ -268,8 +284,8 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 				else if ((val & 0xBC00) == 0)
 				{
 					receivedPositionReport = true;
-					dataReceived = true;
 					sensorError = false;
+					dataReceived = true;
 				}
 			}
 			else if ((data8 & 1) != 0)
@@ -282,13 +298,14 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 				{
 				case TypeMagnetV2MessageTypePosition:
 					receivedPositionReport = true;
-					dataReceived = true;
 					sensorError = false;
+					dataReceived = true;
 					break;
 
 				case TypeMagnetV2MessageTypeError:
 					lastErrorCode = val & 0x00FF;
 					sensorError = (lastErrorCode != 0);
+					dataReceived = true;
 					break;
 
 				case TypeMagnetV2MessageTypeInfo:
@@ -296,6 +313,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 					{
 					case TypeMagnetV2InfoTypeVersion:
 						version = val & 0x00FF;
+						dataReceived = true;
 						break;
 
 					case TypeMagnetV3InfoTypeMagnitude:
@@ -521,5 +539,122 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 	}
 	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
+GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	const GCodeResult rslt = CommonConfigure(parser, reply, InterruptMode::change, seen);
+	if (rslt <= GCodeResult::warning)
+	{
+		if (parser.GetFloatParam('L', mmPerRev))
+		{
+			seen = true;
+		}
+		if (parser.GetFloatParam('E', minimumExtrusionCheckLength))
+		{
+			seen = true;
+		}
+
+		uint16_t minMax[2];
+		size_t numValues = 2;
+		if (parser.GetUint16ArrayParam('R', numValues, minMax))
+		{
+			if (numValues > 0)
+			{
+				seen = true;
+				minMovementAllowed = (float)minMax[0] * 0.01;
+			}
+			if (numValues > 1)
+			{
+				maxMovementAllowed = (float)minMax[1] * 0.01;
+			}
+		}
+
+		uint16_t temp;
+		if (parser.GetUintParam('S', temp))
+		{
+			seen = true;
+			comparisonEnabled = (temp > 0);
+		}
+
+		if (parser.GetUintParam('A', temp))
+		{
+			seen = true;
+			checkNonPrintingMoves = (temp > 0);
+		}
+
+		if (seen)
+		{
+			Init();
+		}
+		else
+		{
+			reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
+			GetPort().AppendPinName(reply);
+			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
+						(comparisonEnabled) ? "enabled" : "disabled",
+						(double)mmPerRev,
+						ConvertToPercent(minMovementAllowed),
+						ConvertToPercent(maxMovementAllowed),
+						(double)minimumExtrusionCheckLength);
+
+			if (!dataReceived)
+			{
+				reply.cat("no data received");
+			}
+			else
+			{
+				reply.catf("version %u, ", version);
+				if (switchOpenMask != 0)
+				{
+					reply.cat(((sensorValue & switchOpenMask) != 0) ? "no filament, " : "filament present, ");
+				}
+				if (version >= 3)
+				{
+					reply.catf("mag %u agc %u, ", magnitude, agc);
+				}
+				if (sensorError)
+				{
+					reply.cat("error: ");
+					// Translate the common error codes to text
+					switch (lastErrorCode)
+					{
+					case 6:
+						reply.cat("no magnet detected");
+						break;
+					case 7:
+						reply.cat("magnet too weak");
+						break;
+					case 8:
+						reply.cat("magnet too strong");
+						break;
+					default:
+						reply.catf("%u", lastErrorCode);
+						break;
+					}
+				}
+				else if (HaveCalibrationData())
+				{
+					const float measuredMmPerRev = MeasuredSensitivity();
+					reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
+						(double)measuredMmPerRev,
+						ConvertToPercent(minMovementRatio * measuredMmPerRev),
+						ConvertToPercent(maxMovementRatio * measuredMmPerRev),
+						(double)totalExtrusionCommanded);
+				}
+				else
+				{
+					reply.cat("no calibration data");
+				}
+			}
+		}
+	}
+	return rslt;
+}
+
+#endif
 
 // End

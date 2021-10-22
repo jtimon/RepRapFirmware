@@ -21,17 +21,35 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(AxisShaper, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(AxisShaper, __VA_ARGS__)
 
+constexpr ObjectModelArrayDescriptor AxisShaper::amplitudesArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+										-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetIndex(0)], 3); }
+};
+
+constexpr ObjectModelArrayDescriptor AxisShaper::durationsArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+										-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetIndex(0)] * (1.0/StepClockRate), 5); }
+};
+
 constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. InputShaper members
+	{ "amplitudes",				OBJECT_MODEL_FUNC_NOSELF(&amplitudesArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
+	{ "durations",				OBJECT_MODEL_FUNC_NOSELF(&durationsArrayDescriptor), 		ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
 	{ "minAcceleration",		OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t AxisShaper::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t AxisShaper::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(AxisShaper)
 
@@ -154,6 +172,22 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			numExtraImpulses = 0;
 			break;
 #endif
+
+		case InputShaperType::mzv:		// I can't find any references in the literature to this input shaper type, so the values are taken from Klipper source code
+			{
+				// Klipper gives amplitude steps of [a3 = k^2 * (1 - 1/sqrt(2)), a2 = k * (sqrt(2) - 1), a1 = 1 - 1/sqrt(2)] all divided by (a1 + a2 + a3)
+				// Rearrange to: a3 = k^2 * (1 - sqrt(2)/2), a2 = k * (sqrt(2) - 1), a1 = (1 - sqrt(2)/2)
+				const float kMzv = expf(-zeta * 0.75 * Pi/sqrtOneMinusZetaSquared);
+				const float a1 = 1.0 - 0.5 * sqrtf(2.0);
+				const float a2 = (sqrtf(2.0) - 1.0) * kMzv;
+				const float a3 = a1 * fsquare(kMzv);
+			    const float sum = (a1 + a2 + a3);
+			    coefficients[0] = a3/sum;
+			    coefficients[1] = (a2 + a3)/sum;
+			}
+			durations[0] = durations[1] = 0.375 * dampedPeriod;
+			numExtraImpulses = 2;
+			break;
 
 		case InputShaperType::zvd:		// see https://www.researchgate.net/publication/316556412_INPUT_SHAPING_CONTROL_TO_REDUCE_RESIDUAL_VIBRATION_OF_A_FLEXIBLE_BEAM
 			{
@@ -455,6 +489,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 
 	// The other input shapers all have multiple impulses with varying coefficients
 	case InputShaperType::zvd:
+	case InputShaperType::mzv:
 	case InputShaperType::zvdd:
 	case InputShaperType::ei2:
 	case InputShaperType::ei3:

@@ -424,11 +424,64 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = EutGetInfo(buf->msg.getInfo, replyRef, extra);
 				break;
 
-			case CanMessageType::m308New:
+			// Heater commands
+			case CanMessageType::m950Heater:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetHeat().EutProcessM308(buf->msg.generic, replyRef);
+				rslt = reprap.GetHeat().ConfigureHeater(buf->msg.generic, replyRef);
 				break;
 
+			case CanMessageType::heaterFeedForward:
+				requestId = buf->msg.heaterFeedForward.requestId;
+				rslt = reprap.GetHeat().FeedForward(buf->msg.heaterFeedForward, replyRef);
+				break;
+
+			case CanMessageType::updateHeaterModelNew:
+				requestId = buf->msg.heaterModelNew.requestId;
+				rslt = reprap.GetHeat().ProcessM307New(buf->msg.heaterModelNew, replyRef);
+				break;
+
+			case CanMessageType::setHeaterTemperature:
+				requestId = buf->msg.setTemp.requestId;
+				rslt = reprap.GetHeat().SetTemperature(buf->msg.setTemp, replyRef);
+				break;
+
+			case CanMessageType::heaterTuningCommand:
+				requestId = buf->msg.heaterTuningCommand.requestId;
+				rslt = reprap.GetHeat().TuningCommand(buf->msg.heaterTuningCommand, replyRef);
+				break;
+
+			case CanMessageType::setHeaterFaultDetection:
+				requestId = buf->msg.setHeaterFaultDetection.requestId;
+				rslt = reprap.GetHeat().SetFaultDetection(buf->msg.setHeaterFaultDetection, replyRef);
+				break;
+
+			case CanMessageType::setHeaterMonitors:
+				requestId = buf->msg.setHeaterMonitors.requestId;
+				rslt = reprap.GetHeat().SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
+				break;
+
+			case CanMessageType::m308New:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetHeat().ProcessM308(buf->msg.generic, replyRef);
+				break;
+
+			// Fan commands
+			case CanMessageType::m950Fan:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetFansManager().ConfigureFanPort(buf->msg.generic, replyRef);
+				break;
+
+			case CanMessageType::fanParameters:
+				requestId = buf->msg.fanParameters.requestId;
+				rslt = reprap.GetFansManager().ConfigureFan(buf->msg.fanParameters, replyRef);
+				break;
+
+			case CanMessageType::setFanSpeed:
+				requestId = buf->msg.setFanSpeed.requestId;
+				rslt = reprap.GetFansManager().SetFanSpeed(buf->msg.setFanSpeed, replyRef);
+				break;
+
+			// GPIO commands
 			case CanMessageType::m950Gpio:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().EutHandleM950Gpio(buf->msg.generic, replyRef);
@@ -489,6 +542,22 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				InputMonitor::ReadInputs(buf);
 				CanInterface::SendResponseNoFree(buf);
 				return;
+
+			// Filament monitor commands
+			case CanMessageType::createFilamentMonitor:
+				requestId = buf->msg.createFilamentMonitor.requestId;
+				rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);
+				break;
+
+			case CanMessageType::deleteFilamentMonitor:
+				requestId = buf->msg.deleteFilamentMonitor.requestId;
+				rslt = FilamentMonitor::Delete(buf->msg.deleteFilamentMonitor, replyRef);
+				break;
+
+			case CanMessageType::configureFilamentMonitor:
+				requestId = buf->msg.generic.requestId;
+				rslt = FilamentMonitor::Configure(buf->msg.generic, replyRef);
+				break;
 
 			default:
 				// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.

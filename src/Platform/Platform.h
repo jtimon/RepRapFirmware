@@ -31,6 +31,7 @@ Licence: GPL
 #include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
+#include "EventManager.h"
 #include <Storage/FileStore.h>
 #include <Storage/FileData.h>
 #include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
@@ -540,8 +541,6 @@ public:
 
 	int GetAveragingFilterIndex(const IoPort&) const noexcept;
 
-	void UpdateConfiguredHeaters() noexcept;
-
 	// AUX device
 	void PanelDueBeep(int freq, int ms) noexcept;
 	void SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept;
@@ -810,9 +809,6 @@ private:
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
 #endif
 
-	// Heaters
-	HeatersBitmap configuredHeaters;								// bitmap of all real heaters in use
-
 	// Fans
 	uint32_t lastFanCheckTime;
 
@@ -873,7 +869,9 @@ private:
 	uint32_t numV12UnderVoltageEvents, previousV12UnderVoltageEvents;
 #endif
 
-	uint32_t lastWarningMillis;							// When we last sent a warning message
+	// Event handling
+	EventManager eventManager;
+	uint32_t lastDriverPollMillis;						// when we last checked the drivers and voltage monitoring
 
 #ifdef DUET3MINI
 	uint32_t whenLastCanMessageProcessed;

@@ -16,7 +16,7 @@
 
 RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 	: Fan(fanNum),
-	  lastRpm(-1), lastPwm(-1.0), whenLastReportReceived(0),
+	  lastRpm(-1), lastPwm(-1.0), whenLastReportReceived(0), frequency(DefaultFanPwmFreq),
 	  boardNumber(boardNum)
 {
 }
@@ -56,7 +56,12 @@ GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
 	cons.AddUParam('Q', freq);
-	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
+	const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
+	if (rslt <= GCodeResult::warning)
+	{
+		frequency = freq;
+	}
+	return rslt;
 }
 
 void RemoteFan::UpdateFromRemote(CanAddress src, const FanReport& report) noexcept
@@ -78,14 +83,14 @@ GCodeResult RemoteFan::ReportPortDetails(const StringRef& str) const noexcept
 
 bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 {
-	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("No CAN buffer available");
 		return false;
 	}
 
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber);
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageFanParameters>(rid, CanInterface::GetCanAddress(), boardNumber);
 	msg->fanNumber = fanNumber;
 	msg->blipTime = blipTime;
@@ -102,14 +107,14 @@ bool RemoteFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 // Update the hardware PWM
 GCodeResult RemoteFan::Refresh(const StringRef& reply) noexcept
 {
-	CanMessageBuffer *buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("No CAN buffer available");
 		return GCodeResult::error;
 	}
 
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber);
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardNumber, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageSetFanSpeed>(rid, CanInterface::GetCanAddress(), boardNumber);
 	msg->fanNumber = fanNumber;
 	msg->pwm = val;
@@ -122,7 +127,12 @@ GCodeResult RemoteFan::ConfigurePort(const char* pinNames, PwmFrequency freq, co
 	cons.AddUParam('F', fanNumber);
 	cons.AddUParam('Q', freq);
 	cons.AddStringParam('C', pinNames);
-	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
+	const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
+	if (rslt <= GCodeResult::warning)
+	{
+		frequency = freq;
+	}
+	return rslt;
 }
 
 #endif

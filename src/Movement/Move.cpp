@@ -83,6 +83,17 @@ constexpr ObjectModelArrayDescriptor Move::queueArrayDescriptor =
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
 };
 
+#if SUPPORT_COORDINATE_ROTATION
+
+constexpr ObjectModelArrayDescriptor Move::rotationCentreArrayDescriptor =
+{
+	nullptr,					// no lock needed
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
+};
+
+#endif
+
 constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -96,6 +107,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxPrintingAcceleration), 1),				ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
+#if SUPPORT_COORDINATE_ROTATION
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 44),																	ObjectModelEntryFlags::none },
+#endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
@@ -150,9 +164,30 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),																ObjectModelEntryFlags::none },
 	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),																ObjectModelEntryFlags::none },
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),																ObjectModelEntryFlags::none },
+
+#if SUPPORT_COORDINATE_ROTATION
+	// 8. move.rotation members
+	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle()),								ObjectModelEntryFlags::none },
+	{ "centre",					OBJECT_MODEL_FUNC_NOSELF(&rotationCentreArrayDescriptor),										ObjectModelEntryFlags::none },
+#endif
 };
 
-constexpr uint8_t Move::objectModelTableDescriptor[] = { 9, 15, 2, 4 + SUPPORT_LASER, 3, 2, 2, 6 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE), 2, 4 };
+constexpr uint8_t Move::objectModelTableDescriptor[] =
+{
+	9 + SUPPORT_COORDINATE_ROTATION,
+	15 + SUPPORT_WORKPLACE_COORDINATES,
+	2,
+	4 + SUPPORT_LASER,
+	3,
+	2,
+	2,
+	6 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE),
+	2,
+	4,
+#if SUPPORT_COORDINATE_ROTATION
+	2
+#endif
+};
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
@@ -862,16 +897,10 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool
 }
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-// Returns the number of motor steps moves since the last call, and isPrinting is true unless we are currently executing an extruding but non-printing move
-int32_t Move::GetAccumulatedExtrusion(size_t extruder, bool& isPrinting) noexcept
+// Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
+int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 {
-	if (extruder < reprap.GetGCodes().GetNumExtruders())
-	{
-		return mainDDARing.GetAccumulatedExtrusion(extruder, ExtruderToLogicalDrive(extruder), isPrinting);
-	}
-
-	isPrinting = false;
-	return 0;
+	return mainDDARing.GetAccumulatedMovement(drive, isPrinting);
 }
 
 void Move::SetXYBedProbePoint(size_t index, float x, float y) noexcept
@@ -890,7 +919,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range\n");
 	}
 	else
 	{

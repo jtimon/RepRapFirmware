@@ -56,6 +56,7 @@ constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detectio
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
 constexpr size_t TmcTaskStackWords = 140;					// with 100 stack words, deckingman's M122 on the main board after a major axis shift showed just 10 words left
+constexpr uint32_t TmcClockSpeed = 12000000;				// the rate at which the TMC driver is clocked, internally or externally
 
 #if TMC_TYPE == 5130
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
@@ -241,8 +242,19 @@ constexpr uint32_t COOLCONF_SGT_MASK = 127 << COOLCONF_SGT_SHIFT;	// stallguard 
 
 constexpr uint32_t DefaultCoolConfReg = 0;
 
-// DRV_STATUS register. See the .h file for the bit definitions.
+// DRV_STATUS register
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
+constexpr uint32_t TMC_RR_SG = 1 << 24;					// stall detected
+constexpr uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
+constexpr uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
+constexpr uint32_t TMC_RR_OLA = 1 << 29;				// open load A
+constexpr uint32_t TMC_RR_OLB = 1 << 30;				// open load B
+constexpr uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
+constexpr uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
+
+constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
+constexpr unsigned int TMC_RR_SG_BIT_POS = 24;
 
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
@@ -282,12 +294,13 @@ public:
 	DriverMode GetDriverMode() const noexcept;
 	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
-	void AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept;
 	bool UpdatePending() const noexcept { return (registersToUpdate | newRegistersToUpdate) != 0; }
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
+	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
+	void AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept;
 
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
@@ -298,9 +311,6 @@ public:
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
-
-	uint32_t ReadLiveStatus() const noexcept;
-	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	void GetSpiCommand(uint8_t *sendDataBlock) noexcept;
 	void TransferSucceeded(const uint8_t *rcvDataBlock) noexcept;
@@ -314,8 +324,7 @@ private:
 
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 1023;
-		maxSgLoadRegister = 0;
+		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
 	}
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
@@ -359,8 +368,6 @@ private:
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
-	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
-	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
 
 	volatile uint32_t newRegistersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 	uint32_t registersToUpdate;								// bitmap of register indices whose values need to be sent to the driver chip
@@ -369,10 +376,11 @@ private:
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current in mA
 
+	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
 	static uint16_t numTimeouts;							// how many times a transfer timed out
 
-	uint8_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
+	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
 	uint8_t previousRegIndexRequested;						// the register we asked to read in the previous transaction, or 0xFF
@@ -419,7 +427,7 @@ pre(!driversPowered)
 	registersToUpdate = newRegistersToUpdate = 0;
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
-	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
+	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
 
 	// Set default values for all registers and flag them to be updated
 	UpdateRegister(WriteGConf, DefaultGConfReg);
@@ -487,7 +495,7 @@ float TmcDriverState::GetStandstillCurrentPercent() const noexcept
 
 void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 {
-	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
+	standstillCurrentFraction = (uint16_t)constrain<long>(lrintf((percent * 256)/100), 0, 256);
 	UpdateCurrent();
 }
 
@@ -724,9 +732,9 @@ void TmcDriverState::UpdateCurrent() noexcept
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
 	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
-	const uint8_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
+	const uint16_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
 														? standstillCurrentFraction
-															: (uint8_t)(MaxStandstillCurrentTimes256/motorCurrent);
+															: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
 	const uint32_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
@@ -747,70 +755,54 @@ void TmcDriverState::Enable(bool en) noexcept
 }
 
 // Read the status
-uint32_t TmcDriverState::ReadLiveStatus() const noexcept
+StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccumulated) noexcept
 {
-	return readRegisters[ReadDrvStat] & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
-}
+	uint32_t status;
+	if (accumulated)
+	{
+		AtomicCriticalSectionLocker lock;
 
-// Read the status
-uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
-{
-	TaskCriticalSectionLocker lock;
-	const uint32_t status = accumulatedDriveStatus;
-	accumulatedDriveStatus = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
-}
-
-// Append the driver status to a string, and reset the min/max load values
-void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept
-{
-	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
-	if (lastReadStatus & TMC_RR_OT)
-	{
-		reply.cat(" temperature-shutdown!");
-	}
-	else if (lastReadStatus & TMC_RR_OTPW)
-	{
-		reply.cat(" temperature-warning");
-	}
-	if (lastReadStatus & TMC_RR_S2G)
-	{
-		reply.cat(" short-to-ground");
-	}
-	if ((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST))
-	{
-		reply.cat(" open-load-A");
-	}
-	if ((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST))
-	{
-		reply.cat(" open-load-B");
-	}
-	if (lastReadStatus & TMC_RR_STST)
-	{
-		reply.cat(" standstill");
-	}
-	else if ((lastReadStatus & (TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB)) == 0)
-	{
-		reply.cat(" ok");
-	}
-
-	if (minSgLoadRegister <= maxSgLoadRegister)
-	{
-		reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+		status = accumulatedDriveStatus;
+		if (clearAccumulated)
+		{
+			accumulatedDriveStatus = readRegisters[ReadDrvStat];
+		}
 	}
 	else
 	{
-		reply.cat(", SG min/max n/a");
+		status = readRegisters[ReadDrvStat];
+	}
+
+	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
+	StandardDriverStatus rslt;
+	rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the ot, otpw, s2ga and s2gb bits in the right place
+	rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
+	rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+	rslt.sgresultMin = minSgLoadRegister;
+	return rslt;
+}
+
+// Append any additional driver status to a string, and reset the min/max load values
+void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept
+{
+	if (minSgLoadRegister <= 1023)
+	{
+		reply.catf(", SG min %u", minSgLoadRegister);
+	}
+	else
+	{
+		reply.cat(", SG min n/a");
 	}
 	ResetLoadRegisters();
 
-	reply.catf(", reads %u, writes %u timeouts %u", numReads, numWrites, numTimeouts);
+	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
 	{
 		numTimeouts = 0;
 	}
-
 }
 
 void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
@@ -828,8 +820,8 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept
 {
-	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1);
-	UpdateRegister(WriteTcoolthrs, (12000000 + (128 * stepsPerSecond))/(256 * stepsPerSecond));
+	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1u);
+	UpdateRegister(WriteTcoolthrs, (TmcClockSpeed + (128 * stepsPerSecond))/(256 * stepsPerSecond));
 }
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
@@ -844,7 +836,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
-	const float speed2 = (12000000.0 * GetMicrostepping(bdummy))/(256 * tcoolthrs * reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	const float speed2 = ((float)TmcClockSpeed * GetMicrostepping(bdummy))/(256 * tcoolthrs * reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed1, tcoolthrs, (double)speed2);
 }
@@ -914,14 +906,10 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 			// We treat the DRV_STATUS register separately
 			if ((regVal & TMC_RR_STST) == 0)							// in standstill, SG_RESULT returns the chopper on-time instead
 			{
-				const uint32_t sgResult = regVal & TMC_RR_SGRESULT;
+				const uint16_t sgResult = regVal & TMC_RR_SGRESULT;
 				if (sgResult < minSgLoadRegister)
 				{
 					minSgLoadRegister = sgResult;
-				}
-				if (sgResult > maxSgLoadRegister)
-				{
-					maxSgLoadRegister = sgResult;
 				}
 			}
 
@@ -953,9 +941,10 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 		}
 	}
 
-	// Deal with the stall status
+	// Deal with the stall status. Note that the TCoolThrs setting prevents us getting a DIAG output at low speeds, but it doesn't seem to affect the stall status
 	if (   (rcvDataBlock[0] & (1u << 2)) != 0							// if the status indicates stalled
 		&& interval != 0
+		&& interval <= maxStallStepInterval								// if the motor speed is high enough to get a reliable stall indication
 	   )
 	{
 		readRegisters[ReadDrvStat] |= TMC_RR_SG;
@@ -1434,16 +1423,6 @@ void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
 	}
 }
 
-uint32_t SmartDrivers::GetLiveStatus(size_t driver) noexcept
-{
-	return (driver < numTmc51xxDrivers) ? driverStates[driver].ReadLiveStatus() : 0;
-}
-
-uint32_t SmartDrivers::GetAccumulatedStatus(size_t driver, uint32_t bitsToKeep) noexcept
-{
-	return (driver < numTmc51xxDrivers) ? driverStates[driver].ReadAccumulatedStatus(bitsToKeep) : 0;
-}
-
 // Set microstepping and microstep interpolation
 bool SmartDrivers::SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept
 {
@@ -1600,29 +1579,16 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 	return GCodeResult::error;
 }
 
-#if SUPPORT_REMOTE_COMMANDS
-
-StandardDriverStatus SmartDrivers::GetStandardDriverStatus(size_t driver) noexcept
+StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept
 {
-	StandardDriverStatus rslt;
 	if (driver < numTmc51xxDrivers)
 	{
-		const uint32_t status = driverStates[driver].ReadLiveStatus();
-		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
-		rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the it, otpw, s2ga and s2gb bits in the right place
-		rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
-		rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
-		rslt.all |= (status >> (24 - 9)) & (1u << 9);			// put the stall bit in the right place
-		rslt.all |= (status >> (31 - 10)) & (1u << 10);			// put the standstill bit in the right place
+		return driverStates[driver].GetStatus(accumulated, clearAccumulated);
 	}
-	else
-	{
-		rslt.all = 0;
-	}
+	StandardDriverStatus rslt;
+	rslt.all = 0;
 	return rslt;
 }
-
-#endif
 
 #endif
 
