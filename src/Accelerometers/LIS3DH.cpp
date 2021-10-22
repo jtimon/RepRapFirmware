@@ -172,11 +172,11 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 {
 	// Clear the fifo
 	uint8_t val;
-	while (ReadRegister(LisRegister::FifoSource, val) && (val & (1u << 5)) == 0)	// while fifo not empty
+	int cnt = 0;
+	while (ReadRegister(LisRegister::FifoSource, val) && ((val & (1u << 5)) == 0) && (cnt < 128))	// while fifo not empty
 	{
 		ReadRegisters(LisRegister::OutXL, 6);
 	}
-
 	totalNumRead = 0;
 	const bool ok = WriteRegister(LisRegister::Ctrl_0x20, ctrlReg_0x20 | (axes & 7));
 	return ok && attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, this);
@@ -264,6 +264,7 @@ bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
 	{
 		return false;
 	}
+	delayMicroseconds(1);
 	transferBuffer[1] = (numToWrite < 2 || is3DSH) ? (uint8_t)reg : (uint8_t)reg | 0x40;		// set auto increment bit if LIS3DH
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToWrite);
 	Deselect();
