@@ -113,14 +113,14 @@ void SmartDrivers::EnableDrive(size_t drive, bool en) noexcept
 	}
 }
 
-uint32_t SmartDrivers::GetLiveStatus(size_t drive) noexcept
+StandardDriverStatus SmartDrivers::GetStatus(size_t drive, bool accumulated, bool clearAccumulated) noexcept
 {
-	return (drive < numDrivers) ? driverStates[drive]->ReadLiveStatus() : 0;
-}
-
-uint32_t SmartDrivers::GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep) noexcept
-{
-	return (drive < numDrivers) ? driverStates[drive]->ReadAccumulatedStatus(bitsToKeep) : 0;
+	if (drive < numDrivers)
+		return driverStates[drive]->ReadStatus(accumulated, clearAccumulated);
+	StandardDriverStatus rslt;
+	rslt.all = 0;
+	rslt.notPresent = true;
+	return rslt;
 }
 
 // Set microstepping or chopper control register

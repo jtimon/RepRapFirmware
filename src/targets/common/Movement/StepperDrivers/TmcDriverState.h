@@ -27,7 +27,6 @@ public:
 	virtual float GetStandstillCurrentPercent() const noexcept = 0;
 	virtual void SetStandstillCurrentPercent(float percent) noexcept = 0;
 
-	virtual uint32_t ReadLiveStatus() const noexcept = 0;
-	virtual uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept = 0;
+	virtual StandardDriverStatus ReadStatus(bool accumulated, bool clearAccumulated) noexcept = 0;
 };
 #endif

@@ -28,20 +28,23 @@
 #include <functional>
 
 // TMC22xx DRV_STATUS register bit assignments
-const uint32_t TMC22xx_RR_OT = 1u << 1;			// over temperature shutdown
-const uint32_t TMC22xx_RR_OTPW = 1u << 0;		// over temperature warning
-const uint32_t TMC22xx_RR_S2G = 15u << 2;		// short to ground counter (4 bits)
-const uint32_t TMC22xx_RR_OLA = 1u << 6;		// open load A
-const uint32_t TMC22xx_RR_OLB = 1u << 7;		// open load B
-const uint32_t TMC22xx_RR_STST = 1u << 31;		// standstill detected
-const uint32_t TMC22xx_RR_OPW_120 = 1u << 8;	// temperature threshold exceeded
-const uint32_t TMC22xx_RR_OPW_143 = 1u << 9;	// temperature threshold exceeded
-const uint32_t TMC22xx_RR_OPW_150 = 1u << 10;	// temperature threshold exceeded
-const uint32_t TMC22xx_RR_OPW_157 = 1u << 11;	// temperature threshold exceeded
-const uint32_t TMC22xx_RR_TEMPBITS = 15u << 8;	// all temperature threshold bits
+constexpr uint32_t TMC22xx_RR_OT = 1u << 1;			// over temperature shutdown
+constexpr uint32_t TMC22xx_RR_OTPW = 1u << 0;		// over temperature warning
+constexpr uint32_t TMC22xx_RR_S2G = 15u << 2;		// short to ground counter (4 bits)
+constexpr uint32_t TMC22xx_RR_OLA = 1u << 6;		// open load A
+constexpr uint32_t TMC22xx_RR_OLB = 1u << 7;		// open load B
+constexpr uint32_t TMC22xx_RR_STST = 1u << 31;		// standstill detected
+constexpr uint32_t TMC22xx_RR_OPW_120 = 1u << 8;	// temperature threshold exceeded
+constexpr uint32_t TMC22xx_RR_OPW_143 = 1u << 9;	// temperature threshold exceeded
+constexpr uint32_t TMC22xx_RR_OPW_150 = 1u << 10;	// temperature threshold exceeded
+constexpr uint32_t TMC22xx_RR_OPW_157 = 1u << 11;	// temperature threshold exceeded
+constexpr uint32_t TMC22xx_RR_TEMPBITS = 15u << 8;	// all temperature threshold bits
 
 const uint32_t TMC22xx_RR_RESERVED = (15u << 12) | (0x01FF << 21);	// reserved bits
 const uint32_t TMC22xx_RR_SG = 1u << 12;		// this is a reserved bit, which we use to signal a stall
+
+constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
+constexpr unsigned int TMC_RR_SG_BIT_POS = 12;
 
 constexpr uint32_t TransferTimeout = 10;				// any transfer should complete within 100 ticks @ 1ms/tick
 
@@ -369,6 +372,7 @@ public:
 	void SetStallDetectFilter(bool sgFilter) noexcept {};
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 #endif
+	StandardDriverStatus ReadStatus(bool accumulated, bool clearAccumulated) noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	uint8_t GetDriverNumber() const noexcept { return driverNumber; }
 	bool UpdatePending() const noexcept;
@@ -384,9 +388,6 @@ public:
 	void TransferTimedOut() noexcept { ++numTimeouts; AbortTransfer(); }
 	void DmaError() noexcept { ++numDmaErrors; AbortTransfer(); }
 	void AbortTransfer() noexcept;
-
-	uint32_t ReadLiveStatus() const noexcept;
-	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept;
 
 	DriversState SetupDriver(bool reset) noexcept;
 	static Tmc22xxDriverState *GetNextDriver(Tmc22xxDriverState *current) noexcept;
@@ -406,8 +407,7 @@ private:
 	bool IsTmc2209() const noexcept { return (readRegisters[ReadIoIn] & IOIN_VERSION_MASK) == (IOIN_VERSION_2209 << IOIN_VERSION_SHIFT); }
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 1023;
-		maxSgLoadRegister = 0;
+		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
 	}
 #endif
 
@@ -468,8 +468,7 @@ private:
 	uint32_t maxOpenLoadStepInterval;						// the maximum step pulse interval for which we consider open load detection to be reliable
 
 #if HAS_STALL_DETECT
-	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
-	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
+	uint16_t minSgLoadRegister;								// the maximum value of the StallGuard bits we read
 	DriversBitmap driverBit;								// bitmap of just this driver number
 #endif
 
@@ -563,8 +562,7 @@ constexpr uint8_t Tmc22xxDriverState::ReadRegCRCs[NumReadRegisters] =
 };
 
 Tmc22xxDriverState::Tmc22xxDriverState() noexcept : TmcDriverState(), configuredChopConfReg(0),registersToUpdate(0), updateMask(0),
- axisNumber(0), microstepShiftFactor(0), motorCurrent(0), maxOpenLoadStepInterval(0), minSgLoadRegister(0),
- maxSgLoadRegister(0), failedOp(0)
+ axisNumber(0), microstepShiftFactor(0), motorCurrent(0), maxOpenLoadStepInterval(0), minSgLoadRegister(0), failedOp(0)
 {
 }
 
@@ -935,40 +933,51 @@ void Tmc22xxDriverState::Enable(bool en) noexcept
 	}
 }
 
-// Read the status
-uint32_t Tmc22xxDriverState::ReadLiveStatus() const noexcept
+StandardDriverStatus Tmc22xxDriverState::ReadStatus(bool accumulated, bool clearAccumulated) noexcept
 {
-	uint32_t ret = readRegisters[ReadDrvStat] & (TMC22xx_RR_OT | TMC22xx_RR_OTPW | TMC22xx_RR_S2G | TMC22xx_RR_OLA | TMC22xx_RR_OLB | TMC22xx_RR_STST | TMC22xx_RR_TEMPBITS);
-	if (!enabled)
+	StandardDriverStatus rslt;
+	if (maxReadCount != 0)
 	{
-		ret &= ~(TMC22xx_RR_OLA | TMC22xx_RR_OLB);
-	}
-#if HAS_STALL_DETECT
-	if (IoPort::ReadPin(diagPin))
-	{
-		ret |= TMC22xx_RR_SG;
-	}
-#endif
-	return ret;
-}
+		uint32_t status;
+		if (accumulated)
+		{
+			AtomicCriticalSectionLocker lock;
 
-// Read the status
-uint32_t Tmc22xxDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep) noexcept
-{
-	const uint32_t mask = (enabled) ? 0xFFFFFFFF : ~(TMC22xx_RR_OLA | TMC22xx_RR_OLB);
-	bitsToKeep &= mask;
-	const irqflags_t flags = IrqSave();
-	uint32_t status = accumulatedReadRegisters[ReadDrvStat];
-	accumulatedReadRegisters[ReadDrvStat] = (status & bitsToKeep) | readRegisters[ReadDrvStat];		// so that the next call to ReadAccumulatedStatus isn't missing some bits
-	IrqRestore(flags);
-	status &= (TMC22xx_RR_OT | TMC22xx_RR_OTPW | TMC22xx_RR_S2G | TMC22xx_RR_OLA | TMC22xx_RR_OLB | TMC22xx_RR_STST | TMC22xx_RR_TEMPBITS) & mask;
+			status = accumulatedReadRegisters[ReadDrvStat];
+			if (clearAccumulated)
+			{
+				accumulatedReadRegisters[ReadDrvStat] = readRegisters[ReadDrvStat];
+			}
+		}
+		else
+		{
+			status = readRegisters[ReadDrvStat];
+			if (!enabled)
+			{
+				status &= ~(TMC22xx_RR_OLA | TMC22xx_RR_OLB);
+			}
+		}
 #if HAS_STALL_DETECT
-	if (IoPort::ReadPin(diagPin))
-	{
-		status |= TMC22xx_RR_SG;
-	}
+		if (IoPort::ReadPin(diagPin))
+		{
+			status |= TMC22xx_RR_SG;
+		}
 #endif
-	return status;
+
+		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
+		rslt.all = status & 0x000000FF;
+		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
+		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
+#if HAS_STALL_DETECT
+		rslt.sgresultMin = minSgLoadRegister;
+#endif
+	}
+	else
+	{
+		rslt.all = 0;
+		rslt.notPresent = true;
+	}
+	return rslt;
 }
 
 // Append the driver status to a string, and reset the min/max load values
@@ -976,52 +985,23 @@ void Tmc22xxDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
 	if (maxReadCount == 0)
 	{
-		reply.cat(" no-driver-detected");
 		return;
 	}
 	if (IsTmc2209())
 		reply.cat(" 2209");
 	else
 		reply.cat(" 2208");
-	const uint32_t lastReadStatus = readRegisters[ReadDrvStat];
-	if (lastReadStatus & TMC22xx_RR_OT)
-	{
-		reply.cat(" temperature-shutdown!");
-	}
-	else if (lastReadStatus & TMC22xx_RR_OTPW)
-	{
-		reply.cat(" temperature-warning");
-	}
-	if (lastReadStatus & TMC22xx_RR_S2G)
-	{
-		reply.cat(" short-to-ground");
-	}
-	if (lastReadStatus & TMC22xx_RR_OLA)
-	{
-		reply.cat(" open-load-A");
-	}
-	if (lastReadStatus & TMC22xx_RR_OLB)
-	{
-		reply.cat(" open-load-B");
-	}
-	if (lastReadStatus & TMC22xx_RR_STST)
-	{
-		reply.cat(" standstill");
-	}
-	else if ((lastReadStatus & (TMC22xx_RR_OT | TMC22xx_RR_OTPW | TMC22xx_RR_S2G | TMC22xx_RR_OLA | TMC22xx_RR_OLB)) == 0)
-	{
-		reply.cat(" ok");
-	}
+
 #if HAS_STALL_DETECT
 	if (IsTmc2209())
 	{
-		if (maxSgLoadRegister != 0 && minSgLoadRegister <= maxSgLoadRegister)
+		if (minSgLoadRegister <= 1023)
 		{
-			reply.catf(", SG min/max %" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+			reply.catf(", SG min %u", minSgLoadRegister);
 		}
 		else
 		{
-			reply.cat(", SG min/max n/a");
+			reply.cat(", SG min n/a");
 		}
 	}
 	ResetLoadRegisters();
@@ -1031,10 +1011,12 @@ void Tmc22xxDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 		reply.catf(", error r/w %u/%u, ifcnt %u, timeout %u",
 						readErrors, writeErrors, lastIfCount, numTimeouts);
 	if (failedOp != 0xff)
+	{
 		reply.catf(", failedOp 0x%02x", failedOp);
+		failedOp = 0xFF;
+	}
 
 	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
-	failedOp = 0xFF;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -1088,14 +1070,10 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 #if HAS_STALL_DETECT
 			else if (registerToRead == ReadSgResult)
 			{
-				const uint32_t sgResult = regVal & SG_RESULT_MASK;
+				const uint16_t sgResult = regVal & SG_RESULT_MASK;
 				if (sgResult < minSgLoadRegister)
 				{
 					minSgLoadRegister = sgResult;
-				}
-				if (sgResult > maxSgLoadRegister)
-				{
-					maxSgLoadRegister = sgResult;
 				}
 			}
 #endif

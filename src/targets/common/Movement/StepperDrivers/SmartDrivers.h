@@ -15,6 +15,7 @@
 
 #include "StepperDrivers/DriverMode.h"
 
+#if 0
 // DRV_STATUS register bit assignments
 // Note: These values are identical to those used by TMC22XX devices.
 // All other devices must convert the return from GetAccumulatedStatus() to match
@@ -25,6 +26,7 @@ const uint32_t TMC_RR_OLA = 1u << 6;		// open load A
 const uint32_t TMC_RR_OLB = 1u << 7;		// open load B
 const uint32_t TMC_RR_SG = 1u << 12;		// this is a reserved bit, which we use to signal a stall
 const uint32_t TMC_RR_STST = 1u << 31;      // driver standstill
+#endif
 namespace SmartDrivers
 {
 	void Init(size_t numSmartDrivers) noexcept;
@@ -37,8 +39,6 @@ namespace SmartDrivers
 	uint32_t GetAxisNumber(size_t drive) noexcept;
 	void SetCurrent(size_t driver, float current) noexcept;
 	void EnableDrive(size_t driver, bool en) noexcept;
-	uint32_t GetLiveStatus(size_t driver) noexcept;
-	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
@@ -54,6 +54,7 @@ namespace SmartDrivers
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
+	StandardDriverStatus GetStatus(size_t driver, bool accumulated = false, bool clearAccumulated = false) noexcept;
 	bool IsReady() noexcept;
 #if HAS_STALL_DETECT
 	DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
