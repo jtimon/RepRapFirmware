@@ -45,7 +45,7 @@ public:
     static Pin StringToPin(const char *strvalue) noexcept;
     static Pin LookupPin(char *strvalue) noexcept;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
     static bool BeginFirmwareUpdate();
     static bool WriteFirmwareData(const char *data, uint16_t length);
     static void EndFirmwareUpdate();

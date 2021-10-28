@@ -90,7 +90,7 @@
     #define SUPPORT_12864_LCD            0
     #define HAS_WIFI_NETWORKING          0
     #define HAS_MASS_STORAGE             0
-    #define HAS_LINUX_INTERFACE          1
+    #define HAS_SBC_INTERFACE          1
     #define SUPPORT_TELNET               1
 
     #define BOARD_NAME          "LPC176x SBC"
@@ -207,7 +207,7 @@ constexpr size_t MaxSpiTempSensors = 2;
 extern Pin SpiTempSensorCsPins[MaxSpiTempSensors];  // Digital pins the 31855s have their select lines tied to
 extern SSPChannel TempSensorSSPChannel;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
     extern Pin SbcTfrReadyPin;
     extern Pin SbcCsPin;
 #endif

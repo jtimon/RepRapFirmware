@@ -91,7 +91,7 @@
     #define SUPPORT_12864_LCD            1
     #define HAS_WIFI_NETWORKING          0
     #define HAS_MASS_STORAGE             0
-    #define HAS_LINUX_INTERFACE          1
+    #define HAS_SBC_INTERFACE          1
     #define SUPPORT_TELNET               1
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              0
@@ -226,7 +226,7 @@ constexpr size_t MaxSpiTempSensors = 4;
 extern Pin SpiTempSensorCsPins[MaxSpiTempSensors];  // Digital pins the 31855s have their select lines tied to
 extern SSPChannel TempSensorSSPChannel;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
     extern Pin SbcTfrReadyPin;
     extern Pin SbcCsPin;
     extern SSPChannel SbcSpiChannel;

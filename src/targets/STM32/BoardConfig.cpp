@@ -101,7 +101,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"8266wifi.spiChannel", &WiFiSpiChannel, nullptr, cvUint8Type},    
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
     {"sbc.lpcTfrReadyPin", &SbcTfrReadyPin, nullptr, cvPinType},
     {"sbc.TfrReadyPin", &SbcTfrReadyPin, nullptr, cvPinType},
     {"sbc.csPin", &SbcCsPin, nullptr, cvPinType},
@@ -574,7 +574,7 @@ void BoardConfig::Init() noexcept
             sd_mmc_reinit_slot(1, SdSpiCSPins[1], ExternalSDCardFrequency);
         }
 #endif
-    #if HAS_LINUX_INTERFACE
+    #if HAS_SBC_INTERFACE
         if(SbcCsPin != NoPin) pinMode(SbcCsPin, INPUT_PULLUP);
     #endif
     #if HAS_WIFI_NETWORKING
@@ -728,9 +728,9 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     reprap.GetPlatform().Message(mtype, "=== Diagnostics ===\n");
 
 #ifdef DUET_NG
-# if HAS_LINUX_INTERFACE
+# if HAS_SBC_INTERFACE
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
-						(reprap.UsingLinuxInterface()) ? "SBC" : "standalone");
+						(reprap.UsingSbcInterface()) ? "SBC" : "standalone");
 # else
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
 # endif
@@ -738,9 +738,9 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
 #elif LPC17xx
 	reprap.GetPlatform().MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, reprap.GetPlatform().GetElectronicsString(), (int)SystemCoreClock/1000000);
-#elif HAS_LINUX_INTERFACE
+#elif HAS_SBC_INTERFACE
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
-						(reprap.UsingLinuxInterface()) ? "SBC" : "standalone");
+						(reprap.UsingSbcInterface()) ? "SBC" : "standalone");
 #else
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
 #endif
@@ -1158,9 +1158,9 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
-// Routines to support firmware update from the Linux SBC.
+// Routines to support firmware update from the SBC.
 static constexpr char firmwarePath[] = "0:/firmware.bin";
 static FIL *firmwareFile = nullptr;
 static FATFS *fs = nullptr;
