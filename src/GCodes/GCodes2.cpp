@@ -12,8 +12,8 @@
 #include "GCodeException.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 #include <Movement/Move.h>
 #include <Networking/Network.h>
@@ -284,10 +284,10 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 29: // Grid-based bed probing
 
-#if HAS_LINUX_INTERFACE
-			// Pass file- and system-related commands to DSF if they came from somewhere else.
+#if HAS_SBC_INTERFACE
+			// Pass file- and system-related commands to the SBC service if they came from anywhere else.
 			// They will be passed back to us via a binary buffer or separate SPI message if necessary.
-			if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsConnected() && !gb.IsBinary())
+			if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary())
 			{
 				gb.SendToSbc();
 				return false;
@@ -474,9 +474,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		return true;			// we don't simulate most M codes
 	}
 
-#if HAS_LINUX_INTERFACE
-	// Pass file- and system-related commands to DSF if they came from somewhere else. They will be passed back to us via a binary buffer or separate SPI message if necessary.
-	if (   reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsConnected() && !gb.IsBinary()
+#if HAS_SBC_INTERFACE
+	// Pass file- and system-related commands to the SBC service if they came from somewhere else.
+	// They will be passed back to us via a binary buffer or separate SPI message if necessary.
+	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
 		&& (   code == 0 || code == 1
 			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28 || code == 29
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
@@ -850,7 +851,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 23: // Set file to print
 			case 32: // Select file and start SD print
 				// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
@@ -869,8 +870,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
 					if (
-#if HAS_LINUX_INTERFACE
-						reprap.UsingLinuxInterface()
+#if HAS_SBC_INTERFACE
+						reprap.UsingSbcInterface()
 # if HAS_MASS_STORAGE
 						||
 # endif
@@ -935,15 +936,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 						}
 					}
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 					else if (
 # if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 								!fileToPrint.IsLive()
 # else
 								true
 # endif
-# if HAS_LINUX_INTERFACE
-								&& !reprap.UsingLinuxInterface()
+# if HAS_SBC_INTERFACE
+								&& !reprap.UsingSbcInterface()
 # endif
 							)
 					{
@@ -967,8 +968,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
 								// We need to copy the absolute/relative and volumetric extrusion flags over
 								fileGCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
-# if HAS_LINUX_INTERFACE
-								if (!reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+								if (!reprap.UsingSbcInterface())
 # endif
 # if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 								{
@@ -1060,7 +1061,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M25 to print it
 				gb.MustSee('S');
@@ -1085,7 +1086,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// In case there are short periods of time when PrintMonitor says a file is printing but the file is not open, or DSF passes M27 to us, check that we have a file
 					if (fileBeingPrinted.IsLive())
 					{
-						reply.printf("SD printing byte %lu/%lu", GetPrintingFilePosition(), fileBeingPrinted.Length());
+						reply.printf("SD printing byte %lu/%lu", GetFilePosition(), fileBeingPrinted.Length());
 						break;
 					}
 				}
@@ -1126,10 +1127,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// For case 32, see case 23
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 36:	// Return file information
-# if HAS_LINUX_INTERFACE
-				if (reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+				if (reprap.UsingSbcInterface())
 				{
 					reprap.GetFileInfoResponse(nullptr, outBuf, true);
 				}
@@ -1150,8 +1151,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 37:	// Simulation mode on/off, or simulate a whole file
-# if HAS_LINUX_INTERFACE
-				if (reprap.UsingLinuxInterface() && !gb.IsBinary())
+# if HAS_SBC_INTERFACE
+				if (reprap.UsingSbcInterface() && !gb.IsBinary())
 				{
 					reply.copy("M37 can be only started from the SBC interface");
 					result = GCodeResult::error;
@@ -2565,8 +2566,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 					if (sParam == 2 || sParam == 3)
 					{
-#if HAS_LINUX_INTERFACE
-						if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+						if (reprap.UsingSbcInterface())
 						{
 							gb.SetState(GCodeState::waitingForAcknowledgement);
 						}
@@ -2996,7 +2997,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				//result = buildObjects.HandleM486(gb, reply, outBuf);
 				//break;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 500: // Store parameters in config-override.g
 				result = WriteConfigOverrideFile(gb, reply);
 				break;
@@ -3005,7 +3006,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = buildObjects.HandleM486(gb, reply, outBuf);
 				break;
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 			case 501: // Load parameters from config-override.g
 				if (!gb.LatestMachineState().runningM502 && !gb.LatestMachineState().runningM501)		// when running M502 we ignore config-override.g
 				{
@@ -3121,8 +3122,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 550: // Set/report machine name
-#if HAS_LINUX_INTERFACE
-				if (reprap.UsingLinuxInterface() && !gb.IsBinary())
+#if HAS_SBC_INTERFACE
+				if (reprap.UsingSbcInterface() && !gb.IsBinary())
 				{
 					result = GCodeResult::errorNotSupported;
 				}
@@ -3583,11 +3584,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 			case 576: // Set SPI communication parameters
-				if (reprap.UsingLinuxInterface())
+				if (reprap.UsingSbcInterface())
 				{
-					result = reprap.GetLinuxInterface().HandleM576(gb, reply);
+					result = reprap.GetSbcInterface().HandleM576(gb, reply);
 				}
 				else
 				{
@@ -4454,7 +4455,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 916:
 				if (!platform.SysFileExists(RESUME_AFTER_POWER_FAIL_G))
 				{

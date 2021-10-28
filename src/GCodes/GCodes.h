@@ -67,7 +67,7 @@ enum class PauseReason
 #endif
 };
 
-// Keep this in sync with PrintStopReason in Linux/MessageFormats.h
+// Keep this in sync with PrintStopReason in SBC/SbcMessageFormats.h
 enum class StopPrintReason
 {
 	normalCompletion,
@@ -110,7 +110,7 @@ enum class SimulationMode : uint8_t
 	highest = partial
 };
 
-class LinuxInterface;
+class SbcInterface;
 
 // The GCode interpreter
 
@@ -133,8 +133,7 @@ public:
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
-	FilePosition GetFilePosition() const noexcept;								// Return the current position of the file being printed in bytes
-	FilePosition GetPrintingFilePosition() const noexcept;						// Return a valid position of the file being printed in bytes
+	FilePosition GetFilePosition(bool allowNoFilePos = false) const noexcept;	// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file
@@ -229,7 +228,7 @@ public:
 	int GetNewToolNumber() const noexcept { return newToolNumber; }
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 
-	// These next two are public because they are used by class LinuxInterface
+	// These next two are public because they are used by class SbcInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
 	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 
@@ -425,7 +424,7 @@ private:
 
 #if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute) THROWS(GCodeException);	// Set workspace coordinates
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteWorkplaceCoordinates(FileStore *f) const noexcept;
 # endif
 #endif
@@ -484,13 +483,13 @@ private:
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile) THROWS(GCodeException);	// Handle M37 to simulate a whole file
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, SimulationMode newSimMode) THROWS(GCodeException);		// Handle M37 to change the simulation mode
 #endif
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
@@ -508,7 +507,7 @@ private:
 	void EndSimulation(GCodeBuffer *gb) noexcept;								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const noexcept;										// Return true if the code queue is idle
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
 #endif
 
@@ -542,7 +541,7 @@ private:
 
 	Platform& platform;													// The RepRap machine
 
-#if HAS_NETWORKING || HAS_LINUX_INTERFACE
+#if HAS_NETWORKING || HAS_SBC_INTERFACE
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
@@ -625,7 +624,7 @@ private:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
 

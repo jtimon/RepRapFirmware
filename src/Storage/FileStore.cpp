@@ -2,7 +2,7 @@
 
 #include "RepRapFirmware.h"
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
@@ -21,12 +21,12 @@
 # endif
 #endif
 
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 
 FileStore::FileStore() noexcept
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	: writeBuffer(nullptr)
 #endif
 {
@@ -43,11 +43,11 @@ void FileStore::Init() noexcept
 #if HAS_EMBEDDED_FILES
 	fileIndex = -1;
 #endif
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	handle = noFileHandle;
 	length = 0;
 #endif
-#if HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	offset = 0;
 #endif
 }
@@ -58,8 +58,8 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 {
 	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
 #if HAS_EMBEDDED_FILES
-# if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
 # endif
 	{
 		if (!writing)
@@ -84,7 +84,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 	}
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	writeBuffer = nullptr;
 
 	// Try to allocate a write buffer
@@ -115,10 +115,10 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 
 	// Attempt to open the file
 	bool fileOpened = false;
-# if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
-		handle = reprap.GetLinuxInterface().OpenFile(filePath, mode, length, preAllocSize);
+		handle = reprap.GetSbcInterface().OpenFile(filePath, mode, length, preAllocSize);
 		if (handle != noFileHandle)
 		{
 			offset = (mode == OpenMode::append) ? length : 0;
@@ -187,7 +187,7 @@ bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize)
 #endif
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close() noexcept
@@ -252,10 +252,10 @@ bool FileStore::Seek(FilePosition pos) noexcept
 
 	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
-			if (reprap.GetLinuxInterface().SeekFile(handle, pos))
+			if (reprap.GetSbcInterface().SeekFile(handle, pos))
 			{
 				offset = pos;
 				return true;
@@ -280,8 +280,8 @@ bool FileStore::Seek(FilePosition pos) noexcept
 
 FilePosition FileStore::Position() const noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		return offset;
 	}
@@ -304,8 +304,8 @@ FilePosition FileStore::Length() const noexcept
 		return 0;
 
 	case FileUseMode::readOnly:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			return length;
 		}
@@ -319,8 +319,8 @@ FilePosition FileStore::Length() const noexcept
 #endif
 
 	case FileUseMode::readWrite:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			return (writeBuffer != nullptr) ? length + writeBuffer->BytesStored() : length;
 		}
@@ -339,7 +339,7 @@ FilePosition FileStore::Length() const noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Truncate file at current file pointer
 bool FileStore::Truncate() noexcept
@@ -356,11 +356,11 @@ bool FileStore::Truncate() noexcept
 		{
 			return false;
 		}
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			length = offset;
-			return reprap.GetLinuxInterface().TruncateFile(handle);
+			return reprap.GetSbcInterface().TruncateFile(handle);
 		}
 #endif
 #if HAS_MASS_STORAGE
@@ -377,7 +377,7 @@ bool FileStore::Truncate() noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Returns the number of bytes read or -1 if the read process failed
 int FileStore::Read(char* extBuf, size_t nBytes) noexcept
@@ -390,10 +390,10 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 
 	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
-			int bytesRead = reprap.GetLinuxInterface().ReadFile(handle, extBuf, nBytes);
+			int bytesRead = reprap.GetSbcInterface().ReadFile(handle, extBuf, nBytes);
 			if (bytesRead > 0)
 			{
 				offset += bytesRead;
@@ -468,7 +468,7 @@ int FileStore::ReadLine(char* buf, size_t nBytes) noexcept
 
 bool FileStore::ForceClose() noexcept
 {
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool ok = true;
 	if (usageMode == FileUseMode::readWrite)
 	{
@@ -482,10 +482,10 @@ bool FileStore::ForceClose() noexcept
 	}
 #endif
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
-		reprap.GetLinuxInterface().CloseFile(handle);
+		reprap.GetSbcInterface().CloseFile(handle);
 		handle = noFileHandle;
 		offset = length = 0;
 		usageMode = FileUseMode::free;
@@ -537,7 +537,7 @@ void FileStore::Duplicate() noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 {
@@ -546,10 +546,10 @@ bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
 		crc.Update(s, len);
 	}
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
-		bool ok = (len > 0) ? reprap.GetLinuxInterface().WriteFile(handle, s, len) : true;
+		bool ok = (len > 0) ? reprap.GetSbcInterface().WriteFile(handle, s, len) : true;
 		*bytesWritten = ok ? len : 0;
 		offset += len;
 		if (offset > length)
@@ -684,8 +684,8 @@ bool FileStore::Flush() noexcept
 			}
 #endif
 		}
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			return true;
 		}
@@ -700,7 +700,7 @@ bool FileStore::Flush() noexcept
 	}
 }
 
-#if HAS_LINUX_INTERFACE			// these functions are only supported in SBC mode
+#if HAS_SBC_INTERFACE			// these functions are only supported in SBC mode
 
 // Invalidate the file
 void FileStore::Invalidate() noexcept
@@ -894,7 +894,7 @@ void FileWriteBuffer::BindToFile(FileStore *fs) noexcept
 }
 
 #endif // HAS_WRITER_TASK
-#endif	// HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 #endif
 

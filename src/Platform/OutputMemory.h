@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <Storage/FileData.h>
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 #if LPC17xx
 const size_t OUTPUT_STACK_DEPTH = 32;	// Number of OutputBuffer chains that can be pushed onto one stack instance
 #else
@@ -148,7 +148,7 @@ public:
 	// Returns the first item's type from the stack or NoDestinationMessage if none is available
 	MessageType GetFirstItemType() const volatile noexcept;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	// Set the first item of the stack. If it's NULL, then the first item will be removed
 	void SetFirstItem(OutputBuffer *buffer) volatile noexcept;
 #endif

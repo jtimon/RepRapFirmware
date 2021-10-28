@@ -270,7 +270,7 @@ enum Module : uint8_t
 	moduleFilamentSensors = 13,
 	moduleWiFi = 14,
 	moduleDisplay = 15,
-	moduleLinuxInterface = 16,
+	moduleSbcInterface = 16,
 	moduleCan = 17,
 	moduleDriver = 18,
 	numModules = 19,				// make this one greater than the last real module number
@@ -311,8 +311,8 @@ class PortControl;
 class Display;
 #endif
 
-#if HAS_LINUX_INTERFACE
-class LinuxInterface;
+#if HAS_SBC_INTERFACE
+class SbcInterface;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -567,7 +567,7 @@ constexpr size_t NumCoordinateSystems = 1;
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 typedef uint32_t FileHandle;
 const FileHandle noFileHandle = 0;
 #endif

@@ -8,7 +8,7 @@
 #include "LinuxInterface.h"
 #include "DataTransfer.h"
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 #include <GCodes/GCodeBuffer/ExpressionParser.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>

@@ -56,7 +56,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 #endif
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
-	{ "filePosition",		OBJECT_MODEL_FUNC((uint64_t)self->gCodes.GetPrintingFilePosition()),												ObjectModelEntryFlags::live },
+	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetFilePosition()),																	ObjectModelEntryFlags::live },
 	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
@@ -77,7 +77,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 															ObjectModelEntryFlags::none },
 	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
 	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
-	{ "size",				OBJECT_MODEL_FUNC((uint64_t)self->printingFileInfo.fileSize),														ObjectModelEntryFlags::none },
+	{ "size",				OBJECT_MODEL_FUNC(self->printingFileInfo.fileSize),																	ObjectModelEntryFlags::none },
 
 	// 2. TimesLeft members
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
@@ -179,8 +179,8 @@ void PrintMonitor::SetSlicerTimeLeft(float seconds) noexcept
 
 void PrintMonitor::Spin() noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		if (!printingFileParsed)
 		{
@@ -292,8 +292,8 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	WriteLocker locker(printMonitorLock);
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
-# if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
 # endif
 	{
 		printingFileParsed = false;
@@ -360,7 +360,7 @@ float PrintMonitor::FractionOfFilePrinted() const noexcept
 	{
 		return -1.0;
 	}
-	return (float)gCodes.GetPrintingFilePosition() / (float)printingFileInfo.fileSize;
+	return (float)gCodes.GetFilePosition() / (float)printingFileInfo.fileSize;
 }
 
 // Estimate the print time left in seconds on a preset estimation method

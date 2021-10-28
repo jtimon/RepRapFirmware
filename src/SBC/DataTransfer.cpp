@@ -7,9 +7,9 @@
 
 #include "DataTransfer.h"
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
-#include "LinuxInterface.h"
+#include "SbcInterface.h"
 
 #include <Storage/CRC32.h>
 #include <algorithm>
@@ -71,7 +71,8 @@ uint32_t HeaderCRCErrors, DataCRCErrors;
 #include <RTOSIface/RTOSIface.h>
 
 #include <General/IP4String.h>
-static TaskHandle linuxTaskHandle = nullptr;
+
+static TaskHandle sbcTaskHandle = nullptr;
 
 #if !LPC17xx && !STM32F4
 
@@ -93,7 +94,10 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 #endif
 
-volatile bool dataReceived = false;				// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
+volatile bool dataReceived = false;		// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
+#if SAME5x
+uint32_t transferStartTime = 0;
+#endif
 volatile bool transferReadyHigh = false;
 volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
 
@@ -116,7 +120,6 @@ static void spi_dma_disable() noexcept
 }
 
 #if !SAME5x
-
 static bool spi_dma_check_rx_complete() noexcept
 {
 #if USE_DMAC
@@ -275,6 +278,18 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 #endif
 }
 
+void disable_spi() noexcept
+{
+	spi_dma_disable();
+
+#if SAME5x
+	SbcSpiSercom->SPI.CTRLA.reg &= ~SERCOM_SPI_CTRLA_ENABLE;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
+#else
+	spi_disable(SBC_SPI);
+#endif
+}
+
 static void setup_spi(void *inBuffer, const void *outBuffer, size_t bytesToTransfer) noexcept
 pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 {
@@ -326,22 +341,13 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 	NVIC_EnableIRQ(SBC_SPI_IRQn);
 
 	// Begin transfer
+#if SAME5x
+	transferStartTime = 0;
+#endif
 	transferReadyHigh = !transferReadyHigh;
 	digitalWrite(SbcTfrReadyPin, transferReadyHigh);
 }
 
-void disable_spi() noexcept
-{
-	spi_dma_disable();
-
-	// Disable SPI
-#if SAME5x
-	SbcSpiSercom->SPI.CTRLA.reg &= ~SERCOM_SPI_CTRLA_ENABLE;
-	while (SbcSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
-#else
-	spi_disable(SBC_SPI);
-#endif
-}
 
 #ifndef SBC_SPI_HANDLER
 # error SBC_SPI_HANDLER undefined
@@ -358,8 +364,9 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 		SbcSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_SSL;		// disable the interrupt
 		SbcSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTENSET_SSL;		// clear the status
 
+		// Wake up the SBC task
 		dataReceived = true;
-		TaskBase::GiveFromISR(linuxTaskHandle);
+		TaskBase::GiveFromISR(sbcTaskHandle);
 	}
 #else
 	const uint32_t status = SBC_SPI->SPI_SR;							// read status and clear interrupt
@@ -379,18 +386,18 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 			++spiTxUnderruns;
 		}
 
-		// Wake up the Linux task
+		// Wake up the SBC task
 		dataReceived = true;
-		TaskBase::GiveFromISR(linuxTaskHandle);
+		TaskBase::GiveFromISR(sbcTaskHandle);
 	}
 #endif
 }
 
 #else
 #if LPC17xx
-# include "LPC/Linux/DataTransfer.hpp"
+# include "LPC/Sbc/DataTransfer.hpp"
 #elif STM32F4
-# include "STM32/Linux/DataTransfer.hpp"
+# include "STM32/Sbc/DataTransfer.hpp"
 #endif
 #endif
 /*-----------------------------------------------------------------------------------*/
@@ -402,11 +409,11 @@ __nocache TransferHeader DataTransfer::rxHeader;
 __nocache TransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
 __nocache uint32_t DataTransfer::txResponse;
-alignas(4) __nocache char DataTransfer::rxBuffer[LinuxTransferBufferSize];
-alignas(4) __nocache char DataTransfer::txBuffer[LinuxTransferBufferSize];
+alignas(4) __nocache char DataTransfer::rxBuffer[SbcTransferBufferSize];
+alignas(4) __nocache char DataTransfer::txBuffer[SbcTransferBufferSize];
 #endif
 
-DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTransferTime(0), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
+DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingData), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
 #if SAME5x
 	rxBuffer(nullptr), txBuffer(nullptr),
 #endif
@@ -419,8 +426,8 @@ DataTransfer::DataTransfer() noexcept : state(SpiState::ExchangingData), lastTra
 	rxHeader.sequenceNumber = 0;
 
 	// Prepare TX header
-	txHeader.formatCode = LinuxFormatCode;
-	txHeader.protocolVersion = LinuxProtocolVersion;
+	txHeader.formatCode = SbcFormatCode;
+	txHeader.protocolVersion = SbcProtocolVersion;
 	txHeader.numPackets = 0;
 	txHeader.sequenceNumber = 0;
 }
@@ -431,16 +438,16 @@ void DataTransfer::Init() noexcept
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
 #if !SAME70
-	if (reprap.UsingLinuxInterface())
+	if (reprap.UsingSbcInterface())
 	{
 		// Allocate buffers in SBC mode
-		rxBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
-		txBuffer = (char *)new uint32_t[(LinuxTransferBufferSize + 3)/4];
+		rxBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
+		txBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
 	}
 	else
 	{
 		// Only send back the TX header + response code in standalone mode indicating we're running in standalone mode
-		txHeader.formatCode = LinuxFormatCodeStandalone;
+		txHeader.formatCode = SbcFormatCodeStandalone;
 	}
 #endif
 
@@ -502,7 +509,7 @@ void DataTransfer::Init() noexcept
 	matrix_set_slave_slot_cycle(0, 8);
 #endif
 
-	if (!reprap.UsingLinuxInterface())
+	if (!reprap.UsingSbcInterface())
 	{
 		// Start off the first transfer in standalone mode
 		StartNextTransfer();
@@ -511,13 +518,12 @@ void DataTransfer::Init() noexcept
 
 void DataTransfer::InitFromTask() noexcept
 {
-	linuxTaskHandle = TaskBase::GetCallerTaskHandle();
+	sbcTaskHandle = TaskBase::GetCallerTaskHandle();
 }
 
 void DataTransfer::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "State: %d, failed transfers: %u, checksum errors: %u\n", (int)state, failedTransfers, checksumErrors);
-	reprap.GetPlatform().MessageF(mtype, "Last transfer: %" PRIu32 "ms ago\n", millis() - lastTransferTime);
+	reprap.GetPlatform().MessageF(mtype, "Transfer state: %d, failed transfers: %u, checksum errors: %u\n", (int)state, failedTransfers, checksumErrors);
 	reprap.GetPlatform().MessageF(mtype, "RX/TX seq numbers: %d/%d\n", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
 	reprap.GetPlatform().MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 #if LPC17xx || STM32F4
@@ -752,7 +758,7 @@ int DataTransfer::ReadFileData(char *buffer, size_t length) noexcept
 void DataTransfer::ExchangeHeader() noexcept
 {
 	Cache::FlushBeforeDMASend(&txHeader, sizeof(txHeader));
-	state = SpiState::ExchangingHeader;
+	state = InternalTransferState::ExchangingHeader;
 	setup_spi(&rxHeader, &txHeader, sizeof(TransferHeader));
 }
 
@@ -760,7 +766,7 @@ void DataTransfer::ExchangeResponse(uint32_t response) noexcept
 {
 	txResponse = response;
 	Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
-	state = (state == SpiState::ExchangingHeader) ? SpiState::ExchangingHeaderResponse : SpiState::ExchangingDataResponse;
+	state = (state == InternalTransferState::ExchangingHeader) ? InternalTransferState::ExchangingHeaderResponse : InternalTransferState::ExchangingDataResponse;
 	setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 }
 
@@ -768,76 +774,75 @@ void DataTransfer::ExchangeData() noexcept
 {
 	Cache::FlushBeforeDMASend(txBuffer, txHeader.dataLength);
 	size_t bytesToExchange = max<size_t>(rxHeader.dataLength, txHeader.dataLength);
-	state = SpiState::ExchangingData;
+	state = InternalTransferState::ExchangingData;
 	setup_spi(rxBuffer, txBuffer, bytesToExchange);
 }
 
-void DataTransfer::StatefulTransferReset(bool ownRequest) noexcept
+void DataTransfer::ResetTransfer(bool ownRequest) noexcept
 {
-	if (reprap.Debug(moduleLinuxInterface))
+	if (reprap.Debug(moduleSbcInterface))
 	{
-		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Linux request\n");
+		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Sbc request\n");
 	}
 	if (ownRequest)
 	{
 		// Invalidate the data to send
 		txResponse = TransferResponse::BadResponse;
 		Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
-		state = SpiState::Resetting;
+		state = InternalTransferState::Resetting;
 		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
 	}
 	else
 	{
-		// Linux wants to reset the state
+		// Sbc wants to reset the state
 		ExchangeHeader();
 	}
 }
 
-bool DataTransfer::IsReady() noexcept
+TransferState DataTransfer::DoTransfer() noexcept
 {
 	if (dataReceived)
 	{
 #if SAME5x
 		// Unfortunately the SAME5x doesn't have an end-of-transfer interrupt, but SPI transfers typically don't take long
-		uint32_t startTime = millis();
-		while (!digitalRead(SbcSSPin))			// transfer is complete if SS is high
+		if (!digitalRead(SbcSSPin))				// transfer is complete if SS is high
 		{
-			if (millis() - startTime > SpiTransferTimeout)
+			if (transferStartTime == 0)
 			{
-				StatefulTransferReset(true);
-				return false;
+				transferStartTime = millis();
+				return TransferState::finishingTransfer;
 			}
+			return (millis() - transferStartTime > SpiMaxTransferTime) ? TransferState::connectionTimeout : TransferState::finishingTransfer;
 		}
+		transferStartTime = 0;
 
 		if (SbcSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;
 		}
-
 		disable_spi();
 #else
 		// Wait for the current XDMA transfer to finish. Relying on the XDMAC IRQ for this is does not work well...
 		if (!spi_dma_check_rx_complete())
 		{
-			return false;
+			return TransferState::finishingTransfer;
 		}
 #endif
 
 		// Transfer has finished
 		dataReceived = false;
-		lastTransferTime = millis();
 
 		switch (state)
 		{
-		case SpiState::ExchangingHeader:
+		case InternalTransferState::ExchangingHeader:
 		{
 			Cache::InvalidateAfterDMAReceive(&rxHeader, sizeof(rxHeader));
 			// (1) Exchanged transfer headers
 			const uint32_t headerResponse = *reinterpret_cast<const uint32_t*>(&rxHeader);
 			if (headerResponse == TransferResponse::BadResponse)
 			{
-				// Linux wants to restart the transfer
-				StatefulTransferReset(false);
+				// Sbc wants to restart the transfer
+				ResetTransfer(false);
 				break;
 			}
 
@@ -847,7 +852,7 @@ bool DataTransfer::IsReady() noexcept
 #if LPC17xx || STM32F4
 				HeaderCRCErrors++;
 #endif
-				if (reprap.Debug(moduleLinuxInterface))
+				if (reprap.Debug(moduleSbcInterface))
 				{
 					debugPrintf("Bad header CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcHeader, checksum);
 				}
@@ -855,17 +860,17 @@ bool DataTransfer::IsReady() noexcept
 				break;
 			}
 
-			if (rxHeader.formatCode != LinuxFormatCode)
+			if (rxHeader.formatCode != SbcFormatCode)
 			{
 				ExchangeResponse(TransferResponse::BadFormat);
 				break;
 			}
-			if (rxHeader.protocolVersion != LinuxProtocolVersion)
+			if (rxHeader.protocolVersion != SbcProtocolVersion)
 			{
 				ExchangeResponse(TransferResponse::BadProtocolVersion);
 				break;
 			}
-			if (rxHeader.dataLength > LinuxTransferBufferSize)
+			if (rxHeader.dataLength > SbcTransferBufferSize)
 			{
 				ExchangeResponse(TransferResponse::BadDataLength);
 				break;
@@ -875,12 +880,12 @@ bool DataTransfer::IsReady() noexcept
 			break;
 		}
 
-		case SpiState::ExchangingHeaderResponse:
+		case InternalTransferState::ExchangingHeaderResponse:
 			// (2) Exchanged response to transfer header
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
-				if (reprap.UsingLinuxInterface() && (rxHeader.dataLength != 0 || txHeader.dataLength != 0))
+				if (reprap.UsingSbcInterface() && (rxHeader.dataLength != 0 || txHeader.dataLength != 0))
 				{
 					// Perform the actual data transfer
 					ExchangeData();
@@ -890,14 +895,14 @@ bool DataTransfer::IsReady() noexcept
 					// Everything OK
 					rxPointer = txPointer = 0;
 					packetId = 0;
-					state = SpiState::ProcessingData;
-					return true;
+					state = InternalTransferState::ProcessingData;
+					return IsConnectionReset() ? TransferState::connectionReset : TransferState::finished;
 				}
 			}
 			else if (rxResponse == TransferResponse::BadResponse)
 			{
-				// Linux wants to restart the transfer
-				StatefulTransferReset(false);
+				// Sbc wants to restart the transfer
+				ResetTransfer(false);
 			}
 			else if (rxResponse == TransferResponse::BadHeaderChecksum || txResponse == TransferResponse::BadHeaderChecksum)
 			{
@@ -908,19 +913,19 @@ bool DataTransfer::IsReady() noexcept
 			else
 			{
 				// Received invalid response code
-				StatefulTransferReset(true);
+				ResetTransfer(true);
 			}
 			break;
 
-		case SpiState::ExchangingData:
+		case InternalTransferState::ExchangingData:
 		{
 			Cache::InvalidateAfterDMAReceive(rxBuffer, rxHeader.dataLength);
 			// (3) Exchanged data
 			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)
 			{
-				if (reprap.Debug(moduleLinuxInterface))
+				if (reprap.Debug(moduleSbcInterface))
 				{
-					debugPrintf("Resetting state due to Linux request\n");
+					debugPrintf("Resetting state due to Sbc request\n");
 				}
 				failedTransfers++;
 				ExchangeHeader();
@@ -933,7 +938,7 @@ bool DataTransfer::IsReady() noexcept
 #if LPC17xx || STM32F4
 				DataCRCErrors++;
 #endif
-				if (reprap.Debug(moduleLinuxInterface))
+				if (reprap.Debug(moduleSbcInterface))
 				{
 					debugPrintf("Bad data CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcData, checksum);
 				}
@@ -945,7 +950,7 @@ bool DataTransfer::IsReady() noexcept
 			break;
 		}
 
-		case SpiState::ExchangingDataResponse:
+		case InternalTransferState::ExchangingDataResponse:
 			// (4) Exchanged response to data transfer
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
@@ -953,14 +958,14 @@ bool DataTransfer::IsReady() noexcept
 				// Everything OK
 				rxPointer = txPointer = 0;
 				packetId = 0;
-				state = SpiState::ProcessingData;
-				return true;
+				state = InternalTransferState::ProcessingData;
+				return IsConnectionReset() ? TransferState::connectionReset : TransferState::finished;
 			}
 
 			if (rxResponse == TransferResponse::BadResponse)
 			{
-				// Linux wants to restart the transfer
-				StatefulTransferReset(false);
+				// Sbc wants to restart the transfer
+				ResetTransfer(false);
 			}
 			else if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
 			{
@@ -971,11 +976,11 @@ bool DataTransfer::IsReady() noexcept
 			else
 			{
 				// Received invalid response, reset the SPI transfer
-				StatefulTransferReset(true);
+				ResetTransfer(true);
 			}
 			break;
 
-		case SpiState::Resetting:
+		case InternalTransferState::Resetting:
 			// Transmitted bad response, attempt to start a new transfer
 			ExchangeHeader();
 			break;
@@ -987,12 +992,7 @@ bool DataTransfer::IsReady() noexcept
 			break;
 		}
 	}
-	else if (!reprap.GetLinuxInterface().IsWritingIap() && millis() - lastTransferTime > SpiTransferTimeout)
-	{
-		// Reset failed transfers automatically after a certain period of time
-		ResetTransfer();
-	}
-	return false;
+	return (state == InternalTransferState::ExchangingHeader) ? TransferState::doingFullTransfer : TransferState::doingPartialTransfer;
 }
 
 void DataTransfer::StartNextTransfer() noexcept
@@ -1014,41 +1014,29 @@ void DataTransfer::StartNextTransfer() noexcept
 	txHeader.crcData = CalcCRC32(txBuffer, txPointer);
 	txHeader.crcHeader = CalcCRC32(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint32_t));
 
-	// Begin SPI transfer
+	// Begin SPI transfe
 	ExchangeHeader();
 }
 
-void DataTransfer::ResetTransfer() noexcept
+void DataTransfer::ResetConnection(bool fullReset) noexcept
 {
+	// The Sbc interface is no longer connected...
+	disable_spi();
 	dataReceived = false;
-	if (state != SpiState::ExchangingHeader)
+
+	// Reset the sequence numbers and clear the data to send
+	lastTransferNumber = 0;
+	rxHeader.sequenceNumber = 0;
+	txHeader.sequenceNumber = 0;
+	rxPointer = txPointer = 0;
+	packetId = 0;
+
+	// Kick off a new transfer
+	if (fullReset)
 	{
-		disable_spi();
-		failedTransfers++;
 		transferReadyHigh = false;
-		ExchangeHeader();
 	}
-}
-
-void DataTransfer::ResetConnection() noexcept
-{
-	if (lastTransferNumber != 0)
-	{
-		// The Linux interface is no longer connected...
-		disable_spi();
-		dataReceived = false;
-
-		// Reset the sequence numbers and clear the data to send
-		lastTransferNumber = 0;
-		rxHeader.sequenceNumber = 0;
-		txHeader.sequenceNumber = 0;
-		rxPointer = txPointer = 0;
-		packetId = 0;
-
-		// Kick off a new transfer
-		transferReadyHigh = false;
-		StartNextTransfer();
-	}
+	StartNextTransfer();
 }
 
 bool DataTransfer::WriteObjectModel(OutputBuffer *data) noexcept
@@ -1309,6 +1297,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	String<StringLength50> rslt;
 	switch (value.GetType())
 	{
+	case TypeCode::None:
 	// FIXME Add support for arrays
 	case TypeCode::Bool:
 	case TypeCode::DriverId_tc:
@@ -1316,6 +1305,9 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::Float:
 	case TypeCode::Int32:
 		payloadLength = expressionLength;
+		break;
+	case TypeCode::Uint64:
+		payloadLength = AddPadding(expressionLength) + sizeof(uint64_t);
 		break;
 	case TypeCode::CString:
 		payloadLength = expressionLength + strlen(value.sVal);
@@ -1325,7 +1317,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::DateTime_tc:
 	case TypeCode::Port:
 	case TypeCode::UniqueId:
-		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
+		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
 		break;
@@ -1358,6 +1350,10 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	// Write data type and expression value
 	switch (value.GetType())
 	{
+	case TypeCode::None:
+		header->dataType = DataType::Null;
+		header->intValue = 0;
+		break;
 	case TypeCode::Bool:
 		header->dataType = DataType::Bool;
 		header->intValue = value.bVal ? 1 : 0;
@@ -1383,6 +1379,15 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->dataType = DataType::Int;
 		header->intValue = value.iVal;
 		break;
+	case TypeCode::Uint64:
+	{
+		header->dataType = DataType::ULong;
+		header->intValue = 0;
+		txPointer = AddPadding(txPointer);		// add padding to remain on a 4-byte boundary
+		uint64_t ulVal = value.Get56BitValue();
+		WriteData(reinterpret_cast<const char *>(&ulVal), sizeof(uint64_t));
+		break;
+	}
 	case TypeCode::HeapString:
 		header->dataType = DataType::String;
 		header->intValue = value.shVal.GetLength();
@@ -1395,7 +1400,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::UniqueId:
 	default:
 		// We have already converted the value to a string in 'rslt'
-		header->dataType = DataType::String;
+		header->dataType = (value.GetType() == TypeCode::DateTime_tc) ? DataType::DateTime : DataType::String;
 		header->intValue = rslt.strlen();
 		WriteData(rslt.c_str(), rslt.strlen());
 		break;
@@ -1688,7 +1693,7 @@ bool DataTransfer::WriteReadFile(FileHandle handle, size_t bufferSize) noexcept
 	// Write data header
 	ReadFileHeader *header = WriteDataHeader<ReadFileHeader>();
 	header->handle = handle;
-	header->maxLength = min<uint32_t>(bufferSize, LinuxTransferBufferSize - sizeof(FileDataHeader));
+	header->maxLength = min<uint32_t>(bufferSize, SbcTransferBufferSize - sizeof(FileDataHeader));
 	return true;
 }
 

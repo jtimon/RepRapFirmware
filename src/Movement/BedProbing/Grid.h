@@ -89,11 +89,12 @@ public:
 	pre(IsValid());
 	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the grid from file returning true if an error occurred
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	const char *GetFileName() const noexcept { return fileName.c_str(); }
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	void SetFileName(const char *name) noexcept;								// Update the filename
 	void SaveToArray(float *array, float zOffset) const noexcept				// Save the grid Z coordinates to an array
 	pre(IsValid());
@@ -118,7 +119,7 @@ private:
 	GridDefinition def;
 	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed
 	LargeBitmap<MaxGridProbePoints> gridHeightSet;					// Bitmap of which heights are set
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	String<MaxFilenameLength> fileName;								// The name of the file that this height map was loaded from or saved to
 #endif
 	bool useMap;													// True to do bed compensation
