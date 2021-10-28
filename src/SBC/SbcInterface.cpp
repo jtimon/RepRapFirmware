@@ -1009,7 +1009,7 @@ void SbcInterface::ExchangeData() noexcept
 #if LPC17xx || STM32F4
 		if (gb == nullptr)
 		{
-			reprap.GetPlatform().MessageF(DebugMessage, "Unable to get requested channel buffer %d\n", i);
+			debugPrintf("Unable to get requested channel buffer %d\n", i);
 			continue;
 		}
 #endif
@@ -1138,7 +1138,7 @@ void SbcInterface::ExchangeData() noexcept
 		{
 #if LPC17xx || STM32F4
 			BoardConfig::WriteFirmwareData(iapChunk, length);
-			iapWritePointer += packet->length;
+			iapWritePointer += length;
 #else
 			uint32_t *dst = reinterpret_cast<uint32_t *>(iapWritePointer);
 			const uint32_t *src = reinterpret_cast<const uint32_t *>(iapChunk);

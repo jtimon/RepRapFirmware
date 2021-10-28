@@ -1817,7 +1817,7 @@ uint32_t DataTransfer::CalcCRC32(const char *buffer, size_t length) const noexce
 // LPC firmware.
 bool DataTransfer::IapDataExchange(size_t len)
 {
-	lastTransferTime = millis();
+	uint32_t lastTransferTime = millis();
 	dataReceived = false;
 	setup_spi(rxBuffer, txBuffer, len);
 	while (!dataReceived && millis() - lastTransferTime < SpiTransferTimeout) {}
