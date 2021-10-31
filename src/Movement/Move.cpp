@@ -1244,7 +1244,8 @@ void Move::LaserTaskRun() noexcept
 			uint32_t ticks;
 			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
 			{
-				delay(ticks);
+				//delay(ticks);
+				(void)TaskBase::Take(ticks);
 			}
 # endif
 		}
