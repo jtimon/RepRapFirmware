@@ -241,7 +241,7 @@ void Move::Init() noexcept
 	longestGcodeWaitInterval = 0;
 	bedLevellingMoveAvailable = false;
 
-	moveTask.Create(MoveStart, "Move", this, TaskPriority::Move);
+	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
 
 void Move::Exit() noexcept
