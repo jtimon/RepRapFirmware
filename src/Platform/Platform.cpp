@@ -1836,7 +1836,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		}
 		else
 		{
-			srd->Print(mtype, slot);
+			srd->Printit(mtype, slot);
 		}
 	}
 
