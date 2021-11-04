@@ -385,7 +385,7 @@ struct BoardDefaults
 
 struct BoardEntry
 {
-    const char *boardName;
+    const char *boardName[3];
     const PinEntry *boardPinTable;
     const size_t numNamedEntries;
     const BoardDefaults &defaults;

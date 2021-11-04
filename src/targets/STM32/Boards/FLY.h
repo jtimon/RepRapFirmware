@@ -525,4 +525,92 @@ constexpr BoardDefaults fly_super8_Defaults = {
 #endif
     NoPin,
 };
+
+constexpr PinEntry PinTable_FLY_E3_PROV2[] =
+{
+
+
+    //Thermistors
+    {PA_4, "e0temp,t0"},
+    {PA_1, "e1temp,t1"},
+    {PA_3, "bedtemp,tb"},
+    {PC_1, "boardtemp,tboard"},
+    //Endstops
+    {PA_2, "xmin,xstop"},
+    {PB_10, "ymin,ystop"},
+    {PC_4, "zmin,zstop"},
+    {PD_0, "e0min,e0stop"},
+    {PD_1, "e1min,e1stop"},
+    // Servo
+    {PB_0,  "servo0" },
+
+   // Porbe
+    {PC_5, "probe"},
+    
+    //Heaters and Fans (Big and Small Mosfets}
+    {PA_0,  "bed,hbed" },
+    {PA_5,  "e0heat,he0" },
+    {PC_6,  "e1heat,he1" },
+    {PA_7,  "fan0,fan" },
+    {PA_6,  "fan1" },
+    {PB_6,  "fan2" },
+    {PB_7,  "fan3" },
+
+    //EXP1
+    {PE_12, "beep"},
+    {PE_11, "btnenc"},
+    {PE_10, "btnen1"},
+    {PE_9, "btnen2"},
+    {PE_8, "lcdd4"},
+    {PE_7, "lcdrs"},
+    {PB_1, "lcden"},
+
+    //SD
+
+    {PC_9, "SDD1"},
+    {PC_8, "SDD0"},
+    {PC_12, "SDSCK"},
+    {PD_2, "SDCMD"},
+    {PC_11, "SDD3"},
+    {PC_10, "SDD2"},
+
+    // UART
+    {PA_9, "TX1"},
+    {PA_10, "RX1"},
+
+
+
+    //FPC
+    {PB_11, "neopixel"},
+    {PD_11, "PSON"},
+    {PB_1, "laser"},
+    {PD_10, "pwr, PWRDET"},
+
+};
+
+constexpr BoardDefaults fly_e3_prov2_Defaults = {
+    {0xd0c680ae},                   // Signatures
+    SD_SDIO,                                    // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {PB_3, PB_4, PB_5},                  //SPI2
+        {PC_2, PC_0, PC_1},                     //SPI3
+        {PE_8, NoPin, PB_1},                    //SPI4
+        {PD_6, PD_4, PD_6},                     //SPI5
+    },
+    5,                                            // Number of drivers
+    {PE_5, PE_1, PC_2, PD_6 ,PC_15},           //enablePins
+    {PE_3, PB_9, PA_15, PD_4, PC_13},        //stepPins
+    {PE_2, PB_8, PD_7, PD_3, PC_0 },        //dirPins
+#if TMC_SOFT_UART
+    {PE_4, PE_0, PA_8, PD_5, PC_14},           
+     5,                                      //uartPins                                              // Smart drivers
+#endif
+    0,  
+#if HAS_VOLTAGE_MONITOR
+    PC_3,
+#endif
+    NoPin,
+};
 #endif

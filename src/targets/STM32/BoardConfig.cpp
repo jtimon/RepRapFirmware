@@ -396,7 +396,7 @@ static SSPChannel InitSDCard(uint32_t boardSig, FATFS *fs)
             if (LPC_Boards[i].defaults.signatures[j] == boardSig)
             {
                 conf = LPC_Boards[i].defaults.SDConfig;
-                debugPrintf("Sig match 0x%x %d board %s SDConfig %d\n", (unsigned) boardSig, (int)i, LPC_Boards[i].boardName, conf);
+                debugPrintf("Sig match 0x%x %d SDConfig %d\n", (unsigned) boardSig, (int)i, conf);
             }
             
     if (conf == SD_NONE)
