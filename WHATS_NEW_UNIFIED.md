@@ -1,3 +1,10 @@
+Version 3.4.0beta6_1
+====================
+* Duet3d 3.3beta6
+* Add changes from 3.3.0_11
+* Include CCMRam usage in M122 output
+
+
 Version 3.4.0beta5_1
 ====================
 * Duet3D 3.3beta5
