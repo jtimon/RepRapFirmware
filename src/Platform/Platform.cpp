@@ -444,7 +444,6 @@ Platform::Platform() noexcept :
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
-	atxPowerControlled(false),
 	deferredPowerDown(false)
 {
 }
@@ -532,11 +531,7 @@ void Platform::Init() noexcept
 	BoardConfig::Init();
 #endif
 
-#if HAS_DEFAULT_PSON_PIN
-	// Set up the default PS_ON port. Initialise it to off in case it is being used for something else or is inverted.
-	String<1> dummy;
-	PsOnPort.AssignPort("pson", dummy.GetRef(), PinUsedBy::gpout, PinAccess::write0);
-#elif STM32F4 || LPC17xx
+#if STM32F4 || LPC17xx
 	// Setup default PS_ON port based on board.txt config
     if (ATX_POWER_PIN != NoPin)
     {
@@ -643,25 +638,27 @@ void Platform::Init() noexcept
 		axisMinima[axis] = DefaultAxisMinimum;
 		axisMaxima[axis] = DefaultAxisMaximum;
 
-		maxFeedrates[axis] = DefaultXYMaxFeedrate;
-		accelerations[axis] = DefaultXYAcceleration;
-		driveStepsPerUnit[axis] = DefaultXYDriveStepsPerUnit;
-		instantDvs[axis] = DefaultXYInstantDv;
+		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
+		normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
+		reducedAccelerations[axis] = ConvertAcceleration(DefaultReducedAxisAcceleration);
+		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
+		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 	}
 
 	// We use different defaults for the Z axis
-	maxFeedrates[Z_AXIS] = DefaultZMaxFeedrate;
-	accelerations[Z_AXIS] = DefaultZAcceleration;
+	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
+	normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
+	reducedAccelerations[Z_AXIS] = ConvertAcceleration(DefaultReducedZAcceleration);
 	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
-	instantDvs[Z_AXIS] = DefaultZInstantDv;
+	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
 	// Extruders
 	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		maxFeedrates[drive] = DefaultEMaxFeedrate;
-		accelerations[drive] = DefaultEAcceleration;
+		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
+		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
 		driveStepsPerUnit[drive] = DefaultEDriveStepsPerUnit;
-		instantDvs[drive] = DefaultEInstantDv;
+		instantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
 	}
 
 	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);
@@ -3799,12 +3796,10 @@ GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	if (gb.Seen('C'))
 	{
 		rslt = GetGCodeResultFromSuccess(PsOnPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write1));
-		atxPowerControlled = PsOnPort.IsValid();
 	}
 	else if (PsOnPort.IsValid())
 	{
 		PsOnPort.WriteDigital(true);
-		atxPowerControlled = true;
 		rslt = GCodeResult::ok;
 	}
 	else
@@ -3824,14 +3819,27 @@ GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(
 
 GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	deferredPowerDown = gb.Seen('S') && gb.GetUIValue() != 0;
-	atxPowerControlled = true;				// set this before calling AtxPowerOff
-	if (!deferredPowerDown)
+	GCodeResult rslt;
+	if (gb.Seen('C'))
 	{
-		AtxPowerOff();
+		rslt = GetGCodeResultFromSuccess(PsOnPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0));
+	}
+	else if (PsOnPort.IsValid())
+	{
+		deferredPowerDown = gb.Seen('S') && gb.GetUIValue() != 0;
+		if (!deferredPowerDown)
+		{
+			AtxPowerOff();
+		}
+		rslt = GCodeResult::ok;
+	}
+	else
+	{
+		reply.copy("No PS_ON port defined");
+		rslt = GCodeResult::error;
 	}
 	reprap.StateUpdated();
-	return GCodeResult::ok;
+	return rslt;
 }
 
 void Platform::AtxPowerOff() noexcept
@@ -3852,7 +3860,7 @@ void Platform::AtxPowerOff() noexcept
 #endif
 
 	// The PS_ON pin on Duet 3 is shared with another pin, so only try to turn off ATX power if we know that power is being controlled
-	if (atxPowerControlled)
+	if (IsAtxPowerControlled())
 	{
 		PsOnPort.WriteDigital(false);
 		reprap.StateUpdated();

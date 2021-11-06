@@ -346,7 +346,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (oldTool != nullptr)
 			{
 				reprap.StandbyTool(oldTool->Number(), IsSimulating());
-				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
+				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
 			if (reprap.GetTool(newToolNumber).IsNotNull() && (toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
@@ -363,7 +363,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
 			reprap.SelectTool(newToolNumber, IsSimulating());
-			UpdateCurrentUserPosition();				// get the actual position of the new tool
+			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (machineType != MachineType::fff || toolChangeParam == 0)
@@ -377,37 +377,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				scratchString.printf("tpost%d.g", newToolNumber);
 				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
 			}
-		}
-		break;
-
-	case GCodeState::toolChange3:						// move the new tool to the correct height
-	case GCodeState::m109ToolChange3:					// move the new tool to the correct height
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing
-		{
-			// Check here if the tool offsets being applied would exceed Z axis limits
-			auto currentTool = reprap.GetCurrentTool();
-			if (currentTool != nullptr)
-			{
-				const float newZPos = (moveState.coords[Z_AXIS] - currentTool->GetOffset(Z_AXIS));
-				if (newZPos > platform.AxisMaximum(Z_AXIS) || newZPos < platform.AxisMinimum(Z_AXIS))
-				{
-					gb.LatestMachineState().feedRate = toolChangeRestorePoint.feedRate;
-					doingToolChange = false;
-					gb.LatestMachineState().SetError("New tool too close to Z axis limit. Aborting tool change");
-					AbortPrint(gb);
-					gb.SetState(GCodeState::checkError);
-					break;
-				}
-			}
-
-			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
-			SetMoveBufferDefaults();
-			moveState.currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
-			ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
-			moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
-			moveState.tool = reprap.GetCurrentTool();							// needed so that bed compensation is applied correctly
-			NewMoveAvailable(1);
-			gb.AdvanceState();
 		}
 		break;
 
