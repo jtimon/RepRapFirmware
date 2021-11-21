@@ -14,7 +14,6 @@
 #include "Version.h"
 #include "BoardConfig.h"
 #include "RepRapFirmware.h"
-#include "GCodes/GCodeResult.h"
 #include "sd_mmc.h"
 #include "SPI.h"
 #include "HardwareSPI.h"

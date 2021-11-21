@@ -152,7 +152,7 @@ void RemoteHeater::Spin() noexcept
 						CalculateModel(fanOffParams);
 						if (tuningFans.IsEmpty())
 						{
-							SetAndReportModel(false);
+							SetAndReportModelAfterTuning(false);
 							StopTuning();
 							break;
 						}
@@ -182,7 +182,7 @@ void RemoteHeater::Spin() noexcept
 					{
 						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);					// turn fans off
 						CalculateModel(fanOnParams);
-						SetAndReportModel(true);
+						SetAndReportModelAfterTuning(true);
 						StopTuning();
 						break;
 					}
@@ -403,7 +403,7 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply) noexcept
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		CanMessageUpdateHeaterModelNew * const msg = buf->SetupRequestMessage<CanMessageUpdateHeaterModelNew>(rid, CanInterface::GetCanAddress(), boardAddress);
+		CanMessageHeaterModelNewNew * const msg = buf->SetupRequestMessage<CanMessageHeaterModelNewNew>(rid, CanInterface::GetCanAddress(), boardAddress);
 		GetModel().SetupCanMessage(GetHeaterNumber(), *msg);
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}

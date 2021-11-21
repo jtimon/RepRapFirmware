@@ -64,7 +64,7 @@ static Task<AccelerometerTaskStackWords> *accelerometerTask;
 static LIS3DH *accelerometer = nullptr;
 
 static uint16_t samplingRate = 0;							// 0 means use the default
-static volatile uint16_t numSamplesRequested;
+static volatile uint32_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
@@ -73,6 +73,8 @@ static unsigned int numLocalRunsCompleted = 0;
 static unsigned int lastRunNumSamplesReceived = 0;
 static uint8_t axisLookup[3];
 static bool axisInverted[3];
+static volatile bool successfulStart = false;
+static volatile bool failedStart = false;
 
 static IoPort spiCsPort;
 static IoPort irqPort;
@@ -112,9 +114,11 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			unsigned int numOverflows = 0;
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
+			bool recordFailedStart = false;
 
 			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
 			{
+				successfulStart = true;
 				uint16_t dataRate = 0;
 				do
 				{
@@ -198,9 +202,13 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 					f->Write(temp.c_str());
 				}
 			}
-			else if (f != nullptr)
+			else
 			{
-				f->Write("Failed to start accelerometer\n");
+				recordFailedStart = true;
+				if (f != nullptr)
+				{
+					f->Write("Failed to start accelerometer\n");
+				}
 			}
 
 			if (f != nullptr)
@@ -214,6 +222,10 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 
 			// Wait for another command
 			accelerometerFile = nullptr;
+			if (recordFailedStart)
+			{
+				failedStart = true;
+			}
 		}
 	}
 }
@@ -379,7 +391,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	gb.MustSee('P');
 	const DriverId device = gb.GetDriverId();
 	gb.MustSee('S');
-	const uint16_t numSamples = min<uint32_t>(gb.GetUIValue(), 65535);
+	const uint32_t numSamples = gb.GetUIValue();
 	gb.MustSee('A');
 	const uint8_t mode = gb.GetUIValue();
 
@@ -468,7 +480,6 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		temp.cat('\n');
 		f->Write(temp.c_str());
 	}
-	accelerometerFile = f;
 
 # if SUPPORT_CAN_EXPANSION
 	if (device.IsRemote())
@@ -478,10 +489,12 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		expectedRemoteAxes = axes;
 		numRemoteOverflows = 0;
 
+		accelerometerFile = f;
 		const GCodeResult rslt = CanInterface::StartAccelerometer(device, axes, numSamples, mode, gb, reply);
 		if (rslt > GCodeResult::warning)
 		{
 			accelerometerFile->Close();
+			accelerometerFile = nullptr;
 			MassStorage::Delete(accelerometerFileName.c_str(), false);
 			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
 		}
@@ -489,8 +502,32 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	}
 # endif
 
+	successfulStart = false;
+	failedStart = false;
+	accelerometerFile = f;
 	accelerometerTask->Give();
-	return GCodeResult::ok;
+	const uint32_t startTime = millis();
+	do
+	{
+		delay(5);
+		if (successfulStart)
+		{
+			return GCodeResult::ok;
+		}
+	} while (!failedStart && millis() - startTime < 1000);
+
+	reply.copy("Failed to start accelerometer data collection");
+	if (accelerometer->HasInterruptError())
+	{
+		reply.cat(": INT1 error");
+	}
+	if (accelerometerFile != nullptr)
+	{
+		accelerometerFile->Close();
+		accelerometerFile = nullptr;
+		MassStorage::Delete(accelerometerFileName.c_str(), false);
+	}
+	return GCodeResult::error;
 }
 
 bool Accelerometers::HasLocalAccelerometer() noexcept
@@ -608,7 +645,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			if (msg.lastPacket)
 			{
 				String<StringLength50> temp;
-				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numRemoteOverflows);
+				temp.printf("Rate %u, overflows %u\n", (unsigned int)msg.actualSampleRate, numRemoteOverflows);
 				f->Write(temp.c_str());
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();

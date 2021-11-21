@@ -81,15 +81,15 @@ public:
 
     void create() THROWS(GCodeException);
 
-    Family getFamily() noexcept { return _family; }
+    Family getFamily() const noexcept { return _family; }
 
-    BossaFlash* null getFlash() noexcept { return _flash; }
+    BossaFlash *_ecv_from null getFlash() const noexcept { return _flash; }
 
     void reset() THROWS(GCodeException);
 
 private:
     Samba& _samba;
-    BossaFlash* null _flash;
+    BossaFlash *_ecv_from null _flash;
     Family _family;
 
 #if ORIGINAL_BOSSA_CODE

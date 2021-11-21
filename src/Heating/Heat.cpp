@@ -908,7 +908,10 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 			const FopDt& model = heaters[h]->GetModel();
 			if (model.IsEnabled())
 			{
-				ok = model.WriteParameters(f, h);
+				String<StringLength256> scratchString;
+				model.AppendM307Command(h, scratchString.GetRef(), !IsBedOrChamberHeater(h));
+				model.AppendM301Command(h, scratchString.GetRef());
+				ok = f->Write(scratchString.c_str());
 			}
 		}
 	}
@@ -1422,10 +1425,10 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 	return h->ReportDetails(reply);
 }
 
-GCodeResult Heat::ProcessM307New(const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
-	return (h.IsNotNull()) ? h->SetOrReportModelNew(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
+	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
 }
 
 GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept

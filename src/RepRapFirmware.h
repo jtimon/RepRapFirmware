@@ -30,8 +30,8 @@ Licence: GPL
 #include <climits>		// for CHAR_BIT
 
 #include <ctime>
-[[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* t);
-[[deprecated("use SafeStrptime instead")]] char * strptime (const char *buf, const char *format, struct tm *timeptr);
+[[deprecated("use gmtime_r instead for thread-safety")]] tm *_ecv_null gmtime(const time_t* t);
+[[deprecated("use SafeStrptime instead")]] char *_ecv_array strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr);
 const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
 
 #include <Core.h>
@@ -51,11 +51,17 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 #endif
 
 #include <CoreIO.h>
-# include <Devices.h>
+#include <Devices.h>
 
 // The following are needed by many other files, so include them here
-# include <Platform/MessageType.h>
-# include <GCodes/GCodeResult.h>
+#include <Platform/MessageType.h>
+#include <GCodeResult.h>
+
+// Convert an error or warning result into a suitable generic message type. Should only be called with GCodeResult::warning or GCodeResult::error.
+inline MessageType GetGenericMessageType(GCodeResult rslt)
+{
+	return (rslt == GCodeResult::warning) ? WarningMessage : ErrorMessage;
+}
 
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
 
@@ -432,17 +438,17 @@ private:
 };
 
 // Function to delete an object and clear the pointer. Safe to call even if the pointer is already null.
-template <typename T> void DeleteObject(T*& ptr) noexcept
+template <typename T> void DeleteObject(T *null & ptr) noexcept
 {
-	T* p2 = nullptr;
+	T *null p2 = nullptr;
 	std::swap(ptr, p2);
 	delete p2;
 }
 
 // Function to make a pointer point to a new object and delete the existing object, if any. T2 must be the same as T or derived from it.
-template <typename T, typename T2> void ReplaceObject(T*& ptr, T2* pNew) noexcept
+template <typename T, typename T2> void ReplaceObject(T *null & ptr, T2* pNew) noexcept
 {
-	T* p2 = pNew;
+	T *null p2 = static_cast<T *null>(pNew);
 	std::swap(ptr, p2);
 	delete p2;
 }
@@ -456,7 +462,6 @@ constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when ex
 constexpr size_t NO_AXIS = 0x3F;									// A value to represent no axis, must fit in 6 bits (see EndstopHitDetails and RemoteInputHandle) and not be a valid axis number
 
 static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
-static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;

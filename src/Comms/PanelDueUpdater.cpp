@@ -84,7 +84,7 @@ void DebugObserver::onStatus(const char *message, ...) noexcept
 	va_list ap;
 
 	va_start(ap, message);
-	reprap.GetPlatform().MessageF(GenericMessage, message, ap);
+	reprap.GetPlatform().MessageV(GenericMessage, message, ap);
 	va_end(ap);
 }
 
@@ -159,7 +159,7 @@ void PanelDueUpdater::Spin() noexcept
 				// Since writing messages via AppendAuxReply is disabled while flashing we need to send it directly
 				auto auxPort = GetAuxPort();
 				auxPort->write('\n');			// Make sure the previous message is regarded as terminated by PanelDue
-				auxPort->write(panelDueCommandEraseAndReset);
+				auxPort->print(panelDueCommandEraseAndReset);
 				auxPort->flush();
 				state = FlashState::waitAfterEraseAndReset;
 				erasedAndResetAt = millis();

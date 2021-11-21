@@ -61,7 +61,7 @@ constexpr float MinJumpWidth = 0.05;
 constexpr float MaxJumpWidth = 0.5;
 constexpr float DefaultJumpWidth = 0.25;
 
-constexpr const char *NoCanBufferMessage = "no CAN buffer available";
+constexpr const char *_ecv_array NoCanBufferMessage = "no CAN buffer available";
 
 static Mutex transactionMutex;
 
@@ -815,7 +815,7 @@ uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t co
 	return (can1dev != nullptr) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
-bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t const timeout) noexcept
+bool CanInterface::ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t const timeout) noexcept
 {
 	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf);
 }
@@ -1127,7 +1127,7 @@ void CanInterface::WakeAsyncSenderFromIsr() noexcept
 }
 
 // Remote handle functions
-GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval,
+GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *_ecv_array pinName, uint16_t threshold, uint16_t minInterval,
 										bool& currentState, const StringRef& reply) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
@@ -1458,16 +1458,11 @@ CanId CanInterface::ODrive::ArbitrationId(DriverId const driver, uint8_t const c
 #endif
 
 #if DUAL_CAN
-CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
+CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
 {
 	// Detect any early return conditions
 	if (can1dev == nullptr)
 	{
-		return nullptr;
-	}
-	if (cmd & 0xE0) // Top three bits must be zero
-	{
-		reply.copy("Simple CAN command not supported");
 		return nullptr;
 	}
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
@@ -1477,24 +1472,25 @@ CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const dri
 		return nullptr;
 	}
 
-	// Find the correct arbitration id
-
- 	// Flush CAN receive hardware
-	while (CanInterface::ReceivePlainMessage(buf , 0)) { }
-
 	// Build the message
-	buf->id = ArbitrationId(driver, cmd);
 	buf->marker = 0;
 	buf->extId = false; // ODrive uses 11-bit IDs
 	buf->fdMode = false;
 	buf->useBrs = false;
 	buf->dataLength = 0;
-	buf->remote = true; // set RTR bit
 	buf->reportInFifo = false;
 
 	return buf;
 }
 #endif
+
+#if DUAL_CAN
+void CanInterface::ODrive::FlushCanReceiveHardware() noexcept
+{
+	while (CanInterface::ReceivePlainMessage(nullptr, 0)) { }
+}
+#endif
+
 
 #if DUAL_CAN
 bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept

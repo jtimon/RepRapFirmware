@@ -15,7 +15,6 @@
 
 #if SUPPORT_TMC51xx
 
-#include <GCodes/GCodeResult.h>
 #include "DriverMode.h"
 
 namespace SmartDrivers

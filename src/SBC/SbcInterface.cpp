@@ -261,7 +261,7 @@ void SbcInterface::ExchangeData() noexcept
 			// Make sure no existing codes are overwritten
 			uint16_t bufferedCodeSize = sizeof(BufferedCodeHeader) + packet->length;
 			if ((txEnd == 0 && bufferedCodeSize > max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer)) ||
-					(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
+				(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
 			{
 #if false
 				// This isn't enabled because the debug call plus critical section would lead to software resets
@@ -758,10 +758,6 @@ void SbcInterface::ExchangeData() noexcept
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
-			}
 			break;
 
 		// Result of a deletion request
@@ -772,26 +768,18 @@ void SbcInterface::ExchangeData() noexcept
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
-			}
 			break;
 
 		// Result of a file open request
 		case SbcRequest::OpenFileResult:
 			if (fileOperation == FileOperation::openRead ||
-					fileOperation == FileOperation::openWrite ||
-					fileOperation == FileOperation::openAppend)
+				fileOperation == FileOperation::openWrite ||
+				fileOperation == FileOperation::openAppend)
 			{
 				fileHandle = transfer.ReadOpenFileResult(fileOffset);
 				fileSuccess = (fileHandle != noFileHandle);
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
-			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
 			}
 			break;
 
@@ -804,10 +792,6 @@ void SbcInterface::ExchangeData() noexcept
 				fileOffset = fileSuccess ? bytesRead : 0;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
-			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
 			}
 			break;
 
@@ -823,10 +807,6 @@ void SbcInterface::ExchangeData() noexcept
 					fileSemaphore.Give();
 				}
 			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
-			}
 			break;
 
 		// Result of a file seek request
@@ -836,10 +816,6 @@ void SbcInterface::ExchangeData() noexcept
 				fileSuccess = transfer.ReadBoolean();
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
-			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
 			}
 			break;
 
@@ -851,15 +827,14 @@ void SbcInterface::ExchangeData() noexcept
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
-			else
-			{
-				REPORT_INTERNAL_ERROR;
-			}
 			break;
 
 		// Invalid request
 		default:
+#ifdef DEBUG
+			// Report this error only in debug builds. We may get here when the SBC sends a file response but the connection was reset
 			REPORT_INTERNAL_ERROR;
+#endif
 			break;
 		}
 
@@ -971,6 +946,7 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 
 		default:
+			fileOperationPending = false;
 			REPORT_INTERNAL_ERROR;
 			break;
 		}
@@ -1190,6 +1166,7 @@ void SbcInterface::InvalidateResources() noexcept
 
 	if (fileOperation != FileOperation::none)
 	{
+		fileOperationPending = false;
 		fileOperation = FileOperation::none;
 		fileSemaphore.Give();
 	}
@@ -1406,7 +1383,15 @@ bool SbcInterface::FileExists(const char *filename) noexcept
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to check if file %s exists\n", filename);
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return false;
+	}
 
 	// Return the result
 	return fileSuccess;
@@ -1432,7 +1417,15 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return false;
+	}
 
 	// Return the result
 	return fileSuccess;
@@ -1478,7 +1471,16 @@ FileHandle SbcInterface::OpenFile(const char *filename, OpenMode mode, FilePosit
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to open file %s\n", filename);
+		fileLength = 0;
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return false;
+	}
 
 	// Update the file length and return the handle
 	fileLength = fileOffset;
@@ -1507,8 +1509,15 @@ int SbcInterface::ReadFile(FileHandle handle, char *buffer, size_t bufferLength)
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
-;
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to read from file\n");
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return -1;
+	}
 
 	// Return the number of bytes read
 	return fileSuccess ? (int)fileOffset : -1;
@@ -1536,7 +1545,15 @@ bool SbcInterface::WriteFile(FileHandle handle, const char *buffer, size_t buffe
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to write to file\n");
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return false;
+	}
 
 	// Return the result
 	return fileSuccess;
@@ -1563,7 +1580,15 @@ bool SbcInterface::SeekFile(FileHandle handle, FilePosition offset) noexcept
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to seek in file\n");
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return false;
+	}
 
 	// Return the result
 	return fileSuccess;
@@ -1589,7 +1614,15 @@ bool SbcInterface::TruncateFile(FileHandle handle) noexcept
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to truncate file\n");
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+		return false;
+	}
 
 	// Return the result
 	return fileSuccess;
@@ -1615,7 +1648,14 @@ void SbcInterface::CloseFile(FileHandle handle) noexcept
 		delaying = false;
 		sbcTask->Give();
 	}
-	fileSemaphore.Take();
+
+	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to close file\n");
+
+		fileOperation = FileOperation::none;
+		fileOperationPending = false;
+	}
 }
 
 void SbcInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
@@ -1678,6 +1718,12 @@ void SbcInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexce
 // This method returns true on success and false if an error occurred (e.g. file not found)
 bool SbcInterface::GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept
 {
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
 	if (waitingForFileChunk)
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Trying to request a file chunk from two independent tasks\n");
@@ -1692,7 +1738,13 @@ bool SbcInterface::GetFileChunk(const char *filename, uint32_t offset, char *buf
 	requestedFileBuffer = buffer;
 
 	waitingForFileChunk = true;
-	requestedFileSemaphore.Take();
+	if (!requestedFileSemaphore.Take(SpiMaxRequestTime))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while waiting for file chunk\n");
+		bufferLength = fileLength = 0;
+		waitingForFileChunk = false;
+		return false;
+	}
 
 	waitingForFileChunk = false;
 	if (requestedFileDataLength < 0)

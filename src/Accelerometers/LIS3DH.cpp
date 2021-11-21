@@ -178,6 +178,16 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 		ReadRegisters(LisRegister::OutXL, 6);
 	}
 	totalNumRead = 0;
+
+	// Before we enable data collection, check that the interrupt line is low
+	pinMode(int1Pin, INPUT);			// make sure we can read the interrupt pin
+	delayMicroseconds(5);
+	interruptError = digitalRead(int1Pin);
+	if (interruptError)
+	{
+		return false;
+	}
+
 	const bool ok = WriteRegister(LisRegister::Ctrl_0x20, ctrlReg_0x20 | (axes & 7));
 	return ok && attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, CallbackParameter(this));
 }
@@ -224,7 +234,7 @@ unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataR
 		const uint32_t interval = lastInterruptTime - firstInterruptTime;
 		dataRate = (totalNumRead == 0 || interval == 0)
 					? 0
-					: (totalNumRead * StepClockRate)/interval;
+					: (totalNumRead * (uint64_t)StepClockRate)/interval;
 		totalNumRead += numToRead;
 	}
 	return numToRead;

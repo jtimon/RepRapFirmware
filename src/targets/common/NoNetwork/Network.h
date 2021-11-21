@@ -3,7 +3,6 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
-#include "GCodes/GCodeResult.h"
 #include "General/IPAddress.h"
 #include <ObjectModel/ObjectModel.h>
 #include "Networking/NetworkDefs.h"

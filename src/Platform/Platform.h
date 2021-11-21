@@ -309,6 +309,17 @@ struct AxisDriversConfig
 	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
 };
 
+#if SUPPORT_NONLINEAR_EXTRUSION
+
+struct NonlinearExtrusion
+{
+	float A;
+	float B;
+	float limit;
+};
+
+#endif
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform INHERIT_OBJECT_MODEL
 {
@@ -342,8 +353,8 @@ public:
 
 	BoardType GetBoardType() const noexcept { return board; }
 	void SetBoardType(BoardType bt) noexcept;
-	const char* GetElectronicsString() const noexcept;
-	const char* GetBoardString() const noexcept;
+	const char *_ecv_array GetElectronicsString() const noexcept;
+	const char *_ecv_array GetBoardString() const noexcept;
 
 #if SUPPORT_OBJECT_MODEL
 	size_t GetNumGpInputsToReport() const noexcept;
@@ -356,8 +367,8 @@ public:
 
 #ifdef DUET_NG
 	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
-	const char *GetBoardName() const noexcept;
-	const char *GetBoardShortName() const noexcept;
+	const char *_ecv_array GetBoardName() const noexcept;
+	const char *_ecv_array GetBoardShortName() const noexcept;
 #endif
 
 	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
@@ -375,7 +386,7 @@ public:
   	// Communications and data storage
 	void AppendUsbReply(OutputBuffer *buffer) noexcept;
 	void AppendAuxReply(size_t auxNumber, OutputBuffer *buf, bool rawMessage) noexcept;
-	void AppendAuxReply(size_t auxNumber, const char *msg, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool rawMessage) noexcept;
 
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
     bool IsAuxEnabled(size_t auxNumber) const noexcept;				// Any device on the AUX line?
@@ -405,10 +416,10 @@ public:
 
 	// File functions
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
-	bool FileExists(const char* folder, const char *filename) const noexcept;
+	FileStore* OpenFile(const char *_ecv_array folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
+	bool FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool Delete(const char* folder, const char *filename) const noexcept;
+	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 #endif
 
 	const char *_ecv_array GetWebDir() const noexcept; 					// Where the html etc files are
@@ -416,13 +427,13 @@ public:
 	const char *_ecv_array GetMacroDir() const noexcept;				// Where the user-defined macros are
 
 	// Functions to work with the system files folder
-	GCodeResult SetSysDir(const char* dir, const StringRef& reply) noexcept;				// Set the system files path
-	bool SysFileExists(const char *filename) const noexcept;
-	FileStore* OpenSysFile(const char *filename, OpenMode mode) const noexcept;
+	GCodeResult SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the system files path
+	bool SysFileExists(const char *_ecv_array filename) const noexcept;
+	FileStore* OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool DeleteSysFile(const char *filename) const noexcept;
+	bool DeleteSysFile(const char *_ecv_array filename) const noexcept;
 # endif
-	bool MakeSysFileName(const StringRef& result, const char *filename) const noexcept;
+	bool MakeSysFileName(const StringRef& rslt, const char *_ecv_array filename) const noexcept;
 	void AppendSysDir(const StringRef & path) const noexcept;
 	ReadLockedPointer<const char> GetSysDir() const noexcept;	// where the system files are
 #endif
@@ -431,7 +442,7 @@ public:
 	void Message(MessageType type, const char *_ecv_array message) noexcept;
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
 	void MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
-	void MessageF(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
+	void MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
 	void DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept;
 	bool FlushMessages() noexcept;								// Flush messages to USB and aux, returning true if there is more to send
 	void SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept;
@@ -517,7 +528,7 @@ public:
 	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
 
 #if SUPPORT_NONLINEAR_EXTRUSION
-	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept;
+	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
 #endif
 
@@ -543,7 +554,7 @@ public:
 
 	// AUX device
 	void PanelDueBeep(int freq, int ms) noexcept;
-	void SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept;
+	void SendPanelDueMessage(size_t auxNumber, const char *_ecv_array msg) noexcept;
 
 	// Hotend configuration
 	float GetFilamentWidth() const noexcept;
@@ -596,11 +607,11 @@ public:
 #endif
 
 	// Logging support
+	const char *_ecv_array GetLogLevel() const noexcept;
 #if HAS_MASS_STORAGE
 	GCodeResult ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	const char *GetLogFileName() const noexcept;
+	const char *_ecv_array null GetLogFileName() const noexcept;
 #endif
-	const char *GetLogLevel() const noexcept;
 
 	// Ancillary PWM
 	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -662,9 +673,9 @@ protected:
 	OBJECT_MODEL_ARRAY(workplaceOffsets)
 
 private:
-	const char* InternalGetSysDir() const noexcept;  					// where the system files are - not thread-safe!
+	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
 
-	void RawMessage(MessageType type, const char *message) noexcept;	// called by Message after handling error/warning flags
+	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 
 	float GetCpuTemperature() const noexcept;
 
@@ -678,7 +689,7 @@ private:
 #endif
 
 #if HAS_SMART_DRIVERS
-	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported) noexcept;
+	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
 #if HAS_MASS_STORAGE
@@ -743,7 +754,7 @@ private:
 #endif
 
 #if SUPPORT_NONLINEAR_EXTRUSION
-	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
+	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients
 #endif
 
 	DriverId extruderDrivers[MaxExtruders];					// the driver number assigned to each extruder
@@ -827,7 +838,7 @@ private:
 
 	// Files
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	const char *sysDir;
+	const char *_ecv_array sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif
 
