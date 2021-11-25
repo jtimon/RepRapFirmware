@@ -232,12 +232,12 @@ static void ConfigureSPIPins(SSPChannel dev, Pin clk, Pin miso, Pin mosi)
     // Configure a single SPI device, we use DMA on SPI2 and SPI3
     switch(dev)
     {
-    case SSP2:
-        SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, DMA1_Stream3, DMA_CHANNEL_0, DMA1_Stream3_IRQn, DMA1_Stream4, DMA_CHANNEL_0, DMA1_Stream4_IRQn);
-        break;
-    case SSP3:
-        SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, DMA1_Stream0, DMA_CHANNEL_0, DMA1_Stream0_IRQn, DMA1_Stream5, DMA_CHANNEL_0, DMA1_Stream5_IRQn);
-        break;
+    //case SSP2:
+        //SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, DMA1_Stream3, DMA_CHANNEL_0, DMA1_Stream3_IRQn, DMA1_Stream4, DMA_CHANNEL_0, DMA1_Stream4_IRQn);
+        //break;
+    //case SSP3:
+        //SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, DMA1_Stream0, DMA_CHANNEL_0, DMA1_Stream0_IRQn, DMA1_Stream5, DMA_CHANNEL_0, DMA1_Stream5_IRQn);
+        //break;
     default:
         SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin);
         break;
@@ -343,10 +343,11 @@ typedef struct {
 
 // These are our known SD card configurations
 static constexpr SDCardConfig SDCardConfigs[] = {
-    {SSP1, {PA_5, PA_6, PB_5, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // SKR Pro
-    {SSP1, {PA_5, PA_6, PA_7, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // GTR
-    {SSPSDIO, {PC_8, PC_9, PC_10, PC_11, PC_12, PD_2}, {0xc02, 0xc02, 0xc02, 0xc02, 0xc02, 0xc02}}, // Fly/SDIO
-    {SSP3, {PC_10, PC_11, PC_12, PC_9, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
+    //{SSP1, {PA_5, PA_6, PB_5, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // SKR Pro
+    //{SSP1, {PA_5, PA_6, PA_7, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // GTR
+    //{SSPSDIO, {PC_8, PC_9, PC_10, PC_11, PC_12, PD_2}, {0xc02, 0xc02, 0xc02, 0xc02, 0xc02, 0xc02}}, // Fly/SDIO
+    //{SSP3, {PC_10, PC_11, PC_12, PC_9, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
+    {SSP3, {PC_10, PC_11, PC_12, PA_15, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
 };
 
 static bool TryConfig(uint32_t config, FATFS *fs)
@@ -456,7 +457,11 @@ void BoardConfig::Init() noexcept
     // polled I/O for the disk.
     NVIC_SetPriority(DMA2_Stream6_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA2_Stream3_IRQn, NvicPrioritySpi);
+#if STM32H7
+    NVIC_SetPriority(SDMMC1_IRQn, NvicPrioritySDIO);
+#else
     NVIC_SetPriority(SDIO_IRQn, NvicPrioritySDIO);
+#endif
     
     NVIC_SetPriority(DMA1_Stream3_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream4_IRQn, NvicPrioritySpi);

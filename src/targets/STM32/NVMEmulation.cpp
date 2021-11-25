@@ -28,6 +28,9 @@ static uint32_t *GetSlotPtr(uint8_t slot)
 //the first 2 bytes of a used reset slot will have the magic number in it.
 bool IsSlotVacant(uint8_t slot)
 {
+#if STM32H7
+    return false;
+#else
     const uint32_t *p = GetSlotPtr(slot);
     
     for (size_t i = 0; i < SlotSize; ++i)
@@ -39,21 +42,28 @@ bool IsSlotVacant(uint8_t slot)
         ++p;
     }
     return true;
+#endif
 }
 
 
 void NVMEmulationRead(void *data, uint32_t dataLength)
 {
+#if STM32H7
+#else
     // find the most recently written data or slot 0 if all free
     currentSlot = MAX_SLOT;
     while (currentSlot > 0 && IsSlotVacant(currentSlot))
         currentSlot--;
     uint32_t *slotStartAddress = GetSlotPtr(currentSlot);
     memcpy(data, slotStartAddress, dataLength);
+#endif
 }
 
 bool NVMEmulationErase()
 {
+#if STM32H7
+    return false;
+#else
     // Have we reached the last slot yet?
     if (currentSlot < MAX_SLOT)
     {
@@ -81,11 +91,14 @@ bool NVMEmulationErase()
     IrqRestore(flags);
     currentSlot = 0;    
     return ret;
-    
+#endif    
 }
 
 
 bool NVMEmulationWrite(const void *data, uint32_t dataLength){
+#if STM32H7
+    return false;
+#else
     if (dataLength != SlotSize*sizeof(uint32_t))
     {
         debugPrintf("Bad flash data size\n");
@@ -126,6 +139,6 @@ bool NVMEmulationWrite(const void *data, uint32_t dataLength){
     // Re-enable interrupt mode
     IrqRestore(flags);
     return ret;
-    
+#endif    
 }
 

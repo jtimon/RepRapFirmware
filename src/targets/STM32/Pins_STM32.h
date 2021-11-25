@@ -13,11 +13,17 @@
 #define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
 
 // Default board type
+#if STM32H7
+#define DEFAULT_BOARD_TYPE BoardType::Stm32H7
+#define ELECTRONICS "STM32H7"
+#define STM_ELECTRONICS_STRING "STM32H7"
+#define STM_BOARD_STRING "STM32H7"
+#else
 #define DEFAULT_BOARD_TYPE BoardType::Stm32F4
 #define ELECTRONICS "STM32F4"
 #define STM_ELECTRONICS_STRING "STM32F4"
 #define STM_BOARD_STRING "STM32F4"
-
+#endif
 #define FIRMWARE_FILE       "firmware.bin"
 #define WIFI_FIRMWARE_FILE  "DuetWiFiServer.bin" // Firmware to be loaded onto the ESP board
 

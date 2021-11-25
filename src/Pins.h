@@ -22,7 +22,7 @@
 #  define PLATFORM Duet3Mini
 # elif defined(__LPC17xx__)
 #  define PLATFORM LPC
-# elif defined(__STM32F4__)
+# elif defined(__STM32F4__) || defined(__STM32H7__)
 #  define PLATFORM STM32
 #else
 #  error Unknown platform

@@ -1094,7 +1094,7 @@ void Platform::Spin() noexcept
 	// VRef = (3.3*VREFIN_CAL)/VREFINT
 	if (adcFilters[VrefFilterIndex].IsValid())
 	{
-		vRefCorrection = (GET_ADC_CAL(VREFINT_CAL_ADDR, VREFINT_CAL_DEF)*VRefCorrectionScale)/((adcFilters[VrefFilterIndex].GetSum() >> (AdcBits - 12))/ThermistorAverageReadings);
+		//vRefCorrection = (GET_ADC_CAL(VREFINT_CAL_ADDR, VREFINT_CAL_DEF)*VRefCorrectionScale)/((adcFilters[VrefFilterIndex].GetSum() >> (AdcBits - 12))/ThermistorAverageReadings);
 	}
 #endif
 
@@ -2150,7 +2150,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 
 	case (int)DiagnosticTestType::SetWriteBuffer:
-#if SAME70
+#if SAME70 || STM32H7
 		//TODO set cache to write-back instead
 		reply.copy("Write buffer not supported on this processor");
 		return GCodeResult::error;
@@ -4007,6 +4007,8 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		board = BoardType::Lpc;
 #elif defined(__STM32F4__)
 		board = BoardType::Stm32F4;
+#elif defined(__STM32H7__)
+		board = BoardType::Stm32H7;
 #else
 # error Undefined board type
 #endif
@@ -4056,6 +4058,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #elif defined(__STM32F4__)
 	case BoardType::Stm32F4:				return STM_ELECTRONICS_STRING;
+#elif defined(__STM32H7__)
+	case BoardType::Stm32H7:				return STM_ELECTRONICS_STRING;
 
 #else
 # error Undefined board type
@@ -4103,6 +4107,8 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #elif defined(__STM32F4__)
 	case BoardType::Stm32F4:				return STM_BOARD_STRING;
+#elif defined(__STM32H7__)
+	case BoardType::Stm32H7:				return STM_BOARD_STRING;
 #else
 # error Undefined board type
 #endif

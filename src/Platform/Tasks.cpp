@@ -321,7 +321,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
 #endif
 		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
-#if STM32F4
+#if STM32F4 && !STM32H7
 		{
 			size_t ccmStatic, ccmUsed, ccmFree;
 			CoreCCMRAMUsage(ccmStatic, ccmUsed, ccmFree);

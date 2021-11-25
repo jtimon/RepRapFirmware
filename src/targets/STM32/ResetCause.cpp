@@ -7,7 +7,20 @@ static ResetCause_t ResetCause = RESET_CAUSE_UNKNOWN;
 
 void InitResetCause() noexcept
 {
-
+#if STM32H7
+    if (__HAL_RCC_GET_FLAG(RCC_FLAG_LPWR1RST))
+    {
+        ResetCause = RESET_CAUSE_LOW_POWER_RESET;
+    }
+    else if (__HAL_RCC_GET_FLAG(RCC_FLAG_WWDG1RST))
+    {
+        ResetCause = RESET_CAUSE_WINDOW_WATCHDOG_RESET;
+    }
+    else if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDG1RST))
+    {
+        ResetCause = RESET_CAUSE_INDEPENDENT_WATCHDOG_RESET;
+    }
+#else
     if (__HAL_RCC_GET_FLAG(RCC_FLAG_LPWRRST))
     {
         ResetCause = RESET_CAUSE_LOW_POWER_RESET;
@@ -20,6 +33,7 @@ void InitResetCause() noexcept
     {
         ResetCause = RESET_CAUSE_INDEPENDENT_WATCHDOG_RESET;
     }
+#endif
     else if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
     {
         ResetCause = RESET_CAUSE_SOFTWARE_RESET; // This reset is induced by calling the ARM CMSIS `NVIC_SystemReset()` function!

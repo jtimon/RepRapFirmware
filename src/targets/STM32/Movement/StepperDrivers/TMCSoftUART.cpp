@@ -257,7 +257,11 @@ void TMCSoftUARTInit() noexcept
     __HAL_TIM_ENABLE_DMA(&(HardwareTimer_Handle[get_timer_index(TIM1)]->handle), TIM_DMA_UPDATE);
     __HAL_RCC_DMA2_CLK_ENABLE();    
     SUDma.Instance                 = DMA2_Stream5;
+#if STM32H7
+    SUDma.Init.Request             = DMA_REQUEST_TIM1_UP;
+#else
     SUDma.Init.Channel             = DMA_CHANNEL_6;
+#endif
     SUDma.Init.Direction           = DMA_MEMORY_TO_PERIPH;
     SUDma.Init.PeriphInc           = DMA_PINC_DISABLE;
     SUDma.Init.MemInc              = DMA_MINC_ENABLE;
