@@ -8,7 +8,95 @@
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
+#if STM32H7
+constexpr PinEntry PinTable_BIQU_SKR_SE_BX_v2_0[] =
+{
+    //Thermistors
+    {PH_4, "e0temp,th0"},
+    {PA_3, "e1temp,th1"},
+    {PH_5, "e2temp,thb"},
 
+    //Endstops
+    {PB_11, "xstop,x-"},
+    {PD_13, "xstopmax,x+"},
+    {PB_12, "ystop,y-"},
+    {PB_13, "ystopmax,y+"},
+    {PD_12, "zstop,z-"},
+    {PD_11, "zstopmax,z+"},
+	{PH_2, "probe"},
+	
+    //Heaters and Fans (Big and Small Mosfets}
+    {PA_4,  "bed,hbed" },
+    {PC_4,  "e0heat,he0" },
+    {PC_5,  "e1heat,he1" },
+    {PA_5,  "fan0,fan" },
+    {PA_6,  "fan1" },
+    {PA_7,  "fan2" },
+
+    //Servos
+    {PA_2,  "servo0" },
+	
+
+	//Extension 1
+	{PC_9, "PC9"},
+	{PF_9, "PF9"},
+	{PC_4, "PC4"},
+	{PG_11, "PG11"},
+	{PG_14, "PG14"},
+	{PC_1, "PC1"},
+	{PF_8, "PF8"},
+	{PF_10, "PF10"},
+	{PC_5, "PC5"},
+	{PG_13, "PG13"},
+	{PD_3, "PD3"},
+	{PF_7, "PF7"},
+
+	//Extension 2
+	{PD_0, "PD0"},
+	{PD_2, "PD2"},
+	{PD_0, "PD5"},
+	{PE_0, "PE0"},
+	{PE_2, "PE2"},
+	{PE_4, "PE4"},
+
+	//Wifi
+	{PA_0, "wifi-tx,TX4"},
+	{PA_1, "wifi-rx,RX4"},
+    //TFT
+	{PA_9, "tft-tx,TX1"},
+	{PA_10, "tft-rx,RX1"},
+};
+
+constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
+    {0xf1832a2},                 	            // Signatures
+    SD_SPI3_B,                                  // SD Card access
+    {   //CLK, MISO, MOSI
+        {NoPin, NoPin, NoPin},                  //SPI0
+        {NoPin, NoPin, NoPin},                  //SPI1
+        {PC_10, PC_11, PC_12},                  //SPI2
+        {NoPin, NoPin, NoPin},                  //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+        {PE_2,  PE_5,  PE_6},                   //SPI6
+        {NoPin, NoPin, NoPin},                  //SPI7
+        {NoPin, NoPin, NoPin},                  //SPI8
+    },
+	5,											// Number of drivers
+    {PG_14, PB_4, PG_9, PC_15, PD_2},        	//enablePins
+    {PG_13, PB_3, PD_7, PC_14, PA_8},	        //stepPins
+    {PG_12, PD_3, PD_6, PC_13, PC_9},    	    //dirPins
+#if HAS_SMART_DRIVERS
+    {PG_10, PD_4, PD_5, PI_8, PC_8},            //uartPins
+    5,                                      	// Smart drivers
+#endif
+    0,                                       	//digiPot Factor
+#if HAS_VOLTAGE_MONITOR
+    NoPin,
+#endif
+    NoPin,
+};
+
+#else
 constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
 {
     //Thermistors
@@ -760,5 +848,5 @@ constexpr BoardDefaults btt_octopuspro_Defaults = {
 #endif
     NoPin,
 };
-
+#endif
 #endif

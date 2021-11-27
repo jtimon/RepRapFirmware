@@ -89,6 +89,11 @@ static const boardConfigEntry_t boardConfigs[]=
     {"SPI3.pins", SPIPins[3], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI4.pins", SPIPins[4], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI5.pins", SPIPins[5], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
+#if STM32H7
+    {"SPI6.pins", SPIPins[6], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
+    {"SPI7.pins", SPIPins[7], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
+    {"SPI8.pins", SPIPins[8], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
+#endif
     
 #if HAS_WIFI_NETWORKING
     {"8266wifi.espDataReadyPin", &EspDataReadyPin, nullptr, cvPinType},
@@ -229,19 +234,7 @@ static void ConfigureGPIOPins() noexcept
 
 static void ConfigureSPIPins(SSPChannel dev, Pin clk, Pin miso, Pin mosi)
 {
-    // Configure a single SPI device, we use DMA on SPI2 and SPI3
-    switch(dev)
-    {
-    //case SSP2:
-        //SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, DMA1_Stream3, DMA_CHANNEL_0, DMA1_Stream3_IRQn, DMA1_Stream4, DMA_CHANNEL_0, DMA1_Stream4_IRQn);
-        //break;
-    //case SSP3:
-        //SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, DMA1_Stream0, DMA_CHANNEL_0, DMA1_Stream0_IRQn, DMA1_Stream5, DMA_CHANNEL_0, DMA1_Stream5_IRQn);
-        //break;
-    default:
-        SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin);
-        break;
-    }
+    SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin);
 }
 
 
@@ -343,11 +336,11 @@ typedef struct {
 
 // These are our known SD card configurations
 static constexpr SDCardConfig SDCardConfigs[] = {
-    //{SSP1, {PA_5, PA_6, PB_5, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // SKR Pro
-    //{SSP1, {PA_5, PA_6, PA_7, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // GTR
-    //{SSPSDIO, {PC_8, PC_9, PC_10, PC_11, PC_12, PD_2}, {0xc02, 0xc02, 0xc02, 0xc02, 0xc02, 0xc02}}, // Fly/SDIO
-    //{SSP3, {PC_10, PC_11, PC_12, PC_9, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
-    {SSP3, {PC_10, PC_11, PC_12, PA_15, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
+    {SSP1, {PA_5, PA_6, PB_5, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // SKR Pro
+    {SSP1, {PA_5, PA_6, PA_7, PA_4, NoPin, NoPin}, {0x502, 0x502, 0x502, 0x1}}, // GTR
+    {SSPSDIO, {PC_8, PC_9, PC_10, PC_11, PC_12, PD_2}, {0xc02, 0xc02, 0xc02, 0xc02, 0xc02, 0xc02}}, // Fly/SDIO
+    {SSP3, {PC_10, PC_11, PC_12, PC_9, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
+    {SSP3, {PC_10, PC_11, PC_12, PA_15, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // BTT BX
 };
 
 static bool TryConfig(uint32_t config, FATFS *fs)

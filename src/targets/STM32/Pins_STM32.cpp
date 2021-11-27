@@ -8,6 +8,9 @@
 //Known boards with built in stepper configurations and pin table 
 constexpr BoardEntry LPC_Boards[] =
 {
+#if STM32H7
+    {{"biquskr_se_bx_2.0"},      PinTable_BIQU_SKR_SE_BX_v2_0,    ARRAY_SIZE(PinTable_BIQU_SKR_SE_BX_v2_0),    biqu_skr_se_bx_v2_0_Defaults},
+#else
     {{"biquskrpro_1.1"},      PinTable_BIQU_SKR_PRO_v1_1,    ARRAY_SIZE(PinTable_BIQU_SKR_PRO_v1_1),    biquskr_pro_1_1_Defaults},
     {{"biqugtr_1.0"},      PinTable_BIQU_GTR_v1_0,    ARRAY_SIZE(PinTable_BIQU_GTR_v1_0),    biqu_gtr_1_0_Defaults},
     {{"fly_e3_pro"},      PinTable_FLY_E3_PRO,    ARRAY_SIZE(PinTable_FLY_E3_PRO),    fly_e3_pro_Defaults},
@@ -21,6 +24,7 @@ constexpr BoardEntry LPC_Boards[] =
     {{"biqoctopus_1.1"}, PinTable_BTT_OCTOPUS, ARRAY_SIZE(PinTable_BTT_OCTOPUS), btt_octopus_Defaults},
     {{"biqoctopuspro_1.0"}, PinTable_BTT_OCTOPUSPRO, ARRAY_SIZE(PinTable_BTT_OCTOPUSPRO), btt_octopuspro_Defaults},
     {{"fysetc_spider"}, PinTable_FYSETC_SPIDER, ARRAY_SIZE(PinTable_FYSETC_SPIDER), fysetc_spider_Defaults},
+#endif
     {{"generic"},      PinTable_Generic,    ARRAY_SIZE(PinTable_Generic),    Generic_Defaults},
 };
 constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);

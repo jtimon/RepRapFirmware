@@ -303,7 +303,7 @@ extern Pin AuxSerialRxTxPins[NumberSerialPins];
     extern Pin EspDataReadyPin;
     extern Pin SamTfrReadyPin;
     extern Pin EspResetPin;
-    extern Pin SamCsPin; //CS for SSP0
+    extern Pin SamCsPin;
     extern Pin APIN_Serial1_TXD;
     extern Pin APIN_Serial1_RXD;
     extern Pin WifiSerialRxTxPins[NumberSerialPins];
@@ -312,7 +312,6 @@ extern Pin AuxSerialRxTxPins[NumberSerialPins];
     extern Pin APIN_ESP_SPI_MOSI;
     extern Pin APIN_ESP_SPI_MISO;
     extern Pin APIN_ESP_SPI_SCK;
-    //extern SSPChannel ESP_SPI = SSP2;
 #endif
 
 #if SUPPORT_LED_STRIPS
@@ -376,6 +375,7 @@ typedef enum {
     SD_SPI1_B,
     SD_SDIO,
     SD_SPI3_A,
+    SD_SPI3_B,
     SD_NONE = 0xff
 } SDConfigs;
 
