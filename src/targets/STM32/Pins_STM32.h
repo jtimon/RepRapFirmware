@@ -10,15 +10,16 @@
 #define UNUSED(x) (void)(x)
 #endif
 
-#define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
 
 // Default board type
 #if STM32H7
+#define FIRMWARE_NAME "RepRapFirmware for STM32H7 based Boards"
 #define DEFAULT_BOARD_TYPE BoardType::Stm32H7
 #define ELECTRONICS "STM32H7"
 #define STM_ELECTRONICS_STRING "STM32H7"
 #define STM_BOARD_STRING "STM32H7"
 #else
+#define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
 #define DEFAULT_BOARD_TYPE BoardType::Stm32F4
 #define ELECTRONICS "STM32F4"
 #define STM_ELECTRONICS_STRING "STM32F4"
@@ -89,8 +90,13 @@
     #define SUPPORT_TELNET               0
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              1
-    #define BOARD_NAME          "STM32F4 WiFi"
-    #define BOARD_SHORT_NAME    "STMWiFi"
+#if STM32H7
+    #define BOARD_NAME          "STM32H7 WiFi"
+    #define BOARD_SHORT_NAME    "STM7WiFi"
+#else
+    #define BOARD_NAME          "STM32H7 WiFi"
+    #define BOARD_SHORT_NAME    "STM4WiFi"
+#endif
 
 #elif defined(LPC_SBC)
     #define HAS_RTOSPLUSTCP_NETWORKING   0
@@ -101,9 +107,13 @@
     #define SUPPORT_TELNET               1
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              0
-
+#if STM32H7
+    #define BOARD_NAME          "STM32H7 SBC"
+    #define BOARD_SHORT_NAME    "STM7SBC"
+#else
     #define BOARD_NAME          "STM32F4 SBC"
-    #define BOARD_SHORT_NAME    "STMSBC"
+    #define BOARD_SHORT_NAME    "STM4SBC"
+#endif
 
 #else
     #define HAS_RTOSPLUSTCP_NETWORKING   0
