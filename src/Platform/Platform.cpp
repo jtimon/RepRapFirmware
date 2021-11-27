@@ -1094,7 +1094,7 @@ void Platform::Spin() noexcept
 	// VRef = (3.3*VREFIN_CAL)/VREFINT
 	if (adcFilters[VrefFilterIndex].IsValid())
 	{
-		//vRefCorrection = (GET_ADC_CAL(VREFINT_CAL_ADDR, VREFINT_CAL_DEF)*VRefCorrectionScale)/((adcFilters[VrefFilterIndex].GetSum() >> (AdcBits - 12))/ThermistorAverageReadings);
+		vRefCorrection = (GET_ADC_CAL(VREFINT_CAL_ADDR, VREFINT_CAL_DEF)*VRefCorrectionScale)/((adcFilters[VrefFilterIndex].GetSum() >> (AdcBits - 12))/ThermistorAverageReadings);
 	}
 #endif
 
