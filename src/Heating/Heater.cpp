@@ -178,8 +178,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		{
 			// Old style heating model. A = gain, C = cooling time constant
 			seen = true;
-			const float gain = gb.GetFValue();
-			heatingRate = gain * basicCoolingRate * 100.0;
+			heatingRate = gain * basicCoolingRate * 0.01;
 		}
 	}
 
