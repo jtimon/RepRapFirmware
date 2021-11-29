@@ -93,7 +93,7 @@ constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
 #if HAS_VOLTAGE_MONITOR
     NoPin,
 #endif
-    NoPin,
+    PI_11,
 };
 
 #else
