@@ -215,8 +215,8 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 #endif
 
 	Cache::Init();					// initialise the cache and/or the MPU, if applicable to this processor
-	Cache::Enable();
-
+	//Cache::Enable();
+	SCB_DisableDCache();
 #if SAM4S
 	efc_enable_cloe(EFC0);			// enable code loop optimisation
 #elif SAM4E || SAME70
