@@ -171,7 +171,7 @@ constexpr size_t NumDefaultExtruders = 1;            // The number of drivers th
 
 constexpr size_t MaxAxesPlusExtruders = 14;
 
-constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 4;
 
 constexpr size_t MaxFans = 8;
@@ -222,7 +222,7 @@ constexpr float EXT_SHC = 0.0;
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 4700.0;
 
-constexpr size_t MaxSpiTempSensors = 4;
+constexpr size_t MaxSpiTempSensors = 8;
 extern Pin SpiTempSensorCsPins[MaxSpiTempSensors];  // Digital pins the 31855s have their select lines tied to
 extern SSPChannel TempSensorSSPChannel;
 
