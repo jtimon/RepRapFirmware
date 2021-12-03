@@ -12,8 +12,9 @@
 #include "SharedSpiClient.h"
 class SDCardSPI : public SDCard {
 public:
-    SDCardSPI(SSPChannel SSPSlot, Pin cs) noexcept;
     ~SDCardSPI() noexcept {};
+
+    void init(SSPChannel SSPSlot, Pin cs) noexcept;
 
     void unmount() noexcept;
     virtual void set_max_frequency(uint32_t maxFrequency) noexcept;  
@@ -46,7 +47,7 @@ protected:
     // they can be accessed via DMA
     uint8_t tx;
     uint8_t rx;
-    uint8_t cmdData[64];
+    alignas(4) uint8_t cmdData[64];
 };
 
 #endif

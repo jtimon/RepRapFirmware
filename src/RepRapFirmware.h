@@ -44,7 +44,7 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 # error SAME5X should be defined as 0 or 1
 #endif
 
-#if SAME70
+#if SAME70 || STM32H7
 # define __nocache		__attribute__((section(".ram_nocache")))
 #else
 # define __nocache		// nothing

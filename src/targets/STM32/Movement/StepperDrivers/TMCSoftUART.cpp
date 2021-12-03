@@ -60,7 +60,7 @@ static uint32_t SUBitCnt;
 DMA_HandleTypeDef SUDma;
 static uint32_t SUPeriod;
 
-uint32_t SUDmaBits[((SU_MAX_BYTES+SU_GAP_BYTES)*SU_FRAME_LENGTH)*SU_OVERSAMPLE];
+__nocache uint32_t SUDmaBits[((SU_MAX_BYTES+SU_GAP_BYTES)*SU_FRAME_LENGTH)*SU_OVERSAMPLE];
 
 static void SetupPins()
 {

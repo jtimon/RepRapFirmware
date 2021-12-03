@@ -40,7 +40,7 @@ static_assert(FileWriteBufLen >= SbcFileWriteBufLen, "File write buffer must be 
 class FileWriteBuffer
 {
 public:
-#if SAME70
+#if SAME70 || STM32H7
 	FileWriteBuffer(FileWriteBuffer *n, char *storage) noexcept : next(n), index(0), buf(storage) { }
 #else
 	explicit FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
@@ -71,7 +71,7 @@ private:
 	FileWriteBuffer *next;
 
 	size_t index;
-#if SAME70
+#if SAME70 || STM32H7
 	char *_ecv_array buf;
 #else
 	alignas(4) char buf[FileWriteBufLen];								// 32-bit aligned buffer for better HSMCI performance

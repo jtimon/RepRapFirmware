@@ -18,10 +18,12 @@
 /
 /----------------------------------------------------------------------------*/
 
+#if STM32F4 || LPC17xx
+#include "targets/common/Fatfs/ff.h"
+#else
 
 #ifndef FF_DEFINED
 #define FF_DEFINED	86631	/* Revision ID */
-
 #if 1	// dc
 # include <Core.h>		// for processor definitions
 #endif
@@ -437,3 +439,4 @@ int ff_del_syncobj (FF_SYNC_t sobj) noexcept;	/* Delete a sync object */
 #endif
 
 #endif /* FF_DEFINED */
+#endif

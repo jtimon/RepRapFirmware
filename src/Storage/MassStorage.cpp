@@ -31,7 +31,7 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
 // Private data and methods
 
-# if SAME70
+# if SAME70 || STM32H7
 alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
 alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
 # endif
@@ -65,7 +65,7 @@ protected:
 void SdCardInfo::Clear(unsigned int card) noexcept
 {
 	memset(&fileSystem, 0, sizeof(fileSystem));
-#if SAME70
+#if SAME70 || STM32H7
 	fileSystem.win = sectorBuffers[card];
 	memset(sectorBuffers[card], 0, sizeof(sectorBuffers[card]));
 #endif
@@ -289,7 +289,7 @@ void MassStorage::Init() noexcept
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
-#  if SAME70
+#  if SAME70 || STM32H7
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
 #  else
 		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);

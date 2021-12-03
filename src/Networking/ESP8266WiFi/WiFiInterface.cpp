@@ -461,12 +461,20 @@ NetworkProtocol WiFiInterface::GetProtocolByLocalPort(TcpPort port) const noexce
 // Start the network if it was enabled
 void WiFiInterface::Activate() noexcept
 {
+#if STM32H7
+static __nocache struct MessageBufferOut staticMessageBufferOut;
+static __nocache struct MessageBufferIn staticMessageBufferIn;
+#endif
 	if (!activated)
 	{
 		activated = true;
-
+#if STM32H7
+		bufferOut = &staticMessageBufferOut;
+		bufferIn = &staticMessageBufferIn;
+#else
 		bufferOut = new MessageBufferOut;
 		bufferIn = new MessageBufferIn;
+#endif
 		uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
 
 		if (requestedMode != WiFiState::disabled)

@@ -23,7 +23,7 @@
 #include "SharedSpiDevice.h"
 #include "SharedSpiClient.h"
 
-#define SD_DEBUG 1
+//#define SD_DEBUG 1
 
 
 constexpr uint32_t SCLK_SD25 =  50000000;   /* SCLK frequency under High Speed operation [Hz] */
@@ -59,7 +59,7 @@ constexpr uint32_t SCLK_INIT =  400000;     /* SCLK frequency under initializati
 
 #define SD_COMMAND_TIMEOUT 5000
 
-SDCardSPI::SDCardSPI(SSPChannel SSPSlot, Pin cs) noexcept {
+void SDCardSPI::init(SSPChannel SSPSlot, Pin cs) noexcept {
     
     maxFrequency = SCLK_SD12; //default max frequency to run at
     frequency = SCLK_SD12;
@@ -116,6 +116,9 @@ inline uint8_t SDCardSPI::xchg_spi (uint8_t dat) noexcept
     tx = dat;
     rx = 0;
     spi->TransceivePacket((uint8_t *)&tx, (uint8_t *)&rx, 1);
+#ifdef SD_DEBUG
+    debugPrintf("xchg %x recv %x\n", tx, rx);
+#endif
     return rx;
 }
 
@@ -292,7 +295,9 @@ uint8_t SDCardSPI::send_cmd (uint8_t cmd, uint32_t arg) noexcept/* Return value:
     
     /* Receive command resp */
     if (cmd == CMD12) *cmdPtr++ = (0xFF);   /* Discard following one byte when CMD12 */
-    spi->TransceivePacket(cmdData, nullptr, cmdPtr - cmdData);
+    // FIXME: We should not need to provide a read buffer, but STM32H7 SPI + DMA will lockup
+    // after a write only operation (see errata)
+    spi->TransceivePacket(cmdData, cmdData+10, cmdPtr - cmdData);
 
     n = 10;
     //debugPrintf("res bytes:");
@@ -320,16 +325,21 @@ uint8_t SDCardSPI::disk_initialize () noexcept
     
     //Change frequency to slow clock for initialisation
     spi->SetClockFrequency(SCLK_INIT);
+
     select();
     for (n = 10; n; n--) xchg_spi(0xFF);    /* Send 80 dummy clocks */
     ty = 0;
     if (send_cmd(CMD0, 0) == 1) {            /* Put the card SPI state */
-    debugPrintf("Enter SPI state\n");
+#ifdef SD_DEBUG
+        debugPrintf("Enter SPI state\n");
+#endif
         uint32_t now = millis();
         const uint32_t timeout = 1000;                        /* Initialization timeout = 1 sec */
         
         if (send_cmd(CMD8, 0x1AA) == 1) {    /* Is the card SDv2? */
-        debugPrintf("SDv2\n");
+#ifdef SD_DEBUG
+            debugPrintf("SDv2\n");
+#endif
             for (n = 0; n < 4; n++) ocr[n] = xchg_spi(0xFF);    /* Get 32 bit return value of R7 resp */
             if (ocr[2] == 0x01 && ocr[3] == 0xAA) {                /* Does the card support 2.7-3.6V? */
                 while ((millis() - now) < timeout && send_cmd(ACMD41, 1UL << 30)) ;    /* Wait for end of initialization with ACMD41(HCS) */
@@ -337,7 +347,9 @@ uint8_t SDCardSPI::disk_initialize () noexcept
                     for (n = 0; n < 4; n++) ocr[n] = xchg_spi(0xFF);
                     ty = (ocr[0] & 0x40) ? CT_SD2 | CT_BLOCK : CT_SD2;    /* Check if the card is SDv2 */
                 }
+#ifdef SD_DEBUG
                 debugPrintf("ty %x\n", ty);
+#endif
             }
         } else {    /* Not an SDv2 card */
             if (send_cmd(ACMD41, 0) <= 1)     {    /* SDv1 or MMCv3? */
@@ -345,11 +357,15 @@ uint8_t SDCardSPI::disk_initialize () noexcept
             } else {
                 ty = CT_MMC; cmd = CMD1;    /* MMCv3 (CMD1(0)) */
             }
+#ifdef SD_DEBUG
             debugPrintf("not v2 %x\n", ty);
+#endif
             while ((millis() - now) < timeout && send_cmd(cmd, 0)) ;        /* Wait for the card leaves idle state */
             if ((millis() - now) > timeout || send_cmd(CMD16, 512) != 0){    /* Set block length: 512 */
                 ty = 0;
+#ifdef SD_DEBUG
             debugPrintf("ty %x\n", ty);
+#endif
             }
         }
         //set card Blockmode to 512

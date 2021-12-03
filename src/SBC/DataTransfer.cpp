@@ -404,7 +404,7 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 
 // Static data. Note, the startup code we use doesn't make any provision for initialising non-cached memory, other than to zero. So don't specify initial value here
 
-#if SAME70
+#if SAME70 || STM32H7
 __nocache TransferHeader DataTransfer::rxHeader;
 __nocache TransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
@@ -437,7 +437,7 @@ void DataTransfer::Init() noexcept
 	// Initialise transfer ready pin
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
-#if !SAME70
+#if !SAME70 && !STM32H7
 	if (reprap.UsingSbcInterface())
 	{
 		// Allocate buffers in SBC mode

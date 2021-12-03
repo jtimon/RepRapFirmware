@@ -506,7 +506,7 @@ void * nano_calloc(RARG malloc_size_t n, malloc_size_t elem)
 #endif /* DEFINE_CALLOC */
 
 #ifdef DEFINE_REALLOC
-dfdfdf
+
 /* Function nano_realloc
  * Implement realloc by malloc + memcpy */
 void * nano_realloc(RARG void * ptr, malloc_size_t size)

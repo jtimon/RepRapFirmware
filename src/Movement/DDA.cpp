@@ -2070,7 +2070,7 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 #endif
 	{
 		StepPins::StepDriversHigh(driversStepping);					// step drivers high
-#if SAME70
+#if SAME70 || STM32H7
 		__DSB();													// without this the step pulse can be far too short
 #endif
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)

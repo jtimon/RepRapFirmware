@@ -11,6 +11,10 @@
 
 SDCard *_ffs[_DRIVES]; //also used by FatFS
 
+#if STM32H7
+static __nocache SDCardSPI spiBasedCards[_DRIVES];
+#endif
+
 //writeProtect pins and ChipSelect Pins for the SDCards
 void sd_mmc_init(Pin const wpPins[_DRIVES],Pin const spiCsPins[_DRIVES]){
     // STM32 we do nothing here, device and pins are defined later
@@ -35,7 +39,14 @@ void sd_mmc_setSSPChannel(uint8_t slot, SSPChannel channel, Pin cs)
     if (channel == SSPSDIO)
         _ffs[slot] = new SDCardSDIO();
     else if (channel != SSPNONE)
-        _ffs[slot] = new SDCardSPI(channel, cs);
+    {
+#if STM32H7
+        _ffs[slot] = &spiBasedCards[slot];
+#else
+        _ffs[slot] = new SDCardSPI();
+#endif
+        ((SDCardSPI *)_ffs[slot])->init(channel, cs);
+    }
 }
 
 

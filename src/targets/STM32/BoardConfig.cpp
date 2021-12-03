@@ -434,6 +434,9 @@ static SSPChannel InitSDCard(uint32_t boardSig, FATFS *fs)
 
 extern char _sccmram;						// defined in linker script
 extern char _eccmram;					// defined in linker script
+#if STM32H7
+alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
+#endif
 
 void BoardConfig::Init() noexcept
 {
@@ -460,10 +463,15 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream4_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream0_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
+    NVIC_SetPriority(SPI3_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
     delay(STARTUP_DELAY);
 #endif
     ClearPinArrays();
+#if STM32H7
+    fs->win = sectorBuffers[0];
+    memset(sectorBuffers[0], 0, sizeof(sectorBuffers[0]));
+#endif
 #if !HAS_MASS_STORAGE
     sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);
 #endif
