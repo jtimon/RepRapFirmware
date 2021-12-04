@@ -25,6 +25,14 @@
 #include "ExceptionHandlers.h"
 
 #include "pinmap.h"
+
+#if STM32H7
+#include "stm32h7xx_ll_system.h"
+#include "core_cm7.h"
+#else
+#include "stm32f4xx_ll_system.h"
+#include "core_cm4.h"
+#endif
 //Single entry for Board name
 static const boardConfigEntry_t boardEntryConfig[]=
 {
@@ -749,7 +757,7 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 #else
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
 #endif
-
+    
     reprap.GetPlatform().MessageF(mtype, "\n== Configurable Board.txt Settings ==\n");
     //Print the board name
     boardConfigEntry_t board = boardEntryConfig[1];
@@ -834,7 +842,8 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     reprap.GetPlatform().MessageF(mtype, "T_MCU raw (corrected) %d\n", (int) tmcuraw);
     reprap.GetPlatform().MessageF(mtype, "T_MCU cal (corrected) %f\n", (double)(((110.0f - 30.0f)/(((float)(GET_ADC_CAL(TEMPSENSOR_CAL2_ADDR, TEMPSENSOR_CAL2_DEF))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF))))) * ((float)(tmcuraw / (float) (1 << (LegacyAnalogIn::AdcBits - 12))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF)))) + 30.0f)); 
     reprap.GetPlatform().MessageF(mtype, "T_MCU calc (corrected) %f\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
-
+    reprap.GetPlatform().MessageF(mtype, "Device Id %x Revison Id %x CPUId r%dp%d \n", (unsigned)LL_DBGMCU_GetDeviceID(), (unsigned)LL_DBGMCU_GetRevisionID(),  
+                                            (unsigned)((SCB->CPUID >> 20) & 0x0F), (unsigned)(SCB->CPUID & 0x0F));
 }
 
 //Set a variable from a string using the specified data type
