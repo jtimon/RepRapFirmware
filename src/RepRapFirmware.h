@@ -635,18 +635,18 @@ const NvicPriority NvicPrioritySDIO = 9;
 const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 # endif
 
-const NvicPriority NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-const NvicPriority NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityWiFiUart = 7;		// UART used to receive debug data from the WiFi module
-const NvicPriority NvicPriorityUSB = 7;				// USB interrupt
-const NvicPriority NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
+const NvicPriority NvicPriorityPins = 6;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const NvicPriority NvicPriorityStep = 7;			// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityWiFiUart = 8;		// UART used to receive debug data from the WiFi module
+const NvicPriority NvicPriorityUSB = 8;				// USB interrupt
+const NvicPriority NvicPriorityHSMCI = 8;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
 const NvicPriority NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const NvicPriority NvicPriorityEthernet = 8;		// priority for Ethernet interface
 # endif
 
-const NvicPriority NvicPrioritySpi = 8;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const NvicPriority NvicPrioritySpi = 5;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
 const NvicPriority NvicPriorityTwi = 9;				// TWI is used to read endstop and other inputs on the DueXn
 
 #endif

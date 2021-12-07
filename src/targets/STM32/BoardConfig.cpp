@@ -457,12 +457,16 @@ void BoardConfig::Init() noexcept
 
     signature = crc32((char *)0x8000000, 8192);
     // We need to setup DMA and SPI devices before we can use File I/O
-    // Using DMA2 for both TMC UART and the SD card causes corruption problems (see STM errata) so for now we use
-    // polled I/O for the disk.
+    // Using on STM32F4 DMA2 for both TMC UART and the SD card causes corruption problems (see STM errata) so for now we use
+    // polled I/O for SPI1.
     NVIC_SetPriority(DMA2_Stream6_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA2_Stream3_IRQn, NvicPrioritySpi);
 #if STM32H7
     NVIC_SetPriority(SDMMC1_IRQn, NvicPrioritySDIO);
+    NVIC_SetPriority(SPI3_IRQn, NvicPrioritySpi);
+    NVIC_SetPriority(SPI4_IRQn, NvicPrioritySpi);
+    NVIC_SetPriority(DMA1_Stream1_IRQn, NvicPrioritySpi);
+    NVIC_SetPriority(DMA1_Stream2_IRQn, NvicPrioritySpi);
 #else
     NVIC_SetPriority(SDIO_IRQn, NvicPrioritySDIO);
 #endif
@@ -471,7 +475,6 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream4_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream0_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(SPI3_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
     delay(STARTUP_DELAY);
 #endif
