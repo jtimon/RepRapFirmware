@@ -228,8 +228,10 @@ int SDCardSPI::rcvr_datablock (uint8_t *buff, uint32_t btr) noexcept/* 1:OK, 0:E
         
     } while ((token != 0xFE) && (millis() - now) < 200 );
     if(token != 0xFE) return 0;        /* Function fails if invalid DataStart token or timeout */
+#if !STM32H7
     // FIXME SPI should really provide dummy data
     memset(buff, 0xff, btr);
+#endif
     rcvr_spi_multi(buff, btr);        /* Store trailing data to the buffer */
     xchg_spi(0xFF); xchg_spi(0xFF);    /* Discard CRC */
     
@@ -295,9 +297,7 @@ uint8_t SDCardSPI::send_cmd (uint8_t cmd, uint32_t arg) noexcept/* Return value:
     
     /* Receive command resp */
     if (cmd == CMD12) *cmdPtr++ = (0xFF);   /* Discard following one byte when CMD12 */
-    // FIXME: We should not need to provide a read buffer, but STM32H7 SPI + DMA will lockup
-    // after a write only operation (see errata)
-    spi->TransceivePacket(cmdData, cmdData+10, cmdPtr - cmdData);
+    spi->TransceivePacket(cmdData, nullptr, cmdPtr - cmdData);
 
     n = 10;
     //debugPrintf("res bytes:");
