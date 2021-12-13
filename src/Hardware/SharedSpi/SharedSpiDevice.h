@@ -39,7 +39,7 @@ public:
 
 	static void Init() noexcept;
 #if LPC17xx || STM32F4
-	static SharedSpiDevice& GetSharedSpiDevice(SSPChannel chan) noexcept { return *Devices[chan]; }
+	static SharedSpiDevice& GetSharedSpiDevice(SSPChannel chan) noexcept { return (chan < NumSPIDevices) ? *Devices[chan] : *invalidDevice;  }
 #else
 	static SharedSpiDevice& GetMainSharedSpiDevice() noexcept { return *mainSharedSpiDevice; }
 #endif
@@ -63,6 +63,7 @@ private:
 
 #if LPC17xx || STM32F4
 	static SharedSpiDevice *Devices[];
+	static SharedSpiDevice *invalidDevice;
 #else
 	static SharedSpiDevice *mainSharedSpiDevice;
 #endif

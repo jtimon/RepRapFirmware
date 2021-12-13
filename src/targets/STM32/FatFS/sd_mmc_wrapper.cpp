@@ -41,7 +41,7 @@ void sd_mmc_setSSPChannel(uint8_t slot, SSPChannel channel, Pin cs)
 
 void sd_mmc_unmount(uint8_t slot)
 {
-    if(slot < _DRIVES)
+    if(slot < _DRIVES && _ffs[slot])
     {
         _ffs[slot]->unmount();
     }
@@ -50,7 +50,7 @@ void sd_mmc_unmount(uint8_t slot)
 
 sd_mmc_err_t sd_mmc_check(uint8_t slot){
     
-    if(slot < _DRIVES && _ffs[slot]->disk_initialize() == 0)
+    if(slot < _DRIVES && _ffs[slot] && _ffs[slot]->disk_initialize() == 0)
     {
         return SD_MMC_OK;
     }
@@ -63,7 +63,7 @@ sd_mmc_err_t sd_mmc_check(uint8_t slot){
 
 uint32_t sd_mmc_get_capacity(uint8_t slot){
 
-    if(slot < _DRIVES)
+    if(slot < _DRIVES && _ffs[slot])
     {
         uint64_t s = _ffs[slot]->disk_sectors();
         uint32_t b = _ffs[slot]->disk_blocksize();
@@ -77,7 +77,7 @@ uint32_t sd_mmc_get_capacity(uint8_t slot){
 
 card_type_t sd_mmc_get_type(uint8_t slot)
 {
-    if(slot < _DRIVES)
+    if(slot < _DRIVES && _ffs[slot])
     {
         CARD_TYPE type = _ffs[slot]->card_type();
         
@@ -94,7 +94,7 @@ card_type_t sd_mmc_get_type(uint8_t slot)
 
 uint32_t sd_mmc_get_interface_speed(uint8_t slot)
 {
-    if(slot < _DRIVES)
+    if(slot < _DRIVES && _ffs[slot])
     {
         // Get the speed of the SPI SD card interface for reporting purposes, in bytes/sec
         return _ffs[slot]->interface_speed()/8;

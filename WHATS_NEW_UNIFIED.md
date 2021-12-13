@@ -1,4 +1,15 @@
 Version 3.4beta6_2
+==================
+* Increase heaters per tool to 4
+* include changes from 3.3.0_12
+
+Version 3.3.0_12
+================
+* STM32F4 Add support for Fly Gemini
+* STM32F4 Report usage of SPI device when channel has not been defined (avoid board reset)
+
+Version 3.4beta6_2
+==================
 * Increase heaters per tool to 4
 
 
@@ -29,6 +40,10 @@ Version 3.4beta2_2
 * Improve SBC robustness when connection is dropped and reconnects
 * Pick up changes from 3.3.0_7
 
+Version 3.3.0_12
+================
+* STM32F4 Add support for Fly Gemini
+* STM32F4 Report usage of SPI device when channel has not been defined (avoid board reset)
 
 Version 3.3.0_11
 ================
