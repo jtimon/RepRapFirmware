@@ -991,7 +991,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							return false;
 						}
-						DoPause(gb, PauseReason::gcode, nullptr);
+						DoPause(gb, PrintPausedReason::gcode, (gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2 : GCodeState::pausing1);
 					}
 				}
 				break;
@@ -1013,7 +1013,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							return false;
 						}
-						DoPause(gb, PauseReason::filamentChange, nullptr);
+						DoPause(gb, PrintPausedReason::filamentChange, GCodeState::filamentChangePause1);
 					}
 				}
 				break;
@@ -1046,7 +1046,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						return false;
 					}
-					DoPause(gb, PauseReason::user, nullptr);
+					DoPause(gb, PrintPausedReason::user, GCodeState::pausing1);
 				}
 				break;
 
@@ -3340,7 +3340,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						result = max<GCodeResult>(result, reprap.ClearTemperatureFault(heater, reply));
 					}
 				}
-				heaterFaultState = HeaterFaultState::noFault;
 				break;
 
 			case 563: // Define tool
@@ -4526,18 +4525,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 #if SUPPORT_ACCELEROMETERS
-			case 955:
+			case 955:	// configure accelerometer
 				result = Accelerometers::ConfigureAccelerometer(gb, reply);
 				break;
 
-			case 956:
+			case 956:	// start accelerometer
 				result = Accelerometers::StartAccelerometer(gb, reply);
 				break;
 #endif
 
+			case 957:	// raise event
+				result = RaiseEvent(gb, reply);
+				break;
+
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 997:	// Perform firmware update
 				result = UpdateFirmware(gb, reply);
 				break;
+#endif
 
 			case 998:
 				// The input handling code replaces the gcode by this when it detects a checksum error.

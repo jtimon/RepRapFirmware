@@ -12,13 +12,14 @@
 #include <Heating/Heat.h>
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
+#include <Platform/Event.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/Tasks.h>
 #include <Hardware/I2C.h>
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include <Comms/FirmwareUpdater.h>
 #endif
 
@@ -1122,6 +1123,8 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	return GCodeResult::ok;
 }
 
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+
 // Handle M997
 GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 {
@@ -1166,7 +1169,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 			for (size_t i = 0; i < numUpdateModules; ++i)
 			{
 				uint32_t t = modulesToUpdate[i];
-				if (t >= NumFirmwareUpdateModules)
+				if (t >= FirmwareUpdater::NumUpdateModules)
 				{
 					reply.printf("Invalid module number '%" PRIu32 "'\n", t);
 					firmwareUpdateModuleMap.Clear();
@@ -1231,6 +1234,8 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	gb.SetState(GCodeState::flashing1);
 	return GCodeResult::ok;
 }
+
+#endif
 
 // Handle M260 - send and possibly receive via I2C
 GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
@@ -1863,6 +1868,88 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	return true;
 }
 
+// Handle M957
+GCodeResult GCodes::RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+{
+	String<StringLength50> temp;
+	gb.MustSee('E');
+	gb.GetQuotedString(temp.GetRef(), false);
+	const EventType et(temp.c_str());
+	if (!et.IsValid())
+	{
+		reply.copy("Invalid event type");
+		return GCodeResult::error;
+	}
+
+	const unsigned int devNum = gb.GetLimitedUIValue('D', 256);
+	const unsigned int param = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+	const unsigned int boardAddress = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
+	temp.Clear();
+	if (gb.Seen('S'))
+	{
+		gb.GetQuotedString(temp.GetRef(), true);
+	}
+
+	const bool added = Event::AddEvent(et, param, boardAddress, devNum, "%s", temp.c_str());
+	if (added)
+	{
+		return GCodeResult::ok;
+	}
+	reply.copy("a similar event is already queued");
+	return GCodeResult::warning;
+}
+
+// Process an event. The autoPauseGCode buffer calls this when there is a new event to be processed.
+// This is a separate function because it allocates strings on the stack.
+void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
+{
+	// Get the event message
+	String<StringLength100> eventText;
+	const MessageType mt = Event::GetTextDescription(eventText.GetRef());
+	platform.Message(mt, eventText.c_str());							// tell the user about the event and log it
+
+	// Get the name of the macro file that we should look for
+	String<StringLength50> macroName;
+	Event::GetMacroFileName(macroName.GetRef());
+	if (platform.SysFileExists(macroName.c_str()))
+	{
+		// Set up the macro parameters
+		VariableSet vars;
+		Event::GetParameters(vars);
+		vars.InsertNewParameter("S", ExpressionValue(StringHandle(eventText.c_str())));
+
+		// Run the macro
+		gb.SetState(GCodeState::finishedProcessingEvent);				// cancel the event when we have finished processing it
+		if (DoFileMacro(gb, macroName.c_str(), false, AsyncSystemMacroCode, vars))
+		{
+			return;
+		}
+	}
+
+	// We didn't execute the macro, so do the default action
+	if (Event::GetDefaultPauseReason() == PrintPausedReason::dontPause)
+	{
+		Event::FinishedProcessing();									// nothing more to do
+	}
+	else
+	{
+		// It's a serious event that causes the print to pause by default, so send an alert
+		String<StringLength100> eventText;
+		Event::GetTextDescription(eventText.GetRef());
+		const bool isPrinting = IsReallyPrinting();
+		platform.SendAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification", 1, 0.0, AxesBitmap());
+		if (IsReallyPrinting())
+		{
+			// We are going to pause. It may need to wait for the movement lock, so do it in a new state.
+			gb.SetState(GCodeState::processingEvent);
+		}
+		else
+		{
+			Event::FinishedProcessing();
+		}
+	}
+}
+
 #if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
 
 // Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
@@ -1873,4 +1960,4 @@ void GCodes::SetAux0CommsProperties(uint32_t mode) const noexcept
 
 #endif
 
-	// End
+// End
