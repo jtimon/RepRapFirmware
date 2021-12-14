@@ -3,6 +3,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Platform/RepRap.h>
+#include <Platform/Event.h>
 #include <Movement/Move.h>
 #include <Tools/Tool.h>
 #include <Heating/Heat.h>
@@ -408,6 +409,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::pausing1:
+	case GCodeState::eventPausing1:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
@@ -432,28 +434,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::filamentErrorPause1:
-		if (LockMovementAndWaitForStandstill(gb))
-		{
-			gb.AdvanceState();
-			if (AllAxesAreHomed())
-			{
-				String<StringLength20> macroName;
-				macroName.printf(FILAMENT_ERROR "%u.g", gb.LatestMachineState().stateParameter);
-				if (!DoFileMacro(gb, macroName.c_str(), false, AsyncSystemMacroCode))
-				{
-					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, AsyncSystemMacroCode))
-					{
-						DoFileMacro(gb, PAUSE_G, true, AsyncSystemMacroCode);
-					}
-				}
-			}
-		}
-		break;
-
 	case GCodeState::pausing2:
 	case GCodeState::filamentChangePause2:
-	case GCodeState::filamentErrorPause2:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			reply.printf((gb.GetState() == GCodeState::filamentChangePause2) ? "Printing paused for filament change at" : "Printing paused at");
@@ -467,6 +449,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			reportPause = reprap.UsingSbcInterface();
 #endif
 			gb.SetState(GCodeState::normal);
+		}
+		break;
+
+	case GCodeState::eventPausing2:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			pauseState = PauseState::paused;
+#if HAS_SBC_INTERFACE
+			reportPause = reprap.UsingSbcInterface();
+#endif
+			gb.SetState(GCodeState::finishedProcessingEvent);
 		}
 		break;
 
@@ -544,7 +537,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
 			}
 			catch (const GCodeException&) { }
-			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
+			for (unsigned int module = 1; module < FirmwareUpdater::NumUpdateModules; ++module)
 			{
 				if (firmwareUpdateModuleMap.IsBitSet(module))
 				{
@@ -868,7 +861,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reprap.GetMove().SetLatestMeshDeviation(deviation);
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)deviation.GetMean(), (double)deviation.GetDeviationFromMean());
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 				if (TrySaveHeightMap(DefaultHeightMapFile, reply))
 				{
 					stateMachineResult = GCodeResult::error;
@@ -1479,6 +1472,30 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
 #endif
 	case GCodeState::checkError:				// we return to this state after running the retractprobe macro when there may be a stored error message
+		gb.SetState(GCodeState::normal);
+		break;
+
+	// Here when we need to execute the default action for an event because the macro file was not found, the the default action involves pausing the print.
+	// We have already sent an alert.
+	case GCodeState::processingEvent:
+		if (pauseState != PauseState::resuming)						// if we are resuming, wait for the resume to complete
+		{
+			if (pauseState != PauseState::notPaused)
+			{
+				gb.SetState(GCodeState::finishedProcessingEvent);	// already paused or pausing
+			}
+			else if (LockMovementAndWaitForStandstill(gb))
+			{
+				const PrintPausedReason pauseReason = Event::GetDefaultPauseReason();
+				gb.SetState(GCodeState::finishedProcessingEvent);
+				DoPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
+			}
+		}
+		break;
+
+	// Here when we have finished processing an event
+	case GCodeState::finishedProcessingEvent:
+		Event::FinishedProcessing();
 		gb.SetState(GCodeState::normal);
 		break;
 

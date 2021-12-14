@@ -7,7 +7,8 @@
 
 #include "FirmwareUpdater.h"
 
-#include <RepRapFirmware.h>
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
@@ -23,10 +24,6 @@
 
 namespace FirmwareUpdater
 {
-	const unsigned int WifiFirmwareModule = 1;
-	// Module 2 used to be the DWC binary file but is no longer used
-	const unsigned int WifiExternalFirmwareModule = 3;
-
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
 	GCodeResult CheckFirmwareUpdatePrerequisites(
@@ -144,5 +141,7 @@ namespace FirmwareUpdater
 #endif
 	}
 }
+
+#endif
 
 // End

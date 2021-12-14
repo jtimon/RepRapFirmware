@@ -12,6 +12,7 @@
 #include "PulsedFilamentMonitor.h"
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Platform/Event.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
 #include <PrintMonitor/PrintMonitor.h>
@@ -53,7 +54,7 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 FilamentMonitor::FilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
 	: driveNumber(drv), type(monitorType), driverId(did), lastStatus(FilamentSensorStatus::noDataReceived)
 #if SUPPORT_CAN_EXPANSION
-	  , hasRemote(false)
+	  , lastRemoteStatus(FilamentSensorStatus::noDataReceived), hasRemote(false)
 #endif
 {
 }
@@ -298,7 +299,6 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 					fromIsr = false;
 					locIsrMillis = 0;
 				}
-
 				GCodes& gCodes = reprap.GetGCodes();
 				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
 				{
@@ -309,28 +309,33 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 				{
 					fst = fs.Clear();
 				}
-
-				if (fst != fs.lastStatus)
+			}
+#if SUPPORT_CAN_EXPANSION
+			else
+			{
+				fst = fs.lastRemoteStatus;
+			}
+#endif
+			if (fst != fs.lastStatus)
+			{
+#if SUPPORT_REMOTE_COMMANDS
+				statusChanged = true;
+#endif
+				fs.lastStatus = fst;
+				if (fst != FilamentSensorStatus::ok
+#if SUPPORT_REMOTE_COMMANDS
+					&& !CanInterface::InExpansionMode()
+#endif
+					)
 				{
-#if SUPPORT_REMOTE_COMMANDS
-					statusChanged = true;
-#endif
-					fs.lastStatus = fst;
-					if (fst != FilamentSensorStatus::ok
-#if SUPPORT_REMOTE_COMMANDS
-						&& !CanInterface::InExpansionMode()
-#endif
-						)
+					const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
+					if (reprap.Debug(moduleFilamentSensors))
 					{
-						const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
-						if (reprap.Debug(moduleFilamentSensors))
-						{
-							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
-						}
-						else
-						{
-							gCodes.FilamentError(extruder, fst);
-						}
+						debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
+					}
+					else
+					{
+						Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), extruder, CanInterface::GetCanAddress(), "");
 					}
 				}
 			}
@@ -367,23 +372,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			FilamentMonitor& fs = *filamentSensors[extruder];
 			if (fs.driverId.boardAddress == src && fs.driverId.localDriver < msg.numMonitorsReported)
 			{
-				const FilamentSensorStatus fstat(msg.data[fs.driverId.localDriver].status);
-				fs.lastStatus = fstat;
-				GCodes& gCodes = reprap.GetGCodes();
-				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
-				{
-					if (fstat != FilamentSensorStatus::ok)
-					{
-						if (reprap.Debug(moduleFilamentSensors))
-						{
-							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fstat.ToString());
-						}
-						else
-						{
-							gCodes.FilamentError(extruder, fstat);
-						}
-					}
-				}
+				fs.lastRemoteStatus = FilamentSensorStatus(msg.data[fs.driverId.localDriver].status);
 			}
 		}
 	}
