@@ -1,3 +1,7 @@
+Version 3.4beta7_1
+==================
+* Duet3d 3.4beta7
+
 Version 3.4beta6_2
 ==================
 * Increase heaters per tool to 4
