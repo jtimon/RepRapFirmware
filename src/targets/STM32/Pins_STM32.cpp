@@ -1,4 +1,5 @@
 #include "RepRapFirmware.h"
+#include "Platform/Platform.h"
 #include "Pins.h"
 #include "BoardConfig.h"
 #include "Boards/BIQU_SKR.h"
@@ -234,6 +235,24 @@ bool SetBoard(const char* bn) noexcept
     }
     return false;
 }
+
+void PrintBoards(MessageType mtype) noexcept
+{
+    const size_t numBoards = ARRAY_SIZE(LPC_Boards);
+    for(size_t i=0; i<numBoards; i++)
+    {
+        for(size_t j=0; j < ARRAY_SIZE(LPC_Boards[0].boardName); j++)
+            if(LPC_Boards[i].boardName[j])
+            {
+                reprap.GetPlatform().MessageF(mtype, "Board %d.%d: %s Signatures:", i, j, LPC_Boards[i].boardName[j]);
+                for (size_t k = 0; k < MaxSignatures; k++)
+                    if (LPC_Boards[i].defaults.signatures[k] != 0)
+                        reprap.GetPlatform().MessageF(mtype, " 0x%x", (unsigned)LPC_Boards[i].defaults.signatures[k]);
+                reprap.GetPlatform().MessageF(mtype, "\n");
+            }
+    }
+}
+
 
 
 

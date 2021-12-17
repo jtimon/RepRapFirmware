@@ -348,6 +348,7 @@ constexpr PwmFrequency DefaultFanPwmFrequencies[] = { DefaultFanPwmFreq };
 //Boards
 
 bool SetBoard(const char* bn)  noexcept;
+void PrintBoards(MessageType mtype) noexcept;
 void ClearPinArrays() noexcept;
 
 constexpr size_t MaxBoardNameLength = 20;

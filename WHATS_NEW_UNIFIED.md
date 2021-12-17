@@ -1,3 +1,7 @@
+Version 3.4beta7_2
+==================
+* Report supported boards as part of M122 p200 output
+
 Version 3.4beta7_1
 ==================
 * Duet3d 3.4beta7

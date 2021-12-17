@@ -743,6 +743,8 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 #else
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
 #endif
+    reprap.GetPlatform().MessageF(mtype, "\n== Supported boards ==\n");
+    PrintBoards(mtype);
 
     reprap.GetPlatform().MessageF(mtype, "\n== Configurable Board.txt Settings ==\n");
     //Print the board name
