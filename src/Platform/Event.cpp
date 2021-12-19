@@ -60,6 +60,19 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 	return true;
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Queue an event received via CAN
+/*static*/ void Event::Add(const CanMessageEvent& msg, CanAddress src, size_t msgLen) noexcept
+{
+	// We need to make sure that the text is null terminated
+	String<StringLength100> msgText;
+	msgText.copy(msg.text, msg.GetMaxTextLength(msgLen));
+	(void)AddEvent((EventType)msg.eventType, msg.eventParam, src, msg.deviceNumber, "%s", msgText.c_str());
+}
+
+#endif
+
 // Get the highest priority event and mark it as being serviced
 /*static*/ bool Event::StartProcessing() noexcept
 {
@@ -156,18 +169,22 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 
 		case EventType::driver_error:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("Driver %u.%u error: %s", ep->boardAddress, ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u.%u error: ", ep->boardAddress, ep->deviceNumber);
 #else
-			str.printf("Driver %u error: %s", ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u error: ", ep->deviceNumber);
 #endif
+			StandardDriverStatus(ep->param).AppendText(str, 2);
+			str.cat(ep->text.c_str());
 			return ErrorMessage;
 
 		case EventType::driver_warning:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("Driver %u.%u warning: %s", ep->boardAddress, ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u.%u warning: ", ep->boardAddress, ep->deviceNumber);
 #else
-			str.printf("Driver %u warning: %s", ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u warning: ", ep->deviceNumber);
 #endif
+			StandardDriverStatus(ep->param).AppendText(str, 1);
+			str.cat(ep->text.c_str());
 			return WarningMessage;
 
 		case EventType::driver_stall:

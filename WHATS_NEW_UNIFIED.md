@@ -1,3 +1,11 @@
+Version 3.4beta7_2
+==================
+* Report supported boards as part of M122 p200 output
+
+Version 3.4beta7_1
+==================
+* Duet3d 3.4beta7
+
 Version 3.4beta6_2
 ==================
 * Increase heaters per tool to 4
@@ -7,10 +15,6 @@ Version 3.3.0_12
 ================
 * STM32F4 Add support for Fly Gemini
 * STM32F4 Report usage of SPI device when channel has not been defined (avoid board reset)
-
-Version 3.4beta6_2
-==================
-* Increase heaters per tool to 4
 
 
 Version 3.4.0beta6_1
