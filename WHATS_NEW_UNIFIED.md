@@ -1,6 +1,7 @@
 Version 3.4beta7_2
 ==================
 * Report supported boards as part of M122 p200 output
+* Include chaanges from 3.3.0_14
 
 Version 3.4beta7_1
 ==================
@@ -43,6 +44,17 @@ Version 3.4beta2_2
 ==================
 * Improve SBC robustness when connection is dropped and reconnects
 * Pick up changes from 3.3.0_7
+
+
+Version 3.3.0_14
+================
+* STM32F4 Update Fly Gemini board signature
+
+
+Version 3.3.0_13
+================
+* STM32F4 Fix problems with using SDIO based SD cards in SBC mode
+
 
 Version 3.3.0_12
 ================
