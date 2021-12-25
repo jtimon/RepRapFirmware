@@ -48,6 +48,9 @@
 
 #if HAS_SBC_INTERFACE
 # include "SBC/SbcInterface.h"
+# if STM32F4
+#  include "STM32/BoardConfig.h"
+# endif
 #endif
 
 #ifdef DUET3_ATE
@@ -598,13 +601,14 @@ void RepRap::Init() noexcept
 
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
-#if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE
+#if HAS_SBC_INTERFACE && (!HAS_MASS_STORAGE || STM32F4)
 	usingSbcInterface = true;
 	sbcInterface->Init();
 	FileWriteBuffer::UsingSbcMode();
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	if (!usingSbcInterface)
 	{
 		// Try to mount the first SD card
 		GCodeResult rslt;
@@ -657,12 +661,13 @@ void RepRap::Init() noexcept
 		{
 			Spin();
 		}
-
+		BoardConfig::LoadBoardConfigFromSBC();
 		// Run config.g or config.g.bak
 		if (!RunStartupFile(GCodes::CONFIG_FILE))
 		{
 			RunStartupFile(GCodes::CONFIG_BACKUP_FILE);
 		}
+		//BoardConfig::LoadBoardConfigFromSBC();
 
 		// runonce.g is executed by the SBC as soon as processingConfig is set to false.
 		// As we are running the SBC, save RAM by not activating the network

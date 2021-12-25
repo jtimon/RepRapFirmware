@@ -25,6 +25,8 @@ enum configValueType{
     cvStringType,
 };
 
+const uint32_t CVTLengths[] = {sizeof(Pin), sizeof(bool), sizeof(uint8_t), sizeof(uint16_t), sizeof(uint32_t), sizeof(float), MaxBoardNameLength};
+
 struct boardConfigEntry_t
 {
     const char* key;
@@ -37,15 +39,16 @@ struct boardConfigEntry_t
 class Platform; //fwd decl
 
 class BoardConfig {
-
 public:
     static void Init() noexcept;
 
     static void Diagnostics(MessageType mtype) noexcept;
     static Pin StringToPin(const char *strvalue) noexcept;
     static Pin LookupPin(char *strvalue) noexcept;
+    static bool LoadBoardConfigFromFile() noexcept;
 
 #if HAS_SBC_INTERFACE
+    static bool LoadBoardConfigFromSBC() noexcept;
     static bool BeginFirmwareUpdate();
     static bool WriteFirmwareData(const char *data, uint16_t length);
     static void EndFirmwareUpdate();
@@ -53,7 +56,7 @@ public:
     
 private:
     BoardConfig()  noexcept;
-    static bool GetConfigKeys(FIL *configFile, const boardConfigEntry_t *boardConfigEntryArray, const size_t numConfigs) noexcept;
+    static bool GetConfigKeys(FileStore * const configFile, const boardConfigEntry_t *boardConfigEntryArray, const size_t numConfigs) noexcept;
     static void SetValueFromString(configValueType type, void *variable, char *valuePtr) noexcept;
     static void PrintValue(MessageType mtype, configValueType configType, void *variable) noexcept;
 };

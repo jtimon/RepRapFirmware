@@ -25,6 +25,11 @@
 #include "ExceptionHandlers.h"
 
 #include "pinmap.h"
+extern char _sccmram;						// defined in linker script
+extern char _eccmram;					// defined in linker script
+
+static constexpr char boardConfigFile[] = "board.txt";
+
 //Single entry for Board name
 static const boardConfigEntry_t boardEntryConfig[]=
 {
@@ -129,6 +134,102 @@ static const boardConfigEntry_t boardConfigs[]=
 #endif
 
 };
+
+
+class InMemoryBoardConfiguration
+{
+public:
+    InMemoryBoardConfiguration() {}
+    bool isValid() noexcept;
+    void setConfiguration() noexcept;
+    void getConfiguration() noexcept;
+    void saveToBackupRAM() noexcept;
+    void loadFromBackupRAM() noexcept;
+    bool isEqual(InMemoryBoardConfiguration& other) noexcept;
+private:
+    static constexpr uint32_t validSignature = 0xBCBC0001;
+    static constexpr int maxData = 512;
+    uint32_t signature;
+    uint32_t length;
+    uint8_t data[maxData];
+};
+
+bool InMemoryBoardConfiguration::isValid() noexcept
+{
+    debugPrintf("Memory at %x signature %x\n", (unsigned)this, (unsigned) signature);
+    return signature == validSignature;
+}
+
+void InMemoryBoardConfiguration::setConfiguration() noexcept
+{
+    if (!isValid()) debugPrintf("Setting configuration from invalid memory\n");
+    uint8_t *pmem = data;
+    memcpy(lpcBoardName, pmem, MaxBoardNameLength);
+    SetBoard(lpcBoardName);
+    pmem += MaxBoardNameLength;
+    const size_t numConfigs = ARRAY_SIZE(boardConfigs);
+    for(size_t i=0; i<numConfigs; i++)
+    {
+        const boardConfigEntry_t item = boardConfigs[i];
+        uint32_t len = (item.maxArrayEntries == nullptr ? CVTLengths[item.type] : *item.maxArrayEntries*CVTLengths[item.type]);
+        memcpy(item.variable, pmem, len);
+        pmem += len;
+    }
+}
+
+void InMemoryBoardConfiguration::getConfiguration() noexcept
+{
+    uint8_t *pmem = data;
+    memcpy(pmem, lpcBoardName, MaxBoardNameLength);
+    pmem += MaxBoardNameLength;
+    const size_t numConfigs = ARRAY_SIZE(boardConfigs);
+    for(size_t i=0; i<numConfigs; i++)
+    {
+        const boardConfigEntry_t item = boardConfigs[i];
+        uint32_t len = (item.maxArrayEntries == nullptr ? CVTLengths[item.type] : *item.maxArrayEntries*CVTLengths[item.type]);
+        memcpy(pmem, item.variable, len);
+        pmem += len;
+        if (pmem - data > maxData)
+        {
+            debugPrintf("Warning configuration data too large\n");
+            return;
+        }
+    }
+    length = pmem - data;
+    debugPrintf("get config length %d\n", (int)length);
+    signature = validSignature;
+}
+
+void InMemoryBoardConfiguration::saveToBackupRAM() noexcept
+{
+    if (!isValid())
+    {
+        debugPrintf("Attempt to store invalid configuration data to backup RAM\n");
+        return;
+    }
+    // enable access to backup RAM
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+    __HAL_RCC_BKPSRAM_CLK_ENABLE();
+    memcpy((void *)BKPSRAM_BASE, this, sizeof(InMemoryBoardConfiguration));
+}
+
+void InMemoryBoardConfiguration::loadFromBackupRAM() noexcept
+{
+    // enable access to backup RAM
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+    __HAL_RCC_BKPSRAM_CLK_ENABLE();
+    memcpy(this, (void *)BKPSRAM_BASE, sizeof(InMemoryBoardConfiguration));
+    if (isValid())
+        debugPrintf("Loaded valid configuration data from backup RAM\n");
+}
+
+
+bool InMemoryBoardConfiguration::isEqual(InMemoryBoardConfiguration& other) noexcept
+{
+    return (isValid() && other.isValid() && length == other.length && !memcmp(data, other.data, length));
+}
 
 uint32_t crc32_for_byte(uint32_t r) 
 {
@@ -362,6 +463,7 @@ static bool TryConfig(uint32_t config, FATFS *fs)
     FRESULT rslt= f_mount (fs, "0:", 1);
     if (rslt == FR_OK)
     {
+        f_unmount ("0:");
         return true;
     }
     // mount failed reset I/O pins to inputs
@@ -386,8 +488,9 @@ static bool CheckPinConfig(uint32_t config)
 }
 
 
-static SSPChannel InitSDCard(uint32_t boardSig, FATFS *fs)
+static SSPChannel InitSDCard(uint32_t boardSig)
 {
+    FATFS *fs = new FATFS;
     int conf = SD_NONE;
     // First try to find a matching board
     for(uint32_t i = 0; i < NumBoardEntries && conf == SD_NONE; i++)
@@ -438,17 +541,11 @@ static SSPChannel InitSDCard(uint32_t boardSig, FATFS *fs)
     return SSPNONE;
 }
 
-extern char _sccmram;						// defined in linker script
-extern char _eccmram;					// defined in linker script
-
 void BoardConfig::Init() noexcept
 {
-
-    constexpr char boardConfigPath[] = "0:/sys/board.txt";
-    FIL configFile;
-    FATFS *fs = new FATFS;
-    FRESULT rslt;
+	GCodeResult rslt = GCodeResult::notFinished;
     SSPChannel sdChannel;
+	String<100> reply;
 
     signature = crc32((char *)0x8000000, 8192);
     // We need to setup DMA and SPI devices before we can use File I/O
@@ -463,165 +560,149 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream0_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
-    delay(STARTUP_DELAY);
+    //delay(STARTUP_DELAY);
 #endif
-    ClearPinArrays();
 #if !HAS_MASS_STORAGE
     sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);
 #endif
     // Mount the internal SD card
-    sdChannel = InitSDCard(signature, fs);
-    if (sdChannel != SSPNONE)
-    {
-        //Open File
-        rslt = f_open (&configFile, boardConfigPath, FA_READ);
-        if (rslt != FR_OK)
-        {
-            f_unmount ("0:");
-            FatalError("Unable to read board configuration: %s...\n",boardConfigPath );
-            return;
-        }
-    }
+    sdChannel = InitSDCard(signature);
+    // First check for a configuration stored in RAM
+    InMemoryBoardConfiguration inMemoryConfig;
+    inMemoryConfig.loadFromBackupRAM();
+    if (inMemoryConfig.isValid())
+        inMemoryConfig.setConfiguration();
     else
     {
-        // failed to mount card
-        FatalError("Failed to mount sd card\n");
+        rslt = GCodeResult::notFinished;
+        // Try to load the configuration from a local file
+        if (sdChannel != SSPNONE)
+        {
+            do
+            {
+                MassStorage::Spin();
+                rslt = MassStorage::Mount(0, reply.GetRef(), false);
+            }
+            while (rslt == GCodeResult::notFinished);
+        }
+        if (rslt == GCodeResult::ok)
+        {
+            if (!BoardConfig::LoadBoardConfigFromFile())
+                rslt = GCodeResult::notFinished;
+            MassStorage::Unmount(0, reply.GetRef());
+        }
+#if !HAS_SBC_INTERFACE
+        if (rslt != GCodeResult::ok)    
+        {
+            // failed to load a valid configuration
+            FatalError("Failed to load board configuration\n");
+            return;
+        }
+#endif
+    }
+#if HAS_SBC_INTERFACE
+    if (SbcCsPin == NoPin)
+    {
+        FatalError("No SBC configuration\n");
         return;
     }
-    if(rslt == FR_OK)
+#endif
+    //Calculate STEP_DRIVER_MASK (used for parallel writes)
+    STEP_DRIVER_MASK = 0;
+    // Currently not implemented for STM32
+    #if 0
+    for(size_t i=0; i<MaxTotalDrivers; i++)
     {
-            
-        reprap.GetPlatform().MessageF(UsbMessage, "Loading config from %s...\n", boardConfigPath );
-
-        //First find the board entry to load the correct PinTable for looking up Pin by name
-        BoardConfig::GetConfigKeys(&configFile, boardEntryConfig, (size_t) ARRAY_SIZE(boardEntryConfig));
-        if(!SetBoard(lpcBoardName)) // load the Correct PinTable for the defined Board (RRF3)
+        //It is assumed all pins will be on Port 2
+        const Pin stepPin = STEP_PINS[i];
+        if( stepPin != NoPin && (stepPin >> 5) == 2) // divide by 32 to get port number
         {
-            //Failed to find string in known boards array
-            SafeStrncpy(lpcBoardName, "generic", 8); //replace the string in lpcBoardName to "generic"
+            STEP_DRIVER_MASK |= (1 << (stepPin & 0x1f)); //this is a bitmask of all the stepper pins on Port2 used for Parallel Writes
         }
-
-        //Load all other config settings now that PinTable is loaded.
-        f_lseek(&configFile, 0); //go back to beginning of config file
-        BoardConfig::GetConfigKeys(&configFile, boardConfigs, (size_t) ARRAY_SIZE(boardConfigs));
-        f_close(&configFile);
-        f_unmount ("0:");
-        delete fs;
-        //Calculate STEP_DRIVER_MASK (used for parallel writes)
-        STEP_DRIVER_MASK = 0;
-        // Currently not implemented for STM32
-        #if 0
-        for(size_t i=0; i<MaxTotalDrivers; i++)
+        else
         {
-            //It is assumed all pins will be on Port 2
-            const Pin stepPin = STEP_PINS[i];
-            if( stepPin != NoPin && (stepPin >> 5) == 2) // divide by 32 to get port number
+            if(stepPin != NoPin)
             {
-                STEP_DRIVER_MASK |= (1 << (stepPin & 0x1f)); //this is a bitmask of all the stepper pins on Port2 used for Parallel Writes
-            }
-            else
-            {
-                if(stepPin != NoPin)
-                {
-                    // configured step pins are not on the same port - not using parallel writes
-                    hasStepPinsOnDifferentPorts = true;
-                }
+                // configured step pins are not on the same port - not using parallel writes
+                hasStepPinsOnDifferentPorts = true;
             }
         }
-        #endif
-        hasStepPinsOnDifferentPorts = true;
-        
-        //Does board have built in current control via digipots?
-        if(digipotFactor > 1)
-        {
-            hasDriverCurrentControl = true;
-        }
-#if 0
-        // anti-rotation detection feature disabled for now due to potential to damage some drivers
-        CheckDriverPins();
-#endif       
-        //Setup the SPI Pins, note that the SD SPI device may already have been configured
-        for(size_t i = 0; i < ARRAY_SIZE(SPIPins); i++)
-            if (sdChannel != (SSPChannel)i)
-                ConfigureSPIPins((SSPChannel)i, SPIPins[i][0], SPIPins[i][1], SPIPins[i][2]);
-#if HAS_MASS_STORAGE
-        // Set internal SD card frequency (if supported)
-        sd_mmc_reinit_slot(0, NoPin, InternalSDCardFrequency);
-        if (ExternalSDCardSSPChannel != SSPNONE && SdSpiCSPins[1] != NoPin)
-        {
-            sd_mmc_setSSPChannel(1, ExternalSDCardSSPChannel, SdSpiCSPins[1]);
-            sd_mmc_reinit_slot(1, NoPin, ExternalSDCardFrequency);
-        }
-        // Update RRF settings
-        MassStorage::Init2();
-#endif
-// FIXME
-#if 0
-        //Internal SDCard SPI Frequency
-        sd_mmc_reinit_slot(0, SdSpiCSPins[0], InternalSDCardFrequency);
-        
-        //Configure the External SDCard
-        if(SdSpiCSPins[1] != NoPin)
-        {
-            setPullup(SdCardDetectPins[1], true);
-            //set the SSP Channel for External SDCard
-            if(ExternalSDCardSSPChannel == SSP1 || ExternalSDCardSSPChannel == SSP2 || ExternalSDCardSSPChannel == SWSPI0)
-            {
-                sd_mmc_setSSPChannel(1, ExternalSDCardSSPChannel); //must be called before reinit
-            }
-            //set the CSPin and the frequency for the External SDCard
-            sd_mmc_reinit_slot(1, SdSpiCSPins[1], ExternalSDCardFrequency);
-        }
-#endif
-    #if HAS_SBC_INTERFACE
-        if(SbcCsPin != NoPin) pinMode(SbcCsPin, INPUT_PULLUP);
-    #endif
-    #if HAS_WIFI_NETWORKING
-        if(SamCsPin != NoPin) pinMode(SamCsPin, OUTPUT_LOW);
-        if(EspResetPin != NoPin) pinMode(EspResetPin, OUTPUT_LOW);
-        APIN_ESP_SPI_MOSI = SPIPins[WiFiSpiChannel][2];
-        APIN_ESP_SPI_MISO = SPIPins[WiFiSpiChannel][1];
-        APIN_ESP_SPI_SCK = SPIPins[WiFiSpiChannel][0];
-        
-        if(WifiSerialRxTxPins[0] != NoPin && WifiSerialRxTxPins[1] != NoPin)
-        {
-            //Setup the Serial Port for ESP Wifi
-            APIN_Serial1_RXD = WifiSerialRxTxPins[0];
-            APIN_Serial1_TXD = WifiSerialRxTxPins[1];
-            
-            if(!SERIAL_WIFI_DEVICE.Configure(WifiSerialRxTxPins[0], WifiSerialRxTxPins[1]))
-            {
-                reprap.GetPlatform().MessageF(UsbMessage, "Failed to set WIFI Serial with pins %c.%d and %c.%d.\n", 'A'+(WifiSerialRxTxPins[0] >> 4), (WifiSerialRxTxPins[0] & 0xF), 'A'+(WifiSerialRxTxPins[1] >> 4), (WifiSerialRxTxPins[1] & 0xF) );
-            }
-        }
-    #endif
-
-    #if defined(SERIAL_AUX_DEVICE)
-        //Configure Aux Serial
-        if(AuxSerialRxTxPins[0] != NoPin && AuxSerialRxTxPins[1] != NoPin)
-        {
-            if(!SERIAL_AUX_DEVICE.Configure(AuxSerialRxTxPins[0], AuxSerialRxTxPins[1]))
-            {
-                reprap.GetPlatform().MessageF(UsbMessage, "Failed to set AUX Serial with pins %c.%d and %c.%d.\n", 'A'+(AuxSerialRxTxPins[0] >> 4), (AuxSerialRxTxPins[0] & 0xF), 'A'+(AuxSerialRxTxPins[1] >> 4), (AuxSerialRxTxPins[1] & 0xF) );
-            }
-
-        }
-    #endif
-
-    #if defined(SERIAL_AUX2_DEVICE)
-        //Configure Aux2 Serial
-        if(Aux2SerialRxTxPins[0] != NoPin && Aux2SerialRxTxPins[1] != NoPin)
-        {
-            if(!SERIAL_AUX2_DEVICE.Configure(Aux2SerialRxTxPins[0], Aux2SerialRxTxPins[1]))
-            {
-                reprap.GetPlatform().MessageF(UsbMessage, "Failed to set AUX2 Serial with pins %d.%d and %d.%d.\n", (Aux2SerialRxTxPins[0] >> 5), (Aux2SerialRxTxPins[0] & 0x1F), (Aux2SerialRxTxPins[1] >> 5), (Aux2SerialRxTxPins[1] & 0x1F) );
-            }
-
-        }
-    #endif
-
-        ConfigureGPIOPins();
     }
+    #endif
+    hasStepPinsOnDifferentPorts = true;
+    
+    //Does board have built in current control via digipots?
+    if(digipotFactor > 1)
+    {
+        hasDriverCurrentControl = true;
+    }
+#if 0
+    // anti-rotation detection feature disabled for now due to potential to damage some drivers
+    CheckDriverPins();
+#endif       
+    //Setup the SPI Pins, note that the SD SPI device may already have been configured
+    for(size_t i = 0; i < ARRAY_SIZE(SPIPins); i++)
+        if (sdChannel != (SSPChannel)i)
+            ConfigureSPIPins((SSPChannel)i, SPIPins[i][0], SPIPins[i][1], SPIPins[i][2]);
+#if HAS_MASS_STORAGE
+    // Set internal SD card frequency (if supported)
+    sd_mmc_reinit_slot(0, NoPin, InternalSDCardFrequency);
+    if (ExternalSDCardSSPChannel != SSPNONE && SdSpiCSPins[1] != NoPin)
+    {
+        sd_mmc_setSSPChannel(1, ExternalSDCardSSPChannel, SdSpiCSPins[1]);
+        sd_mmc_reinit_slot(1, NoPin, ExternalSDCardFrequency);
+    }
+    // Update RRF settings
+    MassStorage::Init2();
+#endif
+#if HAS_SBC_INTERFACE
+    if(SbcCsPin != NoPin) pinMode(SbcCsPin, INPUT_PULLUP);
+#endif
+#if HAS_WIFI_NETWORKING
+    if(SamCsPin != NoPin) pinMode(SamCsPin, OUTPUT_LOW);
+    if(EspResetPin != NoPin) pinMode(EspResetPin, OUTPUT_LOW);
+    APIN_ESP_SPI_MOSI = SPIPins[WiFiSpiChannel][2];
+    APIN_ESP_SPI_MISO = SPIPins[WiFiSpiChannel][1];
+    APIN_ESP_SPI_SCK = SPIPins[WiFiSpiChannel][0];
+    
+    if(WifiSerialRxTxPins[0] != NoPin && WifiSerialRxTxPins[1] != NoPin)
+    {
+        //Setup the Serial Port for ESP Wifi
+        APIN_Serial1_RXD = WifiSerialRxTxPins[0];
+        APIN_Serial1_TXD = WifiSerialRxTxPins[1];
+        
+        if(!SERIAL_WIFI_DEVICE.Configure(WifiSerialRxTxPins[0], WifiSerialRxTxPins[1]))
+        {
+            reprap.GetPlatform().MessageF(UsbMessage, "Failed to set WIFI Serial with pins %c.%d and %c.%d.\n", 'A'+(WifiSerialRxTxPins[0] >> 4), (WifiSerialRxTxPins[0] & 0xF), 'A'+(WifiSerialRxTxPins[1] >> 4), (WifiSerialRxTxPins[1] & 0xF) );
+        }
+    }
+#endif
+
+#if defined(SERIAL_AUX_DEVICE)
+    //Configure Aux Serial
+    if(AuxSerialRxTxPins[0] != NoPin && AuxSerialRxTxPins[1] != NoPin)
+    {
+        if(!SERIAL_AUX_DEVICE.Configure(AuxSerialRxTxPins[0], AuxSerialRxTxPins[1]))
+        {
+            reprap.GetPlatform().MessageF(UsbMessage, "Failed to set AUX Serial with pins %c.%d and %c.%d.\n", 'A'+(AuxSerialRxTxPins[0] >> 4), (AuxSerialRxTxPins[0] & 0xF), 'A'+(AuxSerialRxTxPins[1] >> 4), (AuxSerialRxTxPins[1] & 0xF) );
+        }
+
+    }
+#endif
+
+#if defined(SERIAL_AUX2_DEVICE)
+    //Configure Aux2 Serial
+    if(Aux2SerialRxTxPins[0] != NoPin && Aux2SerialRxTxPins[1] != NoPin)
+    {
+        if(!SERIAL_AUX2_DEVICE.Configure(Aux2SerialRxTxPins[0], Aux2SerialRxTxPins[1]))
+        {
+            reprap.GetPlatform().MessageF(UsbMessage, "Failed to set AUX2 Serial with pins %d.%d and %d.%d.\n", (Aux2SerialRxTxPins[0] >> 5), (Aux2SerialRxTxPins[0] & 0x1F), (Aux2SerialRxTxPins[1] >> 5), (Aux2SerialRxTxPins[1] & 0x1F) );
+        }
+
+    }
+#endif
+
+    ConfigureGPIOPins();
 }
 
 
@@ -909,36 +990,63 @@ void BoardConfig::SetValueFromString(configValueType type, void *variable, char 
     }
 }
 
-static size_t ReadLine(FIL *fp, char *p, int len)
+bool BoardConfig::LoadBoardConfigFromFile() noexcept
 {
-    int nc = 0;
-    UINT rc;
-    uint8_t s;
-    len -= 1;    /* Make a room for the terminator */
-    while (nc < len)
+    FileStore * const configFile = reprap.GetPlatform().OpenSysFile(boardConfigFile, OpenMode::read);        //Open File
+    if (configFile == nullptr)
     {
-        f_read(fp, &s, 1, &rc);
-        if (rc != 1)
-        {
-            if (nc == 0) return -1;
-            break;
-        }
-        if (s == '\r') continue;
-        if (s == '\n') break;
-        *p++ = s; nc++;
+        reprap.GetPlatform().MessageF(UsbMessage, "Configuration file %s not found\n", boardConfigFile );
+        return false;
     }
-    *p = 0;        /* Terminate the string */
-    return nc;
+    reprap.GetPlatform().MessageF(UsbMessage, "Loading config from %s...\n", boardConfigFile );
+
+    //First find the board entry to load the correct PinTable for looking up Pin by name
+    BoardConfig::GetConfigKeys(configFile, boardEntryConfig, (size_t) ARRAY_SIZE(boardEntryConfig));
+    if(!SetBoard(lpcBoardName)) // load the Correct PinTable for the defined Board (RRF3)
+    {
+        //Failed to find string in known boards array
+        SafeStrncpy(lpcBoardName, "generic", 8); //replace the string in lpcBoardName to "generic"
+    }
+
+    //Load all other config settings now that PinTable is loaded.
+    configFile->Seek(0); //go back to beginning of config file
+    BoardConfig::GetConfigKeys(configFile, boardConfigs, (size_t) ARRAY_SIZE(boardConfigs));
+    configFile->Close();
+    return true;
 }
 
-bool BoardConfig::GetConfigKeys(FIL *configFile, const boardConfigEntry_t *boardConfigEntryArray, const size_t numConfigs) noexcept
+
+bool BoardConfig::LoadBoardConfigFromSBC() noexcept
+{
+    InMemoryBoardConfiguration oldConfig, newConfig;
+    oldConfig.getConfiguration();
+    debugPrintf("Num smart drivers %d\n", totalSmartDrivers);
+    BoardConfig::LoadBoardConfigFromFile();
+    debugPrintf("Num smart drivers after %d\n", totalSmartDrivers);
+    newConfig.getConfiguration();
+    if (oldConfig.isEqual(newConfig))
+        reprap.GetPlatform().MessageF(UsbMessage, "Configurations match\n");
+    else
+    {
+        // store new config into memory that will survive a reboot
+        newConfig.saveToBackupRAM();
+        reprap.GetPlatform().MessageF(UsbMessage, "Configurations do not match rebooting to load new settings\n");
+        debugPrintf("Rebooting....\n");
+        delay(1000);
+        SoftwareReset(SoftwareResetReason::user); // Reboot
+    }
+    return true;
+}
+
+bool BoardConfig::GetConfigKeys(FileStore * const configFile, const boardConfigEntry_t *boardConfigEntryArray, const size_t numConfigs) noexcept
 {
     constexpr size_t maxLineLength = 120;
     char line[maxLineLength];
 
-    int readLen = ReadLine(configFile, line, maxLineLength);
+    int readLen = configFile->ReadLine(line, maxLineLength);
     while(readLen >= 0)
     {
+        debugPrintf("ReadLine returns %d %s\n", readLen, line);
         size_t len = (size_t) readLen;
         size_t pos = 0;
         while(pos < len && line[pos] != 0 && isSpaceOrTab(line[pos])) pos++; //eat leading whitespace
@@ -1147,8 +1255,7 @@ bool BoardConfig::GetConfigKeys(FIL *configFile, const boardConfigEntry_t *board
             //Empty Line - Nothing to do here
         }
 
-        readLen = ReadLine(configFile, line, maxLineLength); //attempt to read the next line
-        //debugPrintf("ReadLine returns %d\n", readLen);
+        readLen = configFile->ReadLine(line, maxLineLength); //attempt to read the next line
     }
     return false;
 }
@@ -1226,7 +1333,7 @@ void BoardConfig::EndFirmwareUpdate()
     }
     reprap.EmergencyStop();			// turn off heaters etc.
     debugPrintf("Restarting....\n");
-    delay(1000);
+    //delay(1000);
     SoftwareReset(SoftwareResetReason::user); // Reboot
 }
 #endif
