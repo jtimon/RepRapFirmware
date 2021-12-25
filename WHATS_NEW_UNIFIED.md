@@ -1,3 +1,7 @@
+Version 3.4beta7_3
+==================
+* Fix bug pin A.0 set to input mode during board init
+
 Version 3.4beta7_2
 ==================
 * Report supported boards as part of M122 p200 output
