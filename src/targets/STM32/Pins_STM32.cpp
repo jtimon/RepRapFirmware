@@ -34,13 +34,8 @@ constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
 //All I/Os default to input with pullup after reset (9.2.1 from manual)
 
 Pin TEMP_SENSE_PINS[NumThermistorInputs];
-<<<<<<< HEAD
 Pin SpiTempSensorCsPins[MaxSpiTempSensors]; // Used to deselect all devices at boot
 SSPChannel TempSensorSSPChannel = SSPNONE;  // Off by default
-=======
-Pin SpiTempSensorCsPins[MaxSpiTempSensors];
-SSPChannel TempSensorSSPChannel = SSPNONE;   //default SPI Temp sensor on SSP1
->>>>>>> v3.4-dev
 
 Pin ATX_POWER_PIN = NoPin;                  // Pin to use to control external power
 bool ATX_POWER_INVERTED = false;            // Should the state of this pin be inverted
