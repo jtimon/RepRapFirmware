@@ -1,4 +1,4 @@
-Version 3.3.o_14
+Version 3.3.0_15
 ================
 * STM32F4 Fix number of drivers in Fly Gemini config
 
