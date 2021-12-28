@@ -665,7 +665,7 @@ constexpr BoardDefaults fly_gemini_Defaults = {
         {NoPin, NoPin, NoPin},                    //SPI4
         {NoPin, NoPin, NoPin},                     //SPI5
     },
-    5,                                            // Number of drivers
+    4,                                            // Number of drivers
     {PB_2, PB_6, PB_5, PB_4},           //enablePins
     {PC_13, PC_14, PC_15, PC_3},        //stepPins
     {PC_1, PC_4, PC_5, PC_7},           //dirPins
