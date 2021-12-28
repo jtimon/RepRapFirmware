@@ -1,3 +1,7 @@
+Version 3.4beta7_3
+==================
+* Fix bug pin A.0 set to input mode during board init
+
 Version 3.4beta7_2
 ==================
 * Report supported boards as part of M122 p200 output
@@ -11,12 +15,6 @@ Version 3.4beta6_2
 ==================
 * Increase heaters per tool to 4
 * include changes from 3.3.0_12
-
-Version 3.3.0_12
-================
-* STM32F4 Add support for Fly Gemini
-* STM32F4 Report usage of SPI device when channel has not been defined (avoid board reset)
-
 
 Version 3.4.0beta6_1
 ====================
@@ -45,6 +43,9 @@ Version 3.4beta2_2
 * Improve SBC robustness when connection is dropped and reconnects
 * Pick up changes from 3.3.0_7
 
+Version 3.3.0_15
+================
+* STM32F4 Fix number of drivers in Fly Gemini config
 
 Version 3.3.0_14
 ================
