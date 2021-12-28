@@ -1,3 +1,7 @@
+Version 3.3.o_14
+================
+* STM32F4 Fix number of drivers in Fly Gemini config
+
 Version 3.3.0_14
 ================
 * STM32F4 Update Fly Gemini board signature
