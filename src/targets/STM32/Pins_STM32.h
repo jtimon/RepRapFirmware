@@ -24,8 +24,8 @@
 //needed to compile
 #define IAP_FIRMWARE_FILE       "firmware.bin"
 #define IAP_UPDATE_FILE         "N/A"
-#define IAP_UPDATE_FILE_SBC     "firmware.bin"
-#define IAP_IMAGE_START         0
+#define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
+#define IAP_IMAGE_START         0x20018000
 
 #define FLASH_DATA_LENGTH (16*1024) //size of the Software Reset Data in Flash
 

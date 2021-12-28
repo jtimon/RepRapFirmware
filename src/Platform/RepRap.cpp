@@ -657,8 +657,14 @@ void RepRap::Init() noexcept
 	if (usingSbcInterface)
 	{
 		// Keep spinning until the SBC connects
+		uint32_t start = millis();
 		while (!sbcInterface->IsConnected())
 		{
+			if (millis() - start > 1000)
+			{
+				platform->MessageF(UsbMessage, "Waiting for SBC connect\n");
+				start = millis();
+			}
 			Spin();
 		}
 		BoardConfig::LoadBoardConfigFromSBC();
@@ -667,7 +673,6 @@ void RepRap::Init() noexcept
 		{
 			RunStartupFile(GCodes::CONFIG_BACKUP_FILE);
 		}
-		//BoardConfig::LoadBoardConfigFromSBC();
 
 		// runonce.g is executed by the SBC as soon as processingConfig is set to false.
 		// As we are running the SBC, save RAM by not activating the network
@@ -2829,7 +2834,9 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 	StartIap(filenameRef.c_str());
 #endif
 }
+#endif
 
+#if !LPC17xx
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_12864_LCD
@@ -2872,9 +2879,9 @@ void RepRap::PrepareToLoadIap() noexcept
 
 #if 0
 	// Debug
-	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 30 * 1024);
 	delay(2000);
-	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
+	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (30 * 1024)); ++p)
 	{
 		if (*p != 0x7E)
 		{
@@ -2889,7 +2896,7 @@ void RepRap::StartIap(const char *filename) noexcept
 {
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
-
+	SERIAL_MAIN_DEVICE.end();
 	// Disable all IRQs
 	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
 	IrqDisable();
@@ -2900,7 +2907,7 @@ void RepRap::StartIap(const char *filename) noexcept
 	}
 
 	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
-#if !SAME5x
+#if !SAME5x && !STM32F4
 	PIOA->PIO_IDR = 0xFFFFFFFF;
 	PIOB->PIO_IDR = 0xFFFFFFFF;
 	PIOC->PIO_IDR = 0xFFFFFFFF;
