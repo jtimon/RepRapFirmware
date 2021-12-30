@@ -31,8 +31,8 @@
 //needed to compile
 #define IAP_FIRMWARE_FILE       "firmware.bin"
 #define IAP_UPDATE_FILE         "N/A"
-#define IAP_UPDATE_FILE_SBC     "firmware.bin"
-#define IAP_IMAGE_START         0
+#define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
+#define IAP_IMAGE_START         0x20018000
 
 #define FLASH_DATA_LENGTH (16*1024) //size of the Software Reset Data in Flash
 
@@ -102,8 +102,8 @@
     #define HAS_RTOSPLUSTCP_NETWORKING   0
     #define SUPPORT_12864_LCD            1
     #define HAS_WIFI_NETWORKING          0
-    #define HAS_MASS_STORAGE             0
-    #define HAS_SBC_INTERFACE          1
+    #define HAS_MASS_STORAGE             1
+    #define HAS_SBC_INTERFACE            1
     #define SUPPORT_TELNET               1
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              0
@@ -377,8 +377,11 @@ typedef enum {
     SD_SDIO,
     SD_SPI3_A,
     SD_SPI3_B,
+    SD_UNKNOWN = 0xfe,
     SD_NONE = 0xff
 } SDConfigs;
+
+constexpr uint32_t UNKNOWN_BOARD = 0;
 
 struct BoardDefaults
 {

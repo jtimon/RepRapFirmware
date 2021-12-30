@@ -12,7 +12,7 @@ constexpr PinEntry PinTable_Generic[] =
 
 constexpr BoardDefaults Generic_Defaults = {
     {},                                         // Signatures
-    SD_NONE,                                    // SD Card access
+    SD_UNKNOWN,                                 // SD Card access
     {   //CLK, MISO, MOSI
         {NoPin, NoPin, NoPin},                  //SPI0
         {NoPin, NoPin, NoPin},                  //SPI1

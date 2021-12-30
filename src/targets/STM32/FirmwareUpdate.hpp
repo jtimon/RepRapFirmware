@@ -1,9 +1,8 @@
-
-//SD
 /*
-    LPC uses Smoothie Bootloader to flash new firmware. So firmware updates is just
+    Most STM32 boards use a Bootloader to flash new firmware. So firmware updates is just
     moving firmware.bin to / and rebooting.
 */
+#if 0
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_12864_LCD
@@ -58,6 +57,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	debugPrintf("Scan complete\n");
 	#endif
 }
+#endif
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept

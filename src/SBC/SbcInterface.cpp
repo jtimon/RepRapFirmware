@@ -1074,7 +1074,7 @@ void SbcInterface::ExchangeData() noexcept
 
 [[noreturn]] void SbcInterface::ReceiveAndStartIap(const char *iapChunk, size_t length) noexcept
 {
-#if LPC17xx || STM32F4
+#if LPC17xx
 	// On the LPC we repurpose the IAP code to download the firmware update data.
 	// on the Duet this is a two stage process (IAP followed by firmware), but we
 	// do not need the IAP and can instead use the error checked IAP download for
@@ -1087,7 +1087,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Write the next IAP chunk
 		if (iapChunk != nullptr)
 		{
-#if LPC17xx || STM32F4
+#if LPC17xx
 			BoardConfig::WriteFirmwareData(iapChunk, length);
 			iapWritePointer += length;
 #else
@@ -1136,7 +1136,7 @@ void SbcInterface::ExchangeData() noexcept
 				break;
 			}
 			case SbcRequest::StartIap:	// Start the IAP binary
-#if LPC17xx || STM32F4
+#if LPC17xx
 				transfer.EmulateIap();
 				BoardConfig::EndFirmwareUpdate(); // This reboots the board.
 #else

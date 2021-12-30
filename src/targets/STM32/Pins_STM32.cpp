@@ -6,9 +6,11 @@
 #include "Boards/FLY.h"
 #include "Boards/FYSETC.h"
 #include "Boards/Generic.h"
-//Known boards with built in stepper configurations and pin table 
+//Known boards with built in stepper configurations and pin table
+// Note the generic entry must be the first entry in the table.
 constexpr BoardEntry LPC_Boards[] =
 {
+    {{"generic"},      PinTable_Generic,    ARRAY_SIZE(PinTable_Generic),    Generic_Defaults},
 #if STM32H7
     {{"biquskr_se_bx_2.0"},      PinTable_BIQU_SKR_SE_BX_v2_0,    ARRAY_SIZE(PinTable_BIQU_SKR_SE_BX_v2_0),    biqu_skr_se_bx_v2_0_Defaults},
 #else
@@ -27,7 +29,6 @@ constexpr BoardEntry LPC_Boards[] =
     {{"biqoctopuspro_1.0"}, PinTable_BTT_OCTOPUSPRO, ARRAY_SIZE(PinTable_BTT_OCTOPUSPRO), btt_octopuspro_Defaults},
     {{"fysetc_spider"}, PinTable_FYSETC_SPIDER, ARRAY_SIZE(PinTable_FYSETC_SPIDER), fysetc_spider_Defaults},
 #endif
-    {{"generic"},      PinTable_Generic,    ARRAY_SIZE(PinTable_Generic),    Generic_Defaults},
 };
 constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
 
@@ -38,8 +39,8 @@ constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
 //All I/Os default to input with pullup after reset (9.2.1 from manual)
 
 Pin TEMP_SENSE_PINS[NumThermistorInputs];
-Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { NoPin, NoPin, NoPin, NoPin };
-SSPChannel TempSensorSSPChannel = SSPNONE;   //default SPI Temp sensor on SSP1
+Pin SpiTempSensorCsPins[MaxSpiTempSensors]; // Used to deselect all devices at boot
+SSPChannel TempSensorSSPChannel = SSPNONE;  // Off by default
 
 Pin ATX_POWER_PIN = NoPin;                  // Pin to use to control external power
 bool ATX_POWER_INVERTED = false;            // Should the state of this pin be inverted
@@ -50,11 +51,7 @@ bool ATX_POWER_STATE = true;                // We may not have an actual pin so 
 Pin SdCardDetectPins[NumSdCards] = { NoPin, NoPin };
 Pin SdSpiCSPins[NumSdCards] =      { PA_4,  NoPin };    // Internal, external. Note:: ("slot" 0 in CORE is configured to be LCP SSP1 to match default RRF behaviour)
 uint32_t ExternalSDCardFrequency = 4000000;             //default to 4MHz
-#if HAS_SBC_INTERFACE || HAS_WIFI_NETWORKING
-    SSPChannel ExternalSDCardSSPChannel = SSPNONE;          // SSP0 used for network
-#else
-    SSPChannel ExternalSDCardSSPChannel = SSPNONE;             //default to SSP2
-#endif
+SSPChannel ExternalSDCardSSPChannel = SSPNONE;          // Off by default
 uint32_t InternalSDCardFrequency = 25000000;            //default to 25MHz
 
 
@@ -65,7 +62,7 @@ Pin EncoderPinA = NoPin;
 Pin EncoderPinB = NoPin;
 Pin EncoderPinSw = NoPin;           //click
 Pin PanelButtonPin = NoPin;         //Extra button on Viki and RRD Panels (reset/back etc)
-SSPChannel LcdSpiChannel = SSPNONE;
+SSPChannel LcdSpiChannel = SSPNONE; //Off by default
 
 Pin DiagPin = NoPin;
 
@@ -84,7 +81,7 @@ SSPChannel SmartDriversSpiChannel = SSPNONE;
 #endif
 
 uint32_t STEP_DRIVER_MASK = 0;                          //SD: mask of the step pins on Port 2 used for writing to step pins in parallel
-bool hasStepPinsOnDifferentPorts = false;               //for boards that don't have all step pins on port2
+bool hasStepPinsOnDifferentPorts = false;               //for boards that don't have all step pins on same port
 bool hasDriverCurrentControl = false;                   //Supports digipots to set stepper current
 float digipotFactor = 0.0;                              //defualt factor for converting current to digipot value
 
@@ -160,26 +157,13 @@ PinEntry *PinTable = (PinEntry *) PinTable_Generic;
 size_t NumNamedLPCPins = ARRAY_SIZE(PinTable_Generic);
 char lpcBoardName[MaxBoardNameLength] = "generic";
 
-bool IsEmptyPinArray(Pin *arr, size_t len) noexcept
-{
-    for(size_t i=0; i<len; i++)
-    {
-        if(arr[i] != NoPin) return false;
-    }
-    
-    return true;
-}
-
-//If the dst array is empty, then copy the src array to dst array
+// Copy the default src pin array to dst array
 static void SetDefaultPinArray(const Pin *src, Pin *dst, size_t len) noexcept
 {
-    if(IsEmptyPinArray(dst, len))
+    //array is empty from board.txt config, set to defaults
+    for(size_t i=0; i<len; i++)
     {
-        //array is empty from board.txt config, set to defaults
-        for(size_t i=0; i<len; i++)
-        {
-            dst[i] = src[i];
-        }
+        dst[i] = src[i];
     }
 }
 
@@ -191,6 +175,7 @@ static void InitPinArray(Pin *dst, size_t len) noexcept
 
 void ClearPinArrays() noexcept
 {
+    InitPinArray(SpiTempSensorCsPins, MaxSpiTempSensors);
     InitPinArray(ENABLE_PINS, NumDirectDrivers);
     InitPinArray(STEP_PINS, NumDirectDrivers);
     InitPinArray(DIRECTION_PINS, NumDirectDrivers);
@@ -203,7 +188,7 @@ void ClearPinArrays() noexcept
     InitPinArray(TEMP_SENSE_PINS, NumThermistorInputs);
     for(size_t i = 0; i < ARRAY_SIZE(SPIPins); i++)
         InitPinArray(SPIPins[i], NumSPIPins);
-
+    InitPinArray(SpiTempSensorCsPins, MaxSpiTempSensors);
 }
 
 //Find Board settings from string
@@ -216,9 +201,11 @@ bool SetBoard(const char* bn) noexcept
         for(size_t j=0; j < ARRAY_SIZE(LPC_Boards[0].boardName); j++)
             if(LPC_Boards[i].boardName[j] && StringEqualsIgnoreCase(bn, LPC_Boards[i].boardName[j]))
             {
+                SafeStrncpy(lpcBoardName, bn, sizeof(lpcBoardName));
                 PinTable = (PinEntry *)LPC_Boards[i].boardPinTable;
                 NumNamedLPCPins = LPC_Boards[i].numNamedEntries;
-
+                // Clear everything
+                ClearPinArrays();
                 //copy default settings
                 for(size_t j = 0; j < ARRAY_SIZE(SPIPins); j++)
                     SetDefaultPinArray(LPC_Boards[i].defaults.spiPins[j], SPIPins[j], NumSPIPins);

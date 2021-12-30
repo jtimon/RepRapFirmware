@@ -1732,7 +1732,7 @@ uint32_t DataTransfer::CalcCRC32(const char *buffer, size_t length) const noexce
 }
 
 
-#if LPC17xx || STM32F4
+#if LPC17xx
 
 // Additional methods to emulate the Duet3 IAP. This allows us to
 // use the standard firmware update routines from the DSF for updating
