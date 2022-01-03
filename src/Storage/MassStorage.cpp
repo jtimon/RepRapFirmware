@@ -31,9 +31,12 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
 // Private data and methods
 
-# if SAME70 || STM32H7
+# if SAME70
 alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
 alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
+# elif STM32H7
+alignas(4) static __nocache2 uint8_t sectorBuffers[NumSdCards][512];
+alignas(4) static __nocache2 char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
 # endif
 
 enum class CardDetectState : uint8_t

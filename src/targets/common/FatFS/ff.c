@@ -611,18 +611,27 @@ static const BYTE DbcTbl[] = MKCVTBL(TBL_DC, FF_CODE_PAGE);
 // Function to check whether a buffer pointer is suitably aligned.
 // If it isn't then we must not do direct sector reads/writes due to limitations of the hardware
 
-# if SAME70 || STM32H7
+# if SAME70
 extern uint8_t _nocache_ram_start;
 extern uint8_t _nocache_ram_end;
+#elif STM32H7
+extern uint8_t _nocache2_ram_start;
+extern uint8_t _nocache2_ram_end;
 # endif
 
 //extern int debugPrintf(const char *, ...);
 
 static _Bool isAligned(const BYTE *p)
 {
-# if SAME70 || STM32H7
+# if SAME70
 	// On the SAME70 all transfers must be within non-cached memory. We assume the whole buffer either is or isn't.
 	if (p < &_nocache_ram_start || p >= &_nocache_ram_end)
+	{
+		return false;
+	}
+# elif STM32H7
+	// On the STM32H7 all transfers must be within non-cached AXA memory. We assume the whole buffer either is or isn't.
+	if (p < &_nocache2_ram_start || p >= &_nocache2_ram_end)
 	{
 		return false;
 	}
