@@ -109,7 +109,10 @@ constexpr BoardDefaults fysetc_spider_Defaults = {
 #if HAS_VOLTAGE_MONITOR
     NoPin,
 #endif
-    NoPin
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 #endif

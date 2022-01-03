@@ -94,6 +94,9 @@ constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
     NoPin,
 #endif
     PI_11,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 #else
@@ -221,6 +224,9 @@ constexpr BoardDefaults biquskr_pro_1_1_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 
@@ -361,6 +367,9 @@ constexpr BoardDefaults biqu_gtr_1_0_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 constexpr PinEntry PinTable_BTT_RRF_E3_v1_1[] =
@@ -485,6 +494,9 @@ constexpr BoardDefaults btt_rrf_e3_1_1_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 constexpr PinEntry PinTable_BTT_SKR_2[] =
@@ -595,6 +607,9 @@ constexpr BoardDefaults btt_skr_2_Defaults = {
     NoPin,
 #endif
     PC_13,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 constexpr PinEntry PinTable_BTT_OCTOPUS[] =
@@ -721,6 +736,9 @@ constexpr BoardDefaults btt_octopus_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 constexpr PinEntry PinTable_BTT_OCTOPUSPRO[] =
 {
@@ -847,6 +865,9 @@ constexpr BoardDefaults btt_octopuspro_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 #endif
 #endif

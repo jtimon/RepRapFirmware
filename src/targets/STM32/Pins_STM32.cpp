@@ -12,6 +12,7 @@ constexpr BoardEntry LPC_Boards[] =
 {
     {{"generic"},      PinTable_Generic,    ARRAY_SIZE(PinTable_Generic),    Generic_Defaults},
 #if STM32H7
+    {{"fly_super8"},      PinTable_FLY_SUPER8,    ARRAY_SIZE(PinTable_FLY_SUPER8),    fly_super8_Defaults},
     {{"biquskr_se_bx_2.0"},      PinTable_BIQU_SKR_SE_BX_v2_0,    ARRAY_SIZE(PinTable_BIQU_SKR_SE_BX_v2_0),    biqu_skr_se_bx_v2_0_Defaults},
 #else
     {{"biquskrpro_1.1"},      PinTable_BIQU_SKR_PRO_v1_1,    ARRAY_SIZE(PinTable_BIQU_SKR_PRO_v1_1),    biquskr_pro_1_1_Defaults},
@@ -221,6 +222,11 @@ bool SetBoard(const char* bn) noexcept
                 PowerMonitorVinDetectPin = LPC_Boards[i].defaults.vinDetectPin;
     #endif
                 StepperPowerEnablePin = LPC_Boards[i].defaults.stepperPowerEnablePin;
+    #if HAS_SBC_INTERFACE
+                SbcTfrReadyPin = LPC_Boards[i].defaults.SbcTfrReadyPin;
+                SbcCsPin = LPC_Boards[i].defaults.SbcCsPin;
+                SbcSpiChannel = LPC_Boards[i].defaults.SbcSpiChannel;
+    #endif
                 return true;
             }
     }

@@ -34,5 +34,8 @@ constexpr BoardDefaults Generic_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 #endif

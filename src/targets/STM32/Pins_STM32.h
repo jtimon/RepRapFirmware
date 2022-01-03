@@ -400,7 +400,12 @@ struct BoardDefaults
 #if HAS_VOLTAGE_MONITOR
     const Pin vinDetectPin;
 #endif
-    const Pin stepperPowerEnablePin;    
+    const Pin stepperPowerEnablePin;
+#if HAS_SBC_INTERFACE
+    Pin SbcTfrReadyPin;
+    Pin SbcCsPin;
+    SSPChannel SbcSpiChannel;
+#endif     
 };
 
 struct BoardEntry

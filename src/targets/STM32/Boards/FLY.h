@@ -109,6 +109,9 @@ constexpr BoardDefaults fly_f407zg_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 
@@ -218,6 +221,9 @@ constexpr BoardDefaults fly_e3_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 
@@ -329,6 +335,9 @@ constexpr BoardDefaults fly_cdyv2_Defaults = {
     PC_3,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 constexpr PinEntry PinTable_FLY_E3_PRO[] =
@@ -419,6 +428,9 @@ constexpr BoardDefaults fly_e3_pro_Defaults = {
     PC_3,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 constexpr PinEntry PinTable_FLY_SUPER8[] =
@@ -524,6 +536,9 @@ constexpr BoardDefaults fly_super8_Defaults = {
     PC_2,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 constexpr PinEntry PinTable_FLY_E3_PROV2[] =
@@ -612,6 +627,9 @@ constexpr BoardDefaults fly_e3_prov2_Defaults = {
     PC_3,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 
 
@@ -656,7 +674,7 @@ constexpr PinEntry PinTable_FLY_GEMINI[] =
 
 constexpr BoardDefaults fly_gemini_Defaults = {
     {0xbfecc997},                       // Signatures
-    SD_SDIO,                            // SD Card access
+    SD_NONE,                            // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
         {PB_13, PB_14, PB_15},                  //SPI1
@@ -678,5 +696,8 @@ constexpr BoardDefaults fly_gemini_Defaults = {
     NoPin,
 #endif
     NoPin,
+#if HAS_SBC_INTERFACE
+    PB_3, PB_12, SSP2,
+#endif
 };
 #endif

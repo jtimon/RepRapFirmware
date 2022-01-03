@@ -191,7 +191,7 @@ private:
 
 bool InMemoryBoardConfiguration::isValid() noexcept
 {
-    debugPrintf("Memory at %x signature %x confSig %x\n", (unsigned)this, (unsigned) signature, (unsigned)configEntrySig);
+    //debugPrintf("Memory at %x signature %x confSig %x\n", (unsigned)this, (unsigned) signature, (unsigned)configEntrySig);
     return signature == validSignature;
 }
 
@@ -233,7 +233,7 @@ void InMemoryBoardConfiguration::getConfiguration() noexcept
     length = pmem - data;
     signature = validSignature;
     configEntrySig = crc32(boardConfigs, sizeof(boardConfigs));
-    debugPrintf("config length %d sig %x\n", (int)length, (unsigned)configEntrySig);
+    //debugPrintf("config length %d sig %x\n", (int)length, (unsigned)configEntrySig);
 }
 
 void InMemoryBoardConfiguration::saveToBackupRAM() noexcept
@@ -252,8 +252,8 @@ void InMemoryBoardConfiguration::loadFromBackupRAM() noexcept
     HAL_PWR_EnableBkUpAccess();
     __HAL_RCC_BKPSRAM_CLK_ENABLE();
     memcpy(this, (void *)BKPSRAM_BASE, sizeof(InMemoryBoardConfiguration));
-    if (isValid())
-        debugPrintf("Loaded valid configuration data from backup RAM\n");
+    //if (isValid())
+        //debugPrintf("Loaded valid configuration data from backup RAM\n");
 }
 
 
@@ -403,6 +403,10 @@ static uint32_t signature;
 // an actual board configuration.
 static uint32_t IdentifyBoard()
 {
+#if STM32H7
+    // Hack until we get a bootloader for the Fly H7
+    return 1;
+#else
     // We use the CRC of part of the bootloader to id the board
     signature = crc32((char *)0x8000000, 8192);
     // Try to find a matching board we accept the first match
@@ -417,6 +421,7 @@ static uint32_t IdentifyBoard()
     debugPrintf("Board signature %x not found\n", (unsigned)signature);
     SetBoard("generic");
     return UNKNOWN_BOARD;
+#endif
 }
             
 typedef struct {
@@ -474,10 +479,10 @@ static bool CheckPinConfig(uint32_t config)
     return true;
 }
 
-static SSPChannel InitSDCard(uint32_t boardSig, bool needed)
+static SSPChannel InitSDCard(uint32_t boardId, bool needed)
 {
     int conf = SD_UNKNOWN;
-    conf = LPC_Boards[boardSig].defaults.SDConfig;
+    conf = LPC_Boards[boardId].defaults.SDConfig;
     if (conf == SD_UNKNOWN)
     {
         // failed to find matching signature, see if the bootloader has left things configured
@@ -491,7 +496,7 @@ static SSPChannel InitSDCard(uint32_t boardSig, bool needed)
 
     if (conf == SD_UNKNOWN)
     {
-        UnknownHardware(boardSig);
+        UnknownHardware(signature);
     }
     else if (conf == SD_NONE)
     {
@@ -507,7 +512,7 @@ static SSPChannel InitSDCard(uint32_t boardSig, bool needed)
             return SDCardConfigs[conf].device;
         }
         if (needed)
-            FatalError("Unable to mount SD card, board signature is 0x%x.\n", (unsigned)boardSig);
+            FatalError("Unable to mount SD card, board signature is 0x%x, boardId %d config %d.\n", signature, (int)boardId, conf);
         else
         {
             debugPrintf("Unable to mount SD card using config %d\n", conf);
@@ -533,6 +538,8 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA2_Stream3_IRQn, NvicPrioritySpi);
 #if STM32H7
     NVIC_SetPriority(SDMMC1_IRQn, NvicPrioritySDIO);
+    NVIC_SetPriority(SDMMC2_IRQn, NvicPrioritySDIO);
+    NVIC_SetPriority(SPI2_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(SPI3_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(SPI4_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream1_IRQn, NvicPrioritySpi);
@@ -557,12 +564,13 @@ void BoardConfig::Init() noexcept
     inMemoryConfig.loadFromBackupRAM();
     if (inMemoryConfig.isValid())
     {
+        debugPrintf("Using RAM based configuration data\n");
         inMemoryConfig.setConfiguration();
         sdChannel = InitSDCard(boardId, false);
     }
     else
     {
-        // See if there is (optional) config on the SD card
+        // See if there is an (optional) config file on the SD card
         sdChannel = InitSDCard(boardId, false);
         if (sdChannel != SSPNONE && !BoardConfig::LoadBoardConfigFromFile())
             debugPrintf("Warning: unable to load configuration from file\n");
@@ -573,9 +581,9 @@ void BoardConfig::Init() noexcept
         return;
     }
 #else
-    // Try and mount the sd card, error if not present
+    // Try and mount the sd card and read the board.txt file, error if not present
     sdChannel = InitSDCard(boardId, true);
-    if (BoardConfig::LoadBoardConfigFromFile())
+    if (!BoardConfig::LoadBoardConfigFromFile())
     {
         // failed to load a valid configuration
         FatalError("Failed to load board configuration\n");
@@ -1008,9 +1016,9 @@ bool BoardConfig::LoadBoardConfigFromSBC() noexcept
 {
     InMemoryBoardConfiguration oldConfig, newConfig;
     oldConfig.getConfiguration();
-    debugPrintf("Num smart drivers %d\n", totalSmartDrivers);
+    //debugPrintf("Num smart drivers %d\n", totalSmartDrivers);
     BoardConfig::LoadBoardConfigFromFile();
-    debugPrintf("Num smart drivers after %d\n", totalSmartDrivers);
+    //debugPrintf("Num smart drivers after %d\n", totalSmartDrivers);
     newConfig.getConfiguration();
     if (oldConfig.isEqual(newConfig))
         reprap.GetPlatform().MessageF(UsbMessage, "Configurations match\n");
@@ -1019,9 +1027,9 @@ bool BoardConfig::LoadBoardConfigFromSBC() noexcept
         // store new config into memory that will survive a reboot
         newConfig.saveToBackupRAM();
         reprap.GetPlatform().MessageF(UsbMessage, "Configurations do not match rebooting to load new settings\n");
-        debugPrintf("Rebooting....\n");
+        reprap.GetPlatform().FlushMessages();
         delay(1000);
-        SoftwareReset(SoftwareResetReason::user); // Reboot
+        SoftwareReset(SoftwareResetReason::erase); // Reboot
     }
     return true;
 }
@@ -1041,7 +1049,7 @@ bool BoardConfig::GetConfigKeys(FileStore * const configFile, const boardConfigE
     int readLen = configFile->ReadLine(line, maxLineLength);
     while(readLen >= 0)
     {
-        debugPrintf("ReadLine returns %d %s\n", readLen, line);
+        //debugPrintf("ReadLine returns %d %s\n", readLen, line);
         size_t len = (size_t) readLen;
         size_t pos = 0;
         while(pos < len && line[pos] != 0 && isSpaceOrTab(line[pos])) pos++; //eat leading whitespace
