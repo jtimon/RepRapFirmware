@@ -594,10 +594,8 @@ void RepRap::Init() noexcept
 
 #if HAS_SBC_INTERFACE && (!HAS_MASS_STORAGE || STM32F4)
 	usingSbcInterface = true;
-	debugPrintf("Init sbc\n");
 	sbcInterface->Init();
 	FileWriteBuffer::UsingSbcMode();
-	debugPrintf("After init\n");
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES

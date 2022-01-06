@@ -110,7 +110,7 @@ constexpr BoardDefaults fly_f407zg_Defaults = {
 #endif
     NoPin,
 #if HAS_SBC_INTERFACE
-    NoPin, NoPin, SSPNONE,
+    PB_2, PF_11, SSP2,
 #endif
 };
 

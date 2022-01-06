@@ -122,6 +122,7 @@ Pin SPIPins[NumSPIDevices][NumSPIPins];                 //GPIO pins for hardware
     Pin SbcTfrReadyPin = NoPin;
     Pin SbcCsPin = PB_12;
     SSPChannel SbcSpiChannel = SSP2;
+    bool SbcLoadConfig = false;
 #endif
 
 bool ADCEnablePreFilter = true;

@@ -123,6 +123,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"sbc.TfrReadyPin", &SbcTfrReadyPin, nullptr, cvPinType},
     {"sbc.csPin", &SbcCsPin, nullptr, cvPinType},
     {"sbc.spiChannel", &SbcSpiChannel, nullptr, cvUint8Type},    
+    {"sbc.loadConfig", &SbcLoadConfig, nullptr, cvBoolType},    
 #endif
 
 #if defined(SERIAL_AUX_DEVICE)
@@ -192,7 +193,7 @@ private:
 bool InMemoryBoardConfiguration::isValid() noexcept
 {
     //debugPrintf("Memory at %x signature %x confSig %x\n", (unsigned)this, (unsigned) signature, (unsigned)configEntrySig);
-    return signature == validSignature;
+    return signature == validSignature && configEntrySig == crc32(boardConfigs, sizeof(boardConfigs));
 }
 
 void InMemoryBoardConfiguration::setConfiguration() noexcept
@@ -259,7 +260,7 @@ void InMemoryBoardConfiguration::loadFromBackupRAM() noexcept
 
 bool InMemoryBoardConfiguration::isEqual(InMemoryBoardConfiguration& other) noexcept
 {
-    return (isValid() && other.isValid() && configEntrySig == other.configEntrySig && length == other.length && !memcmp(data, other.data, length));
+    return (isValid() && other.isValid() && length == other.length && !memcmp(data, other.data, length));
 }
 #endif
 
@@ -449,11 +450,11 @@ static bool TryConfig(uint32_t config, bool mount)
     }
     else
         sd_mmc_setSSPChannel(0, conf->device, NoPin);
-    
+
     if (!mount) return true;
 
-	GCodeResult rslt;
-	String<100> reply;
+    GCodeResult rslt;
+    String<100> reply;
 
     do
     {
@@ -557,7 +558,7 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream0_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
-    //delay(STARTUP_DELAY);
+    delay(STARTUP_DELAY);
 #endif
     ClearPinArrays();
     uint32_t boardId = IdentifyBoard();
@@ -578,7 +579,11 @@ void BoardConfig::Init() noexcept
         // See if there is an (optional) config file on the SD card
         sdChannel = InitSDCard(boardId, true, false);
         if (sdChannel != SSPNONE && !BoardConfig::LoadBoardConfigFromFile())
+        {
             debugPrintf("Warning: unable to load configuration from file\n");
+            // Enable loading of config from the SBC
+            SbcLoadConfig = true;
+        }
     }
     if (SbcCsPin == NoPin)
     {
@@ -1019,6 +1024,8 @@ bool BoardConfig::LoadBoardConfigFromFile() noexcept
 #if HAS_SBC_INTERFACE
 bool BoardConfig::LoadBoardConfigFromSBC() noexcept
 {
+    // Is this feature disabled?
+    if (!SbcLoadConfig) return false;
     InMemoryBoardConfiguration oldConfig, newConfig;
     oldConfig.getConfiguration();
     //debugPrintf("Num smart drivers %d\n", totalSmartDrivers);

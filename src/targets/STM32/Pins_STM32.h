@@ -246,6 +246,7 @@ extern SSPChannel TempSensorSSPChannel;
     extern Pin SbcTfrReadyPin;
     extern Pin SbcCsPin;
     extern SSPChannel SbcSpiChannel;
+    extern bool SbcLoadConfig;
 #endif
 
 // Power control
