@@ -87,6 +87,9 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 # include <wdt/wdt.h>
 #endif
 
+#if STM32F4 && HAS_SBC_INTERFACE
+# include <iapparams.h>
+# endif
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
 static_assert(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY <= NvicPriorityHSMCI, "configMAX_SYSCALL_INTERRUPT_PRIORITY is set too high");
 
@@ -584,18 +587,6 @@ void RepRap::Init() noexcept
 #endif
 
 	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
-#if (LPC17xx || STM32F4) && SUPPORT_TMC22xx
-	if (platform->GetAtxPowerState())
-	{
-		// ensure smart drivers are up and running
-		platform->MessageF(UsbMessage, "Checking drivers...\n");
-		do
-		{
-			SmartDrivers::Spin(true);
-		} while (!SmartDrivers::IsReady());
-	}
-#endif
-
 	delay(100);											// give the tick ISR time to collect voltage readings
 	platform->ResetVoltageMonitors();					// get rid of the spurious zero minimum voltage readings
 
@@ -603,8 +594,10 @@ void RepRap::Init() noexcept
 
 #if HAS_SBC_INTERFACE && (!HAS_MASS_STORAGE || STM32F4)
 	usingSbcInterface = true;
+	debugPrintf("Init sbc\n");
 	sbcInterface->Init();
 	FileWriteBuffer::UsingSbcMode();
+	debugPrintf("After init\n");
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -667,7 +660,11 @@ void RepRap::Init() noexcept
 				platform->MessageF(UsbMessage, "Waiting for SBC connect\n");
 				start = millis();
 			}
+#if STM32F4 || LPC17xx
+			sbcInterface->Spin();
+#else
 			Spin();
+#endif
 		}
 		BoardConfig::LoadBoardConfigFromSBC();
 		// Run config.g or config.g.bak
@@ -675,7 +672,6 @@ void RepRap::Init() noexcept
 		{
 			RunStartupFile(GCodes::CONFIG_BACKUP_FILE);
 		}
-
 		// runonce.g is executed by the SBC as soon as processingConfig is set to false.
 		// As we are running the SBC, save RAM by not activating the network
 	}
@@ -2923,6 +2919,19 @@ void RepRap::StartIap(const char *filename) noexcept
 # endif
 #endif
 
+#if STM32F4 && HAS_SBC_INTERFACE
+	// We need to pass details of how to talk to the SBC to the IAP
+	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
+	SBCIAPParams* paramsPtr = reinterpret_cast<SBCIAPParams*>(topOfStack);
+	paramsPtr->sig1 = SBCIAPParamSig;
+	paramsPtr->dev = SbcSpiChannel;
+	paramsPtr->clk = SPIPins[SbcSpiChannel][0];
+	paramsPtr->miso = SPIPins[SbcSpiChannel][1];
+	paramsPtr->mosi = SPIPins[SbcSpiChannel][2];
+	paramsPtr->cs = SbcCsPin;
+	paramsPtr->tfrRdy = SbcTfrReadyPin;
+	paramsPtr->sig2 = SBCIAPParamSig;
+#endif
 #if HAS_MASS_STORAGE
 	if (filename != nullptr)
 	{

@@ -225,7 +225,7 @@ constexpr BoardDefaults biquskr_pro_1_1_Defaults = {
 #endif
     NoPin,
 #if HAS_SBC_INTERFACE
-    NoPin, NoPin, SSPNONE,
+    PF_12, PB_12, SSP2,
 #endif
 };
 

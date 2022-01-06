@@ -439,11 +439,9 @@ static constexpr SDCardConfig SDCardConfigs[] = {
     {SSP3, {PC_10, PC_11, PC_12, PA_15, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // BTT BX
 };
 
-static bool TryConfig(uint32_t config)
+static bool TryConfig(uint32_t config, bool mount)
 {
     const SDCardConfig *conf = &SDCardConfigs[config];
-	GCodeResult rslt;
-	String<100> reply;
     if (conf->device != SSPSDIO)
     {
         ConfigureSPIPins(conf->device, conf->pins[0], conf->pins[1], conf->pins[2]);
@@ -451,6 +449,12 @@ static bool TryConfig(uint32_t config)
     }
     else
         sd_mmc_setSSPChannel(0, conf->device, NoPin);
+    
+    if (!mount) return true;
+
+	GCodeResult rslt;
+	String<100> reply;
+
     do
     {
         MassStorage::Spin();
@@ -479,7 +483,7 @@ static bool CheckPinConfig(uint32_t config)
     return true;
 }
 
-static SSPChannel InitSDCard(uint32_t boardId, bool needed)
+static SSPChannel InitSDCard(uint32_t boardId, bool mount, bool needed)
 {
     int conf = SD_UNKNOWN;
     conf = LPC_Boards[boardId].defaults.SDConfig;
@@ -506,9 +510,9 @@ static SSPChannel InitSDCard(uint32_t boardId, bool needed)
     }
     else
     {
-        if (TryConfig(conf))
+        if (TryConfig(conf, mount))
         {
-            debugPrintf("SD card mounted using config %d\n", conf);
+            debugPrintf("SD card configured for config %d\n", conf);
             return SDCardConfigs[conf].device;
         }
         if (needed)
@@ -553,7 +557,7 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream0_IRQn, NvicPrioritySpi);
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
-    delay(STARTUP_DELAY);
+    //delay(STARTUP_DELAY);
 #endif
     ClearPinArrays();
     uint32_t boardId = IdentifyBoard();
@@ -566,12 +570,13 @@ void BoardConfig::Init() noexcept
     {
         debugPrintf("Using RAM based configuration data\n");
         inMemoryConfig.setConfiguration();
-        sdChannel = InitSDCard(boardId, false);
+        // Don't bother mounting the SD card at this time
+        sdChannel = InitSDCard(boardId, false, false);
     }
     else
     {
         // See if there is an (optional) config file on the SD card
-        sdChannel = InitSDCard(boardId, false);
+        sdChannel = InitSDCard(boardId, true, false);
         if (sdChannel != SSPNONE && !BoardConfig::LoadBoardConfigFromFile())
             debugPrintf("Warning: unable to load configuration from file\n");
     }
@@ -582,7 +587,7 @@ void BoardConfig::Init() noexcept
     }
 #else
     // Try and mount the sd card and read the board.txt file, error if not present
-    sdChannel = InitSDCard(boardId, true);
+    sdChannel = InitSDCard(boardId, true, true);
     if (!BoardConfig::LoadBoardConfigFromFile())
     {
         // failed to load a valid configuration
@@ -1027,7 +1032,9 @@ bool BoardConfig::LoadBoardConfigFromSBC() noexcept
         // store new config into memory that will survive a reboot
         newConfig.saveToBackupRAM();
         reprap.GetPlatform().MessageF(UsbMessage, "Configurations do not match rebooting to load new settings\n");
-        reprap.GetPlatform().FlushMessages();
+        uint32_t start = millis();
+        while(reprap.GetPlatform().FlushMessages() && (millis() - start < 5000))
+            ;
         delay(1000);
         SoftwareReset(SoftwareResetReason::erase); // Reboot
     }
