@@ -3,7 +3,7 @@
 #include "Core.h"
 #include "Microstepping.h"
 #include "sd_mmc.h"
-#include "RepRapFirmware.h"
+//#include "RepRapFirmware.h"
 #include "NVMEmulation.h"
 
 #ifndef UNUSED
@@ -162,13 +162,23 @@ constexpr size_t NumDirectDrivers = 11;               // The maximum number of d
     #define TMC_SOFT_UART 0
 #endif
 
+#if STM32H7
+#include <Duet3Common.h>
+#else
+constexpr size_t MaxSensors = 32;
+constexpr size_t MaxHeaters = 9;                     // The maximum number of heaters in the machine
+constexpr size_t MaxMonitorsPerHeater = 3;
+constexpr size_t MaxZProbes = 2;
+constexpr size_t MaxFans = 8;
+constexpr size_t MaxGpInPorts = 10;
+constexpr size_t MaxGpOutPorts = 10;
+constexpr size_t MaxSpindles = 4;                    // Maximum number of configurable spindles
+#endif
+
+
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensors = 32;
-
-constexpr size_t MaxHeaters = 9;                     // The maximum number of heaters in the machine
 constexpr size_t MaxPortsPerHeater = 2;
-constexpr size_t MaxMonitorsPerHeater = 3;
 
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;
@@ -176,10 +186,6 @@ constexpr int8_t DefaultBedHeater = 0;
 constexpr int8_t DefaultE0Heater = 1;                // Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 9;
-
-constexpr size_t MaxZProbes = 2;
-constexpr size_t MaxGpInPorts = 10;
-constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;                        // The minimum and default number of axes
 constexpr size_t MaxAxes = 10;                       // The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -193,11 +199,7 @@ constexpr size_t MaxAxesPlusExtruders = 14;
 constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 4;
 
-constexpr size_t MaxFans = 8;
-
 constexpr unsigned int MaxTriggers = 16;            // Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
-
-constexpr size_t MaxSpindles = 4;                    // Maximum number of configurable spindles
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxCanDrivers = 20;

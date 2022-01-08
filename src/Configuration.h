@@ -118,7 +118,7 @@ constexpr float DefaultZDive = 5.0;						// Millimetres
 constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
 
-#if !defined(DUET3) && !defined(DUET3MINI)				// for Duet 3 these are defined in Duet3Common.h in project CANLib
+#if !defined(DUET3) && !defined(DUET3MINI) && !STM32H7				// for Duet 3 these are defined in Duet3Common.h in project CANLib
 constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
 #endif
 
