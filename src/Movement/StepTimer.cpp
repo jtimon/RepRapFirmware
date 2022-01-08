@@ -571,12 +571,16 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0)
 # elif SAME70
 					((STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER & TC_IER_CPBS) == 0)
+# elif STM32F4
+					__HAL_TIM_GET_IT_SOURCE(STHandle, TIM_IT_CC1)
 # endif
 						? "disabled" : "enabled");
 # if SAME5x
 		if (StepTc->CC[0].reg != pst->whenDue)
 # elif SAME70
 		if (STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB != (uint16_t)pst->whenDue)
+# elif STM32F4
+		if (__HAL_TIM_GET_COMPARE(STHandle, TIM_CHANNEL_1) != pst->whenDue)
 # endif
 		{
 			reply.cat(", CC0 mismatch!!");

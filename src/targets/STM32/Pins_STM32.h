@@ -199,6 +199,12 @@ constexpr unsigned int MaxTriggers = 16;            // Must be <= 32 because we 
 
 constexpr size_t MaxSpindles = 4;                    // Maximum number of configurable spindles
 
+#if SUPPORT_CAN_EXPANSION
+constexpr size_t MaxCanDrivers = 20;
+constexpr size_t MaxCanBoards = 20;
+constexpr unsigned int CanDeviceNumber = 1;			// we use CAN1
+#endif
+
 //Steppers
 // HAS_SMART_DRIVERS is defined in Pins.h, we duplicate it for the board files to use
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)

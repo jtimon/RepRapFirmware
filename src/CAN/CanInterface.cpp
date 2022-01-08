@@ -259,6 +259,7 @@ void CanInterface::Init() noexcept
 #elif SAME5x
 	SetPinFunction(CanRxPin, CanPinsMode);
 	SetPinFunction(CanTxPin, CanPinsMode);
+#elif STM32H7
 #else
 # error Unsupported MCU
 #endif

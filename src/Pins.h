@@ -211,7 +211,7 @@
 #endif
 
 // We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
-#if SAM4E || SAM4S || SAME70 || SAME5x
+#if SAM4E || SAM4S || SAME70 || SAME5x || STM32H7
 # define MCU_HAS_UNIQUE_ID		1
 #else
 # define MCU_HAS_UNIQUE_ID		0
