@@ -406,7 +406,7 @@ static uint32_t IdentifyBoard()
 {
 #if STM32H7
     // Hack until we get a bootloader for the Fly H7
-    return 1;
+    return 2;
 #else
     // We use the CRC of part of the bootloader to id the board
     signature = crc32((char *)0x8000000, 8192);
@@ -528,6 +528,8 @@ static SSPChannel InitSDCard(uint32_t boardId, bool mount, bool needed)
     return SSPNONE;
 }
 
+extern HardwareTimer STimer;
+
 void BoardConfig::Init() noexcept
 {
     SSPChannel sdChannel = SSPNONE;
@@ -560,6 +562,7 @@ void BoardConfig::Init() noexcept
 #if STARTUP_DELAY
     delay(STARTUP_DELAY);
 #endif
+debugPrintf("Step timer base %d\n", STimer.getTimerClkFreq());
     ClearPinArrays();
     uint32_t boardId = IdentifyBoard();
 #if HAS_SBC_INTERFACE
@@ -819,7 +822,7 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 # endif
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 	reprap.GetPlatform().MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
-#elif LPC17xx
+#elif LPC17xx || STM32F4
 	reprap.GetPlatform().MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, reprap.GetPlatform().GetElectronicsString(), (int)SystemCoreClock/1000000);
 #elif HAS_SBC_INTERFACE
 	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
@@ -900,6 +903,7 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 	}
 
     reprap.GetPlatform().MessageF(mtype, "\n== MCU ==\n");
+    reprap.GetPlatform().MessageF(mtype, "AdcBits = %d\n", (int) LegacyAnalogIn::AdcBits);
     reprap.GetPlatform().MessageF(mtype, "TS_CAL1 (30C) = %d\n", (int) (*TEMPSENSOR_CAL1_ADDR));
     reprap.GetPlatform().MessageF(mtype, "TS_CAL2 (110C) = %d\n", (int) (*TEMPSENSOR_CAL2_ADDR));
     reprap.GetPlatform().MessageF(mtype, "V_REFINCAL (30C 3.3V) = %d\n\n", (int) (*VREFINT_CAL_ADDR));

@@ -91,7 +91,7 @@
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              1
 #if STM32H7
-    #define SUPPORT_CAN_EXPANSION	     1
+    //#define SUPPORT_CAN_EXPANSION	     1
     #define DUAL_CAN				     0					// support the second CAN interface as simple CAN (not FD)
 
     #define BOARD_NAME          "STM32H7 WiFi"

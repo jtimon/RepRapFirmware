@@ -243,6 +243,7 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 
 void CanInterface::Init() noexcept
 {
+	debugPrintf("Start CAN init\n");
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingMotionBuffers = nullptr;
 
