@@ -197,6 +197,7 @@ constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] =
 
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 4700.0;
+constexpr float DefaultThermistorSeriesR_DueX_v0_11 = 2200.0;
 
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] =
@@ -463,7 +464,7 @@ constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
 // SD Card
 constexpr Pin HsmciClockPin = PortAPin(29);
 constexpr Pin HsmciOtherPins[] = { PortAPin(28), PortAPin(30), PortAPin(31), PortAPin(26), PortAPin(27) };
-constexpr auto HsmciPinsFunction = GpioPinFunction::C;
+constexpr GpioPinFunction HsmciPinsFunction = GpioPinFunction::C;
 
 /*
  * TWI Interfaces

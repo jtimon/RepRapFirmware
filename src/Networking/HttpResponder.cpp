@@ -588,6 +588,21 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
+	else if (StringEqualsIgnoreCase(request, "thumbnail"))
+	{
+		OutputBuffer::ReleaseAll(response);
+		const char* const nameVal = GetKeyValue("name");
+		const char* const offsetVal = GetKeyValue("offset");
+		FilePosition offset;
+		if (nameVal != nullptr && offsetVal != nullptr && (offset = StrToU32(offsetVal)) != 0)
+		{
+			response = reprap.GetThumbnailResponse(nameVal, offset);
+		}
+		else
+		{
+			response->copy("{\"err\":1}");
+		}
+	}
 #else
 	else if (	StringEqualsIgnoreCase(request, "upload")
 			 || StringEqualsIgnoreCase(request, "delete")
@@ -595,6 +610,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			 || StringEqualsIgnoreCase(request, "files")
 			 || StringEqualsIgnoreCase(request, "move")
 			 || StringEqualsIgnoreCase(request, "mkdir")
+			 || StringEqualsIgnoreCase(request, "thumbnail")
 			)
 	{
 		response->copy("{err:1}");
@@ -1291,6 +1307,8 @@ void HttpResponder::DoUpload() noexcept
 	bool dataRead = false;
 	while (skt->ReadBuffer(buffer, len))
 	{
+		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
+		timer = millis();									// reset the timer
 		if (!dummyUpload)
 		{
 			// Check to see how much we can write, this avaoid blocking when using a 
@@ -1310,8 +1328,6 @@ void HttpResponder::DoUpload() noexcept
 		skt->Taken(len);
 		uploadedBytes += len;
 
-		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
-		timer = millis();									// reset the timer
 		dataRead = true;
 	}
 	if (!dataRead && (!skt->CanRead() || millis() - timer >= HttpSessionTimeout))

@@ -71,8 +71,7 @@ public:
 	void SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException);
 	float GetActiveTemperature() const noexcept { return activeTemperature; }
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }
-	GCodeResult Activate(const StringRef& reply) noexcept;				// Switch from idle to active
-	void Standby() noexcept;											// Switch from active to idle
+	GCodeResult SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept;	// Switch from idle to active or standby
 	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);
 																		// Start an auto tune cycle for this heater
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept;		// Get the auto tune status or last result
@@ -138,6 +137,8 @@ protected:
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
+	bool IsBedOrChamber() const noexcept { return isBedOrChamber; }
+
 	GCodeResult SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 															// set the process model
 	void ReportTuningUpdate() noexcept;						// tell the user what's happening
@@ -195,12 +196,13 @@ private:
 	FopDt model;
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater
-	float activeTemperature;						// The required active temperature
-	float standbyTemperature;						// The required standby temperature
-	float maxTempExcursion;							// The maximum temperature excursion permitted while maintaining the setpoint
-	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
+	float activeTemperature;						// the required active temperature
+	float standbyTemperature;						// the required standby temperature
+	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
+	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
 
-	bool active;									// Are we active or standby?
+	bool isBedOrChamber;							// true if this was a bed or chamber heater when we were switched on
+	bool active;									// are we active or standby?
 	bool modelSetByUser;
 	bool monitorsSetByUser;
 };

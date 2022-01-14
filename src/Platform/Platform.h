@@ -224,7 +224,8 @@ public:
 
 	void Init(uint16_t val) volatile noexcept
 	{
-		const irqflags_t flags = IrqSave();
+		AtomicCriticalSectionLocker lock;
+
 		sum = (uint32_t)val * (uint32_t)numAveraged;
 		index = 0;
 		isValid = false;
@@ -232,7 +233,6 @@ public:
 		{
 			readings[i] = val;
 		}
-		IrqRestore(flags);
 	}
 
 	// Call this to put a new reading into the filter
@@ -348,6 +348,7 @@ public:
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
+	bool IsDeferredPowerDown() const noexcept { return deferredPowerDown; }
 	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
@@ -365,9 +366,16 @@ public:
 #endif
 
 #ifdef DUET_NG
-	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
 	const char *_ecv_array GetBoardName() const noexcept;
 	const char *_ecv_array GetBoardShortName() const noexcept;
+
+	const float GetDefaultThermistorSeriesR(size_t inputNumber) const noexcept
+	{
+		// This is only called from one place so we may as well inline it
+		return (inputNumber >= 3 && (expansionBoard == ExpansionBoardType::DueX5_v0_11 || expansionBoard == ExpansionBoardType::DueX2_v0_11))
+			? DefaultThermistorSeriesR_DueX_v0_11
+				: DefaultThermistorSeriesR;
+	}
 #endif
 
 	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }
@@ -415,7 +423,7 @@ public:
 
 	// File functions
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FileStore* OpenFile(const char *_ecv_array folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
+	FileStore* OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
@@ -525,6 +533,10 @@ public:
 	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
 	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
 	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
+
+#ifdef DUET3_MB6XD
+	bool HasDriverError(size_t driver) const noexcept;
+#endif
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
@@ -728,6 +740,11 @@ private:
 
 	bool directions[NumDirectDrivers];
 	int8_t enableValues[NumDirectDrivers];
+
+#ifdef DUET3_MB6XD
+	bool driverErrPinsActiveLow;
+#endif
+
 	IoPort brakePorts[NumDirectDrivers];
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
