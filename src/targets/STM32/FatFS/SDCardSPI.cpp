@@ -453,7 +453,6 @@ uint8_t SDCardSPI::disk_status () noexcept
 DRESULT SDCardSPI::disk_read (uint8_t *buff, uint32_t sector, uint32_t count) noexcept
 {
     uint8_t cmd;
-debugPrintf("Read block %d count %d\n", sector, count);
     if (!count) return RES_PARERR;        /* Check parameter */
     if (status & STA_NOINIT) return RES_NOTRDY;    /* Check if drive is ready */
     if (!(cardtype & CT_BLOCK)) sector *= 512;    /* LBA ot BA conversion (byte addressing cards) */

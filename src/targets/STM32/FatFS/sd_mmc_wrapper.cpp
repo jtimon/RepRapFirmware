@@ -33,7 +33,9 @@ void sd_mmc_setSSPChannel(uint8_t slot, SSPChannel channel, Pin cs)
 {
     if (_ffs[slot] != nullptr)
     {
+#if !STM32H7
         delete _ffs[slot];
+#endif
         _ffs[slot] = nullptr;
     }
     if (channel == SSPSDIO)

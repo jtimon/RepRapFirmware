@@ -406,7 +406,7 @@ static uint32_t IdentifyBoard()
 {
 #if STM32H7
     // Hack until we get a bootloader for the Fly H7
-    return 2;
+    return 1;
 #else
     // We use the CRC of part of the bootloader to id the board
     signature = crc32((char *)0x8000000, 8192);
