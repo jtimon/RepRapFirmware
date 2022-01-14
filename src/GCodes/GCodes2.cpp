@@ -499,7 +499,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
-			&& code != 569	&& code != 201							// these are the only M-codes we implement that can have fractional parts
+			&& code != 36 && code != 201 && code != 569					// these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -1118,24 +1118,50 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 36:	// Return file information
+				switch (gb.GetCommandFraction())
+				{
+				case -1:
+				case 0:		// get regular file information
 # if HAS_SBC_INTERFACE
-				if (reprap.UsingSbcInterface())
-				{
-					reprap.GetFileInfoResponse(nullptr, outBuf, true);
-				}
-				else
-# endif
-				{
-# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-					if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
+					if (reprap.UsingSbcInterface())
 					{
-						return false;
+						reprap.GetFileInfoResponse(nullptr, outBuf, true);
 					}
-
-					String<MaxFilenameLength> filename;
-					gb.GetUnprecedentedString(filename.GetRef(), true);
-					result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
+					else
 # endif
+					{
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+						if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
+						{
+							return false;
+						}
+
+						String<MaxFilenameLength> filename;
+						gb.GetUnprecedentedString(filename.GetRef(), true);
+						result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
+# endif
+					}
+					break;
+
+#if HAS_MASS_STORAGE
+					case 1:		// get thumbnail
+					{
+						String<MaxFilenameLength> filename;
+						gb.MustSee('P');
+						gb.GetQuotedString(filename.GetRef(), false);
+						gb.MustSee('S');
+						const FilePosition offset = gb.GetUIValue();
+						outBuf = reprap.GetThumbnailResponse(filename.c_str(), offset);
+						if (outBuf == nullptr)
+						{
+							return false;											// cannot allocate an output buffer, try again later
+						}
+					}
+					break;
+#endif
+				default:
+					result = GCodeResult::errorNotSupported;
+					break;
 				}
 				break;
 
@@ -1654,7 +1680,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 115: // Print firmware version or set hardware type
-#if defined(DUET_NG) || defined(DUET_06_85)
+#ifdef DUET_NG
 				if (gb.Seen('P'))
 				{
 					if (runningConfigFile)
@@ -1976,14 +2002,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						else
 						{
-							if (temperature < NEARLY_ABS_ZERO)
+							if (temperature <= NEARLY_ABS_ZERO)
 							{
 								heat.SwitchOff(currentHeater);
 							}
 							else
 							{
 								heat.SetActiveTemperature(currentHeater, temperature);		// may throw
-								result = heat.Activate(currentHeater, reply);
+								result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
 							}
 						}
 					}
@@ -2028,14 +2054,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 					if (bedHeater >= 0)
 					{
-						if (gb.Seen('S') && gb.GetIValue() == 1)
-						{
-							result = reprap.GetHeat().Activate(bedHeater, reply);
-						}
-						else
-						{
-							reprap.GetHeat().Standby(bedHeater, nullptr);
-						}
+						const bool setActive = gb.Seen('S') && gb.GetIValue() == 1;
+						result = reprap.GetHeat().SetActiveOrStandby(bedHeater, nullptr, setActive, reply);
 					}
 				}
 				break;
@@ -2078,7 +2098,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 
 						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
-						result = reprap.GetHeat().Activate(heater, reply);
+						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
 						if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TEMPERATURE_CLOSE_ENOUGH))
 						{
 							cancelWait = isWaiting = false;
@@ -2426,8 +2446,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						angleOrWidth = MaxServoPulseWidth;
 					}
 
-					const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
-					result = platform.GetGpOutPort(gpioPortNumber).WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
+					GpOutputPort& port = platform.GetGpOutPort(gpioPortNumber);
+					const float pwm = angleOrWidth * 1.0e-6 * port.GetPwmFrequency();
+					result = port.WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
 				}
 				break;
 

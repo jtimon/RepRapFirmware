@@ -1,5 +1,10 @@
+Version 3.4beta7+7_1
+====================
+* Duet 3D 3.4beta7+7
+
 Version 3.4beta7_3
 ==================
+* Fix number of drivers in gemini config
 * Fix bug pin A.0 set to input mode during board init
 
 Version 3.4beta7_2

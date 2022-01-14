@@ -1,6 +1,5 @@
 #include "RepRapFirmware.h"
 #include "Platform/Platform.h"
-#include "Pins.h"
 #include "BoardConfig.h"
 #include "Boards/BIQU_SKR.h"
 #include "Boards/FLY.h"

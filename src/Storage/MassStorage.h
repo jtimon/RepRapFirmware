@@ -2,7 +2,6 @@
 #define MASSSTORAGE_H
 
 #include <RepRapFirmware.h>
-#include <Pins.h>
 #include "FileWriteBuffer.h"
 #include <Libraries/Fatfs/ff.h>
 #include "FileStore.h"
@@ -48,6 +47,12 @@ namespace MassStorage
 	bool FileExists(const char *filePath) noexcept;
 	void CloseAllFiles() noexcept;
 	void Spin() noexcept;
+
+# ifdef DUET3_MB6HC
+	size_t GetNumVolumes() noexcept;														// The number of SD slots may be 1 or 2 on the 6HC
+# else
+	inline size_t GetNumVolumes() noexcept { return NumSdCards; }
+# endif
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -101,13 +106,17 @@ namespace MassStorage
 
 	InfoResult GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize) noexcept;
 
+# ifdef DUET3_MB6HC
+	GCodeResult ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Configure additional SD card slots
+# endif
+
 # if SUPPORT_OBJECT_MODEL
-	inline size_t GetNumVolumes() noexcept { return NumSdCards; }
 	const ObjectModel *_ecv_from GetVolume(size_t vol) noexcept;
 # endif
 
 #endif
 
 }
+
 
 #endif

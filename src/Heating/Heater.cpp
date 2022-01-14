@@ -106,6 +106,7 @@ Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 Heater::Heater(unsigned int num) noexcept
 	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
+	  isBedOrChamber(false),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
 }
@@ -193,7 +194,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		// Set the model
 		const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
 		const GCodeResult rslt = SetModel(heatingRate, basicCoolingRate, fanCoolingRate, coolingRateExponent, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
-		if (rslt <= GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			modelSetByUser = true;
 		}
@@ -411,7 +412,7 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 										0.0,
 #endif
 										true, false, str.GetRef());
-	if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+	if (Succeeded(rslt))
 	{
 		tuned = true;
 		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n ",
@@ -494,7 +495,7 @@ GCodeResult Heater::ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) TH
 	{
 		monitors[index].Set(monitoringSensor, limit, action, trigger);
 		const GCodeResult rslt = UpdateHeaterMonitors(reply);
-		if (rslt <= GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			monitorsSetByUser = true;
 		}
@@ -568,25 +569,16 @@ const char* Heater::GetSensorName() const noexcept
 	return (sensor.IsNotNull()) ? sensor->GetSensorName() : nullptr;
 }
 
-GCodeResult Heater::Activate(const StringRef& reply) noexcept
+GCodeResult Heater::SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept
 {
 	if (GetMode() != HeaterMode::fault)
 	{
-		active = true;
+		active = setActive;
+		isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
 		return SwitchOn(reply);
 	}
-	reply.printf("Can't activate heater %u while in fault state", heaterNumber);
+	reply.printf("Can't turn heater %u on while in fault state", heaterNumber);
 	return GCodeResult::error;
-}
-
-void Heater::Standby() noexcept
-{
-	if (GetMode() != HeaterMode::fault)
-	{
-		active = false;
-		String<1> dummy;
-		(void)SwitchOn(dummy.GetRef());
-	}
 }
 
 void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException)
@@ -605,7 +597,8 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 		if (GetMode() > HeaterMode::suspended && active == activeNotStandby)
 		{
 			String<StringLength100> reply;
-			if (SwitchOn(reply.GetRef()) > GCodeResult::warning)
+			isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
+			if (!Succeeded(SwitchOn(reply.GetRef())))
 			{
 				throw GCodeException(-1, 1, reply.c_str());
 			}
@@ -703,6 +696,7 @@ GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, co
 		return GCodeResult::ok;
 
 	case CanMessageSetHeaterTemperature::commandOn:
+		isBedOrChamber = msg.isBedOrChamber;
 		activeTemperature = standbyTemperature = msg.setPoint;
 		model.CalcPidConstants(activeTemperature);
 		return SwitchOn(reply);

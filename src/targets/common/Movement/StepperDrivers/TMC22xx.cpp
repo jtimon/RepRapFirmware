@@ -20,7 +20,6 @@
 #if HAS_STALL_DETECT
 #include "Endstops/Endstop.h"
 #endif
-#include "Pins.h"
 #include "Platform/MessageType.h"
 #include "TmcDriverState.h"
 #include "TMCSoftUART.h"
