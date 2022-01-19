@@ -38,16 +38,16 @@ static const boardConfigEntry_t boardConfigs[]=
     {"leds.diagnostic", &DiagPin, nullptr, cvPinType},
 
     //Steppers
-    {"stepper.enablePins", ENABLE_PINS, &MaxTotalDrivers, cvPinType},
-    {"stepper.stepPins", STEP_PINS, &MaxTotalDrivers, cvPinType},
-    {"stepper.directionPins", DIRECTION_PINS, &MaxTotalDrivers, cvPinType},
+    {"stepper.enablePins", ENABLE_PINS, &NumDirectDrivers, cvPinType},
+    {"stepper.stepPins", STEP_PINS, &NumDirectDrivers, cvPinType},
+    {"stepper.directionPins", DIRECTION_PINS, &NumDirectDrivers, cvPinType},
     {"stepper.digipotFactor", &digipotFactor, nullptr, cvFloatType},
 #if HAS_SMART_DRIVERS
-    {"stepper.TmcUartPins", TMC_PINS, &MaxTotalDrivers, cvPinType},
+    {"stepper.TmcUartPins", TMC_PINS, &NumDirectDrivers, cvPinType},
     {"stepper.numSmartDrivers", &totalSmartDrivers, nullptr, cvUint32Type},
 #endif
 #if HAS_STALL_DETECT && SUPPORT_TMC22xx
-    {"stepper.TmcDiagPins", DriverDiagPins, &MaxTotalDrivers, cvPinType},
+    {"stepper.TmcDiagPins", DriverDiagPins, &NumDirectDrivers, cvPinType},
 #endif
 
     //Heater sensors
@@ -274,7 +274,7 @@ void BoardConfig::Init() noexcept
         
         //Calculate STEP_DRIVER_MASK (used for parallel writes)
         STEP_DRIVER_MASK = 0;
-        for(size_t i=0; i<MaxTotalDrivers; i++)
+        for(size_t i=0; i<NumDirectDrivers; i++)
         {
             //It is assumed all pins will be on Port 2
             const Pin stepPin = STEP_PINS[i];

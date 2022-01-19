@@ -52,19 +52,19 @@ static const boardConfigEntry_t boardConfigs[]=
 
     //Steppers
     {"stepper.powerEnablePin", &StepperPowerEnablePin, nullptr, cvPinType},
-    {"stepper.enablePins", ENABLE_PINS, &MaxTotalDrivers, cvPinType},
-    {"stepper.stepPins", STEP_PINS, &MaxTotalDrivers, cvPinType},
-    {"stepper.directionPins", DIRECTION_PINS, &MaxTotalDrivers, cvPinType},
+    {"stepper.enablePins", ENABLE_PINS, &NumDirectDrivers, cvPinType},
+    {"stepper.stepPins", STEP_PINS, &NumDirectDrivers, cvPinType},
+    {"stepper.directionPins", DIRECTION_PINS, &NumDirectDrivers, cvPinType},
     {"stepper.digipotFactor", &digipotFactor, nullptr, cvFloatType},
 #if HAS_SMART_DRIVERS
-    {"stepper.TmcUartPins", TMC_PINS, &MaxTotalDrivers, cvPinType},
+    {"stepper.TmcUartPins", TMC_PINS, &NumDirectDrivers, cvPinType},
     {"stepper.numSmartDrivers", &totalSmartDrivers, nullptr, cvUint32Type},
 #if SUPPORT_TMC51xx
     {"stepper.num5160Drivers", &num5160SmartDrivers, nullptr, cvUint32Type},
     {"stepper.spiChannel", &SmartDriversSpiChannel, nullptr, cvUint8Type},
 #endif
 #if HAS_STALL_DETECT && SUPPORT_TMC22xx
-    {"stepper.TmcDiagPins", DriverDiagPins, &MaxTotalDrivers, cvPinType},
+    {"stepper.TmcDiagPins", DriverDiagPins, &NumDirectDrivers, cvPinType},
 #endif
 #endif
     //Heater sensors
@@ -334,6 +334,16 @@ static void ConfigureGPIOPins() noexcept
     if(LcdCSPin != NoPin) pinMode(LcdCSPin, OUTPUT_LOW);
 
     //Init Diagnostcs Pin
+#if STARTUP_DELAY
+    if ((CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) != 0)
+    {
+        // Debugger is active do not allow use of those pins for diag light
+        if (DiagPin == SWDIO_PIN || DiagPin == SWCLK_PIN)
+            DiagPin = NoPin;
+    } 
+    debugPrintf("Debug reg %x itm reg %x\n", CoreDebug->DHCSR, ITM->TER);
+#endif
+
     pinMode(DiagPin, OUTPUT_LOW);
 
     // Configure ATX power control
@@ -362,7 +372,7 @@ static void FatalError(const char* fmt, ...)
 #if 0
 static void CheckDriverPins() noexcept
 {
-    for(size_t i=0; i<MaxTotalDrivers; i++)
+    for(size_t i=0; i<NumDirectDrivers; i++)
     {
         if (ENABLE_PINS[i] != NoPin && STEP_PINS[i] != NoPin && DIRECTION_PINS[i] != NoPin)
         {
@@ -561,6 +571,7 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
     delay(STARTUP_DELAY);
+    debugPrintf("Debug reg %x itm reg %x\n", CoreDebug->DHCSR, ITM->TER);
 #endif
 debugPrintf("Step timer base %d\n", STimer.getTimerClkFreq());
     ClearPinArrays();
@@ -617,7 +628,7 @@ debugPrintf("Step timer base %d\n", STimer.getTimerClkFreq());
     STEP_DRIVER_MASK = 0;
     // Currently not implemented for STM32
     #if 0
-    for(size_t i=0; i<MaxTotalDrivers; i++)
+    for(size_t i=0; i<NumDirectDrivers; i++)
     {
         //It is assumed all pins will be on Port 2
         const Pin stepPin = STEP_PINS[i];
