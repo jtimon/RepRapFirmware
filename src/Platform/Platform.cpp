@@ -1692,6 +1692,11 @@ void Platform::InitialiseInterrupts() noexcept
 # elif SAME70
 	NVIC_SetPriority(MCAN0_INT0_IRQn, NvicPriorityCan);		// we don't use INT1
 	NVIC_SetPriority(MCAN1_INT0_IRQn, NvicPriorityCan);		// we don't use INT1
+# elif STM32H7
+	NVIC_SetPriority(FDCAN1_IT0_IRQn, NvicPriorityCan);
+	NVIC_SetPriority(FDCAN1_IT1_IRQn, NvicPriorityCan);
+	NVIC_SetPriority(FDCAN2_IT0_IRQn, NvicPriorityCan);
+	NVIC_SetPriority(FDCAN2_IT1_IRQn, NvicPriorityCan);
 # endif
 #endif
 

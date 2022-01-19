@@ -638,7 +638,7 @@ const NvicPriority NvicPrioritySDIO = 9;
 #else
 const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 # endif
-
+const NvicPriority NvicPriorityCan = 6;				// CAN interface
 const NvicPriority NvicPriorityPins = 6;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityStep = 7;			// step interrupt is next highest, it can preempt most other interrupts
 const NvicPriority NvicPriorityWiFiUart = 8;		// UART used to receive debug data from the WiFi module
