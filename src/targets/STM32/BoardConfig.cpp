@@ -341,7 +341,6 @@ static void ConfigureGPIOPins() noexcept
         if (DiagPin == SWDIO_PIN || DiagPin == SWCLK_PIN)
             DiagPin = NoPin;
     } 
-    debugPrintf("Debug reg %x itm reg %x\n", CoreDebug->DHCSR, ITM->TER);
 #endif
 
     pinMode(DiagPin, OUTPUT_LOW);
@@ -571,9 +570,7 @@ void BoardConfig::Init() noexcept
     NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
     delay(STARTUP_DELAY);
-    debugPrintf("Debug reg %x itm reg %x\n", CoreDebug->DHCSR, ITM->TER);
 #endif
-debugPrintf("Step timer base %d\n", STimer.getTimerClkFreq());
     ClearPinArrays();
     uint32_t boardId = IdentifyBoard();
 #if HAS_SBC_INTERFACE

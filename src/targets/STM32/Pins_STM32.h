@@ -204,7 +204,7 @@ constexpr unsigned int MaxTriggers = 16;            // Must be <= 32 because we 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxCanDrivers = 20;
 constexpr size_t MaxCanBoards = 20;
-constexpr unsigned int CanDeviceNumber = 1;			// we use CAN1
+constexpr unsigned int CanDeviceNumber = 0;			// we use FDCAN1 (which is device 0)
 #endif
 
 //Steppers

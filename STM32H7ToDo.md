@@ -6,15 +6,19 @@
 * --SDIO card interface--
 * --DMA memory buffers (re-enable dcache currently disabled)--
 * --TMC2209 interface--
-* TMC5160 interface
+* Test TMC5160 interface
 * Check neopixel timing (consider using dma)
 * Sort out STM32F4 and STM32H7 defines consider having base STM32 define
 * --WiFi interface--
 * --Check clock timing--
-* Enable 16bit ADC samples
+* Enable 16bit ADC samples (currently 12 bit with oversampling to 14)
 * Use processor d-ram for stacks etc.
-* Check UART code (consider using FIFOs)
+* --Check UART code--
+* Consider using FIFOs for UARTS
 * --Common STM32 Core?--
 * Crash dump flash interface
 * CAN support
 * Investigate SD Card SPI mode high speed switching
+* Test SBC mode
+* Build H7 IAP for SBC mode
+* Sort out a H7 bootloader for Fly boards
