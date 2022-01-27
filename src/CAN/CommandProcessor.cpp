@@ -531,7 +531,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().EutProcessM569Point7(buf->msg.generic, replyRef);
 				break;
-
+			case CanMessageType::m915:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().EutProcessM915(buf->msg.generic, replyRef);
+				break;
 			case CanMessageType::createInputMonitor:
 				requestId = buf->msg.createInputMonitor.requestId;
 				rslt = InputMonitor::Create(buf->msg.createInputMonitor, buf->dataLength, replyRef, extra);
@@ -566,7 +569,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			default:
 				// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
-				if (buf->id.Src() != CanInterface::GetCanAddress())
+				if (buf->id.Dst() != CanInterface::GetCanAddress())
 				{
 					return;
 				}
@@ -574,7 +577,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reply.printf("Board %u received unknown msg type %u", CanInterface::GetCanAddress(), (unsigned int)buf->id.MsgType());
 				rslt = GCodeResult::error;
 			}
-
+			if (requestId == CanRequestIdNoReplyNeeded)
+			{
+				// no reply required
+				return;
+			}
 			// Re-use the message buffer to send a standard reply
 			const CanAddress srcAddress = buf->id.Src();
 			CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
