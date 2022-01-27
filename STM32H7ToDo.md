@@ -22,3 +22,7 @@
 * Test SBC mode
 * Build H7 IAP for SBC mode
 * Sort out a H7 bootloader for Fly boards
+* Check H7 timer allocation
+* use QSPI for neoplixels
+* Allow use of shared timeers per pin (find best match)
+* Update hardware usage for H7
