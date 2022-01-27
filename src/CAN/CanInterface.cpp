@@ -337,7 +337,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 	{
 		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceNew>(myAddress);
 		msg->timeSinceStarted = millis();
-		msg->numDrivers = NumDirectDrivers;
+		msg->numDrivers = (NumDirectDrivers < 7 ? NumDirectDrivers : 7);
 		msg->zero = 0;
 		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
 		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new
@@ -501,11 +501,6 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 # if SAME70
 				// On the SAME70 the step clock is also the external time stamp counter
 				const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
-//#elif STM32H7
-#elif 0
-				// on the H7 we use a timer running at the same frequency as the step timer, but it may be offset
-				const uint32_t timeSyncTxDelay = ((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF);
-
 # else
 				// On the SAME5x the time stamp counter counts CAN bit times divided by 64
 				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
@@ -1231,9 +1226,6 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 }
 
 #include <HardwareTimer.h>
-extern HardwareTimer Timer3;
-extern uint32_t canLostFifo1;
-extern uint32_t canLostFifo0;
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
 	Platform& p = reprap.GetPlatform();
@@ -1281,18 +1273,6 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	}
 
 	reprap.GetPlatform().MessageF(mtype, "Tx timeouts%s\n", str.c_str());
-	uint32_t nowst = StepTimer::GetTimerTicks();
-	uint32_t nowms = millis();
-	uint16_t nowcan = GetTimeStampCounter();
-	uint16_t now3 = Timer3.getCount();
-	delay(50);
-	nowst = StepTimer::GetTimerTicks() - nowst;
-	nowms = millis() - nowms;
-	nowcan = GetTimeStampCounter() - nowcan;
-	now3 = Timer3.getCount() - now3;
-	uint32_t nowcan2 = ((((uint32_t)nowcan) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
-	reprap.GetPlatform().MessageF(mtype, "step delta %d ms delta %d can delta %d can delta2 %d tim3 %d LTO %d\n", nowst, nowms, nowcan, nowcan2, now3, StepTimer::GetLocalTimeOffset());
-	reprap.GetPlatform().MessageF(mtype, "Lost fifo0 %d Lost fifo1 %d\n", canLostFifo0, canLostFifo1 );
 
 	longestWaitTime = 0;
 	longestWaitMessageType = 0;

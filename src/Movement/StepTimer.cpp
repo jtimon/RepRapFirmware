@@ -305,14 +305,9 @@ void StepTimer::DisableTimerInterrupt() noexcept
 		localTimeNow = StepTimer::GetTimerTicks();
 		timeStampNow = CanInterface::GetTimeStampCounter();
 	}
-//#if STM32H7
-#if 0
-	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF));	// timestamp counter is 16 bits
-#else
 	// The time stamp counter runs at the CAN normal bit rate, but the step clock runs at 48MHz/64. Calculate the delay to in step clocks.
 	// Datasheet suggests that on the SAMC21 only 15 bits of timestamp counter are readable, but Microchip confirmed this is a documentation error (case 00625843)
 	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits
-#endif
 #endif
 
 	// Save the peak timestamp delay for diagnostic purposes
