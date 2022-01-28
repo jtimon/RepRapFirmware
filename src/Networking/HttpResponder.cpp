@@ -451,7 +451,7 @@ bool HttpResponder::CharFromClient(char c) noexcept
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
 // Return true if we generated a json response to send, false if we didn't and changed the state instead.
 // This may also return true with response == nullptr if we tried to generate a response but ran out of buffers.
-bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen) noexcept
+bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer *&response, bool& keepOpen) noexcept
 {
 	keepOpen = false;	// assume we don't want to persist the connection
 	const char *parameter;
@@ -638,7 +638,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		OutputBuffer::ReleaseAll(response);
 		const char *const filterVal = GetKeyValue("key");
 		const char *const flagsVal = GetKeyValue("flags");
-		response = reprap.GetModelResponse(filterVal, flagsVal);
+		response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);
 	}
 #endif
 	else if (StringEqualsIgnoreCase(request, "config"))
@@ -768,7 +768,7 @@ bool HttpResponder::RemoveAuthentication() noexcept
 	}
 }
 
-void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile) noexcept
+void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWebFile) noexcept
 {
 #if HAS_MASS_STORAGE
 	FileStore *fileToSend = nullptr;
@@ -975,7 +975,7 @@ void HttpResponder::SendGCodeReply() noexcept
 }
 
 // Send a JSON response to the current command. outBuf is non-null on entry.
-void HttpResponder::SendJsonResponse(const char* command) noexcept
+void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 {
 	// Try to authorise the user automatically to retain compatibility with the old web interface
 	if (!CheckAuthenticated() && reprap.NoPasswordSet())
@@ -1274,7 +1274,7 @@ void HttpResponder::ProcessRequest() noexcept
 }
 
 // Reject the current message
-void HttpResponder::RejectMessage(const char* response, unsigned int code) noexcept
+void HttpResponder::RejectMessage(const char *_ecv_array response, unsigned int code) noexcept
 {
 	if (reprap.Debug(moduleWebserver))
 	{
@@ -1418,7 +1418,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 }
 
 // This is called from the GCodes task to store a response, which is picked up by the Network task
-/*static*/ void HttpResponder::HandleGCodeReply(const char *reply) noexcept
+/*static*/ void HttpResponder::HandleGCodeReply(const char *_ecv_array reply) noexcept
 {
 	if (numSessions > 0)
 	{

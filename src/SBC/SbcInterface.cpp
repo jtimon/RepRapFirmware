@@ -55,8 +55,8 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), lastTransferTime(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
-	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
-	waitingForFileChunk(false), fileMutex(), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
+	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), waitingForFileChunk(false),
+	fileMutex(), numOpenFiles(0), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
 #ifdef TRACK_FILE_CODES
 	, fileCodesRead(0), fileCodesHandled(0), fileMacrosRunning(0), fileMacrosClosing(0)
 #endif
@@ -301,7 +301,7 @@ void SbcInterface::ExchangeData() noexcept
 
 			try
 			{
-				OutputBuffer *outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
+				OutputBuffer *outBuf = reprap.GetModelResponse(nullptr, key.c_str(), flags.c_str());
 				if (outBuf == nullptr || !transfer.WriteObjectModel(outBuf))
 				{
 					// Failed to write the whole object model, try again later
@@ -495,7 +495,7 @@ void SbcInterface::ExchangeData() noexcept
 			(void)transfer.ReadData(packet->length);		// skip the packet content
 			break;
 
-			// Return a file chunk
+		// Return a file chunk
 		case SbcRequest::FileChunk:
 			transfer.ReadFileChunk(requestedFileBuffer, requestedFileDataLength, requestedFileLength);
 			requestedFileSemaphore.Give();
@@ -779,6 +779,10 @@ void SbcInterface::ExchangeData() noexcept
 				fileHandle = transfer.ReadOpenFileResult(fileOffset);
 				fileSuccess = (fileHandle != noFileHandle);
 				fileOperation = FileOperation::none;
+				if (fileSuccess)
+				{
+					numOpenFiles++;
+				}
 				fileSemaphore.Give();
 			}
 			break;
@@ -850,7 +854,7 @@ void SbcInterface::ExchangeData() noexcept
 		!fileOperationPending && fileOperation == FileOperation::none)
 	{
 		delaying = true;
-		if (!TaskBase::Take(MassStorage::AnyFileOpen() ? maxFileOpenDelay : maxDelayBetweenTransfers))
+		if (!TaskBase::Take((numOpenFiles != 0) ? maxFileOpenDelay : maxDelayBetweenTransfers))
 		{
 			delaying = false;
 		}
@@ -941,6 +945,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				// Close requests don't get a result back, so they can be resolved as soon as they are sent to the SBC
 				fileOperation = FileOperation::none;
+				numOpenFiles--;
 				fileSemaphore.Give();
 			}
 			break;
@@ -1171,6 +1176,7 @@ void SbcInterface::InvalidateResources() noexcept
 		fileSemaphore.Give();
 	}
 	MassStorage::InvalidateAllFiles();
+	numOpenFiles = 0;
 
 	// Don't cache any messages if they cannot be sent
 	{
@@ -1208,7 +1214,7 @@ void SbcInterface::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
 	reprap.GetPlatform().MessageF(mtype, "State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 ", IAP RAM available 0x%05" PRIx32 "\n", (int)state, numDisconnects, numTimeouts, iapRamAvailable);
-	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d\n", (int)rxPointer, (int)txPointer, (int)txEnd);
+	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d, open files: %u\n", (int)rxPointer, (int)txPointer, (int)txEnd, numOpenFiles);
 #ifdef TRACK_FILE_CODES
 	reprap.GetPlatform().MessageF(mtype, "File codes read/handled: %d/%d, file macros open/closing: %d %d\n", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
 #endif

@@ -2896,7 +2896,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						lastAuxStatusReportType = ObjectModelAuxStatusReportType;
 					}
-					outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
+					outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
 					if (outBuf == nullptr)
 					{
 						OutputBuffer::ReleaseAll(outBuf);
@@ -3380,7 +3380,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 						noMovesBeforeHoming = (gb.GetIValue() > 0);
 					}
-					if (!seen)
+					if (seen)
+					{
+						reprap.MoveUpdated();
+					}
+					else
 					{
 						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "");
 					}

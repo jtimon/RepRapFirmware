@@ -3970,7 +3970,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		fileGCode->LatestMachineState().CloseFile();
+		fileGCode->ClosePrintFile();
 		fileGCode->Init();
 	}
 	else
@@ -4533,7 +4533,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =
 									(lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
-										? reprap.GetModelResponse("", "d99fi")
+										? reprap.GetModelResponse(&gb, "", "d99fi")
 										: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 			if (statusBuf != nullptr)
 			{
