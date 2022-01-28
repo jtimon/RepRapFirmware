@@ -158,6 +158,7 @@ public:
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 	void SetFileFinished() noexcept;							// Mark the current file as finished
 	void SetPrintFinished() noexcept;							// Mark the current print file as finished
+	void ClosePrintFile() noexcept;								// Close the print file
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
@@ -367,10 +368,11 @@ inline void GCodeBuffer::AdvanceState() noexcept
 	machineState->AdvanceState();
 }
 
-// Return true if we can queue gcodes from this source. This is the case if a file is being executed
+// Return true if we can queue the current gcode command from this source. This is the case if a file is being executed.
+// We can't queue it if it contains an expression, because the expression value may change or refer to 'iterations'.
 inline bool GCodeBuffer::CanQueueCodes() const noexcept
 {
-	return machineState->DoingFile();
+	return machineState->DoingFile() && !ContainsExpression();
 }
 
 inline bool GCodeBuffer::IsDoingFile() const noexcept
