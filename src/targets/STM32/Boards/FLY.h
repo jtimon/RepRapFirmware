@@ -3,7 +3,104 @@
 
 #include "../Pins_STM32.h"
 
+#if STM32H7
 
+constexpr PinEntry PinTable_FLY_SUPER8H7[] =
+{
+    //Thermistors
+    {PF_4, "ADC0,out0"},
+    {PF_5, "ADC1,out1"},
+    {PF_9, "ADC2,pwmout2,pwm2,out2"},
+    {PF_10, "ADC3,out3"},
+    {PC_0, "ADC4,out4"},
+    {PC_1, "ADC5,out5"},
+ 
+
+    //Endstops
+    {PG_12, "io0"},
+    {PG_11, "io1"},
+    {PG_10, "io2"},
+    {PG_9, "io3"},
+    {PD_7, "io4"},
+    {PD_6, "io5"},
+    {PA_8, "io6"},
+    {PF_8, "in7,pwmout1,pwm1,out1"},
+    {PF_3, "hvin"},
+    // Servo
+    {PC_6,  "pwmout0,pwm0,servo,out0" },
+
+   // Probe
+    {PC_3, "probe"},
+
+    //Heaters and Fans (Big and Small Mosfets}
+    {PB_0,  "heat0" },
+    {PB_1,  "heat1" },
+    {PC_7,  "heat2" },
+    {PF_7,  "heat3" },
+    {PF_6,  "heat4" },
+    {PE_5,  "bedout,bed" }, 
+    {PA_0,  "fan0" },
+    {PA_1,  "fan1" },
+    {PA_2,  "fan2" },
+    {PA_3,  "fan3" },
+    {PA_15,  "fan4" },
+    {PB_11,  "fan5" },
+    {PB_10,  "fan6" },
+    {PD_12,  "fan7" },
+    {PD_14,  "fan8" },
+    {PD_15,  "fan9" },
+    
+	// UART
+	{PA_9, "TX1"},
+	{PA_10, "RX1"},
+
+    // WIFI UART	
+//	{PD_8, "PD8"},
+//	{PD_9, "PD9"},	
+	
+    //WIFI
+//    {PD_10, "PD10"},
+//    {PD_11, "PDE11"},
+//    {PD_13, "PD13"},
+
+ 
+
+};
+
+constexpr BoardDefaults fly_super8h7_Defaults = {
+    {0x32757276},                               // Signatures
+    SD_SDIO,                                    // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {PB_3, PB_4, PB_5},                     //SPI2
+        {PD_3, PD_4, PD_5},                     //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+        {NoPin, NoPin, NoPin},                  //SPI6
+        {NoPin, NoPin, NoPin},                  //SPI7
+        {NoPin, NoPin, NoPin},                  //SPI8
+
+    },
+	8,											// Number of drivers
+    {PF_11, PF_14, PG_1, PE_9, PF_2, PC_15, PG_4, PG_7},   	//enablePins
+    {PE_2, PE_3, PE_4, PE_14, PE_15, PE_1, PE_0, PE_6},	    //stepPins
+    {PC_5, PF_13, PG_0, PE_8, PE_11, PF_0, PG_3, PG_6},    	//dirPins
+#if HAS_SMART_DRIVERS
+    {PC_4, PF_12, PF_15, PE_7, PE_10, PF_1, PG_2, PG_5},      //uartPins      
+	 8,                                       	// Smart drivers
+#endif
+    0,
+#if HAS_VOLTAGE_MONITOR
+    PC_2,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
+};
+
+#else
 
 constexpr PinEntry PinTable_FLY_F407ZG[] =
 {
@@ -700,4 +797,5 @@ constexpr BoardDefaults fly_gemini_Defaults = {
     PB_3, PB_12, SSP2,
 #endif
 };
+#endif
 #endif

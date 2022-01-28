@@ -2924,7 +2924,7 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 }
 #endif
 
-#if !LPC17xx && HAS_SBC_INTERFACE
+#if !LPC17xx
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_12864_LCD
@@ -2960,7 +2960,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
 	StopAnalogTask();
-#if STM32F4
+#if STM32F4 && HAS_SBC_INTERFACE
 	BoardConfig::InvalidateBoardConfiguration();
 #endif
 	Cache::Disable();						// disable the cache because it interferes with flash memory access

@@ -413,10 +413,6 @@ static uint32_t signature;
 // an actual board configuration.
 static uint32_t IdentifyBoard()
 {
-#if STM32H7
-    // Hack until we get a bootloader for the Fly H7
-    return 1;
-#else
     // We use the CRC of part of the bootloader to id the board
     signature = crc32((char *)0x8000000, 8192);
     // Try to find a matching board we accept the first match
@@ -431,7 +427,6 @@ static uint32_t IdentifyBoard()
     debugPrintf("Board signature %x not found\n", (unsigned)signature);
     SetBoard("generic");
     return UNKNOWN_BOARD;
-#endif
 }
             
 typedef struct {
