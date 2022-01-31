@@ -26,6 +26,14 @@
 #include "TMC22xxDriver.h"
 #include <functional>
 
+#ifndef TMC22xx_HAS_ENABLE_PINS
+# error TMC22xx_HAS_ENABLE_PINS not defined
+#endif
+
+#ifndef TMC22xx_DEFAULT_STEALTHCHOP
+# error TMC22xx_DEFAULT_STEALTHCHOP not defined
+#endif
+
 // TMC22xx DRV_STATUS register bit assignments
 constexpr uint32_t TMC22xx_RR_OT = 1u << 1;			// over temperature shutdown
 constexpr uint32_t TMC22xx_RR_OTPW = 1u << 0;		// over temperature warning
@@ -99,7 +107,13 @@ constexpr uint32_t GCONF_MSTEP_REG = 1 << 7;				// microstep resolution set by M
 constexpr uint32_t GCONF_MULTISTEP_FILT = 1 << 8;			// pulse generation optimised for >750Hz full stepping frequency
 constexpr uint32_t GCONF_TEST_MODE = 1 << 9;				// test mode, do not set this bit for normal operation
 
-constexpr uint32_t DefaultGConfReg = GCONF_UART | GCONF_MSTEP_REG | GCONF_MULTISTEP_FILT;
+constexpr uint32_t DefaultGConfReg =
+#if TMC22xx_DEFAULT_STEALTHCHOP
+									GCONF_UART | GCONF_MSTEP_REG | GCONF_MULTISTEP_FILT;
+#else
+									GCONF_UART | GCONF_MSTEP_REG | GCONF_MULTISTEP_FILT | GCONF_SPREAD_CYCLE;
+#endif
+
 
 // General configuration and status registers
 

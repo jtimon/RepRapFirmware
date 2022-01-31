@@ -144,6 +144,7 @@ constexpr size_t NumDirectDrivers = 11;               // The maximum number of d
     #define TMC22xx_HAS_MUX                 0
     #define SUPPORT_TMC22xx                 1
     #define HAS_STALL_DETECT                1
+    #define TMC22xx_DEFAULT_STEALTHCHOP     0
 # if defined(SUPPORT_TMC51xx)
     #define SUPPORT_TMC51xx			        1
     #define TMC51xx_USES_USART		        0
