@@ -584,12 +584,19 @@ void BoardConfig::Init() noexcept
     {
         // See if there is an (optional) config file on the SD card
         sdChannel = InitSDCard(boardId, true, false);
-        if (sdChannel != SSPNONE && !BoardConfig::LoadBoardConfigFromFile())
+        if (sdChannel == SSPNONE)
+        {
+            SbcLoadConfig = true;
+        }
+        else if (!BoardConfig::LoadBoardConfigFromFile())
         {
             debugPrintf("Warning: unable to load configuration from file\n");
             // Enable loading of config from the SBC
             SbcLoadConfig = true;
         }
+        if (SbcLoadConfig)
+            debugPrintf("Using SBC based configuration files\n");
+
     }
     if (SbcCsPin == NoPin)
     {
