@@ -17,6 +17,7 @@
 #include "sd_mmc.h"
 #include "SPI.h"
 #include "HardwareSPI.h"
+#include "HardwareSDIO.h"
 #include "Platform/Platform.h"
 
 #include "HybridPWM.h"
@@ -353,7 +354,7 @@ static void ConfigureGPIOPins() noexcept
 
 static void ConfigureSPIPins(SSPChannel dev, Pin clk, Pin miso, Pin mosi)
 {
-    SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin);
+    SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, NvicPrioritySpi);
 }
 
 static void FatalError(const char* fmt, ...)
@@ -453,7 +454,10 @@ static bool TryConfig(uint32_t config, bool mount)
         sd_mmc_setSSPChannel(0, conf->device, conf->pins[3]);
     }
     else
+    {
+        HardwareSDIO::SDIO1.InitPins(NvicPrioritySDIO);
         sd_mmc_setSSPChannel(0, conf->device, NoPin);
+    }
 
     if (!mount) return true;
 
@@ -542,27 +546,6 @@ void BoardConfig::Init() noexcept
 #error "Invalid board configuration HAS_MASS_STORAGE is required"
 #endif
     signature = crc32((char *)0x8000000, 8192);
-    // We need to setup DMA and SPI devices before we can use File I/O
-    // Using on STM32F4 DMA2 for both TMC UART and the SD card causes corruption problems (see STM errata) so for now we use
-    // polled I/O for SPI1.
-    NVIC_SetPriority(DMA2_Stream6_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(DMA2_Stream3_IRQn, NvicPrioritySpi);
-#if STM32H7
-    NVIC_SetPriority(SDMMC1_IRQn, NvicPrioritySDIO);
-    NVIC_SetPriority(SDMMC2_IRQn, NvicPrioritySDIO);
-    NVIC_SetPriority(SPI2_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(SPI3_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(SPI4_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(DMA1_Stream1_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(DMA1_Stream2_IRQn, NvicPrioritySpi);
-#else
-    NVIC_SetPriority(SDIO_IRQn, NvicPrioritySDIO);
-#endif
-    
-    NVIC_SetPriority(DMA1_Stream3_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(DMA1_Stream4_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(DMA1_Stream0_IRQn, NvicPrioritySpi);
-    NVIC_SetPriority(DMA1_Stream5_IRQn, NvicPrioritySpi);
 #if STARTUP_DELAY
     delay(STARTUP_DELAY);
 #endif
