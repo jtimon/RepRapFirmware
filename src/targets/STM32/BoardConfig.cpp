@@ -426,6 +426,9 @@ static uint32_t IdentifyBoard()
                 return i;
             }
     debugPrintf("Board signature %x not found\n", (unsigned)signature);
+#if STM32H7
+    return 1;
+#endif
     SetBoard("generic");
     return UNKNOWN_BOARD;
 }
