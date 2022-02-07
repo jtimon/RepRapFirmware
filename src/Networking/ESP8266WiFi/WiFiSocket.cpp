@@ -5,14 +5,16 @@
  *      Author: David
  */
 
+#include "WiFiSocket.h"
+
+#if HAS_WIFI_NETWORKING
+
 #include <Networking/NetworkBuffer.h>
 #include <Platform/RepRap.h>
 #include "WiFiInterface.h"
-#include "WiFiSocket.h"
 #include "NetworkResponder.h"
 
 const unsigned int MaxBuffersPerSocket = 4;
-
 
 WiFiSocket::WiFiSocket(NetworkInterface *iface) noexcept : Socket(iface), receivedData(nullptr), state(SocketState::inactive), needsPolling(false)
 {
@@ -354,5 +356,7 @@ bool WiFiSocket::NeedsPolling() const noexcept
 {
 	return state != SocketState::inactive || needsPolling;
 }
+
+#endif	// HAS_WIFI_NETWORKING
 
 // End

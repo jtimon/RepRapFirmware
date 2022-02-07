@@ -6,6 +6,9 @@
  */
 
 #include "SpiTemperatureSensor.h"
+
+#if SUPPORT_SPI_SENSORS
+
 #include <Platform/Tasks.h>
 #include <Hardware/SharedSpi/SharedSpiDevice.h>
 
@@ -75,5 +78,7 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 
 	return TemperatureError::success;
 }
+
+#endif // SUPPORT_SPI_SENSORS
 
 // End

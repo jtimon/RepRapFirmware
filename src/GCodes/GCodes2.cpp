@@ -1151,7 +1151,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetQuotedString(filename.GetRef(), false);
 						gb.MustSee('S');
 						const FilePosition offset = gb.GetUIValue();
-						outBuf = reprap.GetThumbnailResponse(filename.c_str(), offset);
+						outBuf = reprap.GetThumbnailResponse(filename.c_str(), offset, true);
 						if (outBuf == nullptr)
 						{
 							return false;											// cannot allocate an output buffer, try again later
@@ -1736,7 +1736,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (!cancelWait)
 				{
-					const float tolerance = (gb.Seen('S')) ? max<float>(gb.GetFValue(), 0.1) : TEMPERATURE_CLOSE_ENOUGH;
+					const float tolerance = (gb.Seen('S')) ? max<float>(gb.GetFValue(), 0.1) : TemperatureCloseEnough;
 					bool seen = false;
 					if (gb.Seen('P'))
 					{
@@ -2099,7 +2099,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
 						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
-						if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TEMPERATURE_CLOSE_ENOUGH))
+						if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough))
 						{
 							cancelWait = isWaiting = false;
 							break;
@@ -3516,12 +3516,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = reprap.GetMove().ConfigurePressureAdvance(gb, reply);
 				break;
 
-			case 573: // Report heater average PWM
-				{
-					const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
-					reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
-				}
-				break;
+			// case 573 was report heater average PWM but is no longer supported because you can use "echo heat/heaters[N].avgPwm" instead
 
 			case 574: // Set endstop configuration
 				// We may be about to delete endstops, so make sure we are not executing a move that uses them
@@ -4610,7 +4605,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 #endif
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 				if (gb.Seen('A'))
 				{
 					const uint32_t serialChannel = gb.GetLimitedUIValue('A', 1, NumSerialChannels);

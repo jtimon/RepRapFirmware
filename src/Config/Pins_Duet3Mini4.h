@@ -1,7 +1,7 @@
 /*
- * Pins_Duet5LC.h
+ * Pins_Duet3Mini4.h
  *
- *  Created on: 28 May 2020
+ *  Created on: 02 Feb 2022
  *      Author: David
  */
 
@@ -10,28 +10,23 @@
 
 #include <PinDescription.h>
 
-#define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini_Unknown
+#define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini4
 
-# define BOARD_SHORT_NAME		"Mini5plus"
-# define BOARD_NAME				"Duet 3 Mini 5+"
-# ifdef DUET3_ATE
-#  define FIRMWARE_NAME			"RepRapFirmware for ATE based on Duet 3 Mini 5+"
-# else
-#  define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
-# endif
+#define BOARD_SHORT_NAME		"Mini4"
+#define BOARD_NAME				"Duet 3 Mini 4"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 4"
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
-#define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
-constexpr uint32_t IAP_IMAGE_START = 0x20038000;
+constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
 
 // Features definition
-#define HAS_LWIP_NETWORKING		1
+#define HAS_LWIP_NETWORKING		0
 #define HAS_WIFI_NETWORKING		1
 #define HAS_W5500_NETWORKING	0
-#define HAS_SBC_INTERFACE		1
+#define HAS_SBC_INTERFACE		0
 
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
@@ -45,40 +40,45 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
 
-#define SUPPORT_CAN_EXPANSION	1
+#define SUPPORT_CAN_EXPANSION	0
 
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
-#define SUPPORT_SCANNER			1					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
-#define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
+#define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
-#define SUPPORT_FTP				1
-#define SUPPORT_TELNET			1
-#define SUPPORT_ASYNC_MOVES		1
+#define SUPPORT_FTP				0
+#define SUPPORT_TELNET			0
+#define SUPPORT_ASYNC_MOVES		0
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
+#define SUPPORT_PANELDUE_FLASH	0
+#define SUPPORT_SPI_SENSORS		0
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
+
+// Disable the kinematcs we don't need to save flash memory space
+#define SUPPORT_LINEAR_DELTA	0
+#define SUPPORT_ROTARY_DELTA	0
+#define SUPPORT_POLAR			0
+#define SUPPORT_SCARA			0
+#define SUPPORT_FIVEBARSCARA	0
+#define SUPPORT_HANGPRINTER		0
 
 // The physical capabilities of the machine
 
 #include <Duet3Common.h>
 
-constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 4;				// The maximum number of drives supported by the electronics
 
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
-
-#if SUPPORT_CAN_EXPANSION
-constexpr size_t MaxCanDrivers = 7;					// enough to support another Mini5+ as an expansion board
-constexpr unsigned int MaxCanBoards = 4;
-#endif
 
 constexpr size_t MaxPortsPerHeater = 2;
 
@@ -101,11 +101,7 @@ constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-# ifdef DUET3_ATE
-constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART) - reserve the second UART for ATE use
-#else
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
-#endif
 
 #define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
@@ -123,9 +119,9 @@ constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB po
 constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
 PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
 
-constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19), PortCPin(16), PortCPin(30), PortCPin(18) };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortBPin(29), PortBPin(28), PortDPin(20), PortDPin(21), PortBPin(0), PortAPin(27) };
-constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23), PortCPin(21), PortBPin(10), PortCPin(27) };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortBPin(29), PortBPin(28), PortDPin(20) };
+constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23) };
 // CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.
 constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 {
@@ -133,9 +129,6 @@ constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 	0x02 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[8]	= 2.2
 	0x02 | CCL_LUTCTRL_INSEL0(0x04),		// CCLIN[6] = 2.0
 	0x02 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[7] = 2.1
-	0x03 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[10] = 3.1
-	0x03 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[11] = 3.2
-	0x01 | CCL_LUTCTRL_INSEL1(0x04)			// CCLIN[4] = 1.1
 };
 
 // UART interface to stepper drivers
@@ -150,7 +143,7 @@ constexpr uint8_t TMC22xxSercomRxPad = 1;
 constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 
 #define TMC22xx_HAS_ENABLE_PINS			0
-#define TMC22xx_HAS_MUX					1
+#define TMC22xx_HAS_MUX					0
 #define TMC22xx_USES_SERCOM				1
 #define TMC22xx_VARIABLE_NUM_DRIVERS	0
 #define TMC22xx_SINGLE_DRIVER			0
@@ -209,8 +202,8 @@ constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[NumSdCards - 1] = { PortCPin(14) };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
-Sdhc * const SdDevice = SDHC1;
-constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
+Sdhc * const SdDevice = SDHC0;
+constexpr IRQn_Type SdhcIRQn = SDHC0_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // 12864 LCD
@@ -227,7 +220,6 @@ constexpr Pin EncoderPinSw = PortBPin(9);
 
 constexpr Pin LcdA0Pin = PortAPin(2);
 constexpr Pin LcdBeepPin = PortAPin(9);
-constexpr Pin LcdNeopixelOutPin = PortBPin(12);			// shared with io3.out
 
 // Neopixel output
 constexpr Pin NeopixelOutPin = PortAPin(8);
@@ -265,19 +257,6 @@ constexpr Pin Serial1TxPin = PortBPin(31);
 constexpr Pin Serial1RxPin = PortBPin(30);
 constexpr GpioPinFunction Serial1PinFunction = GpioPinFunction::D;
 
-// Ethernet pins
-constexpr Pin EthernetMacPins[] =
-{
-	PortAPin(12), PortAPin(13), PortAPin(14), PortAPin(15), PortAPin(17), PortAPin(18), PortAPin(19),
-	PortCPin(20), PortCPin(22), PortCPin(23)
-};
-constexpr GpioPinFunction EthernetMacPinsPinFunction = GpioPinFunction::L;
-constexpr Pin EthernetPhyResetPin = PortCPin(17);
-
-constexpr Pin EthernetClockOutPin = PortAPin(16);
-constexpr GpioPinFunction EthernetClockOutPinFunction = GpioPinFunction::M;
-constexpr unsigned int EthernetClockOutGclkNumber = 2;
-
 // WiFi pins
 constexpr unsigned int WiFiUartSercomNumber = 3;
 constexpr uint8_t WiFiUartRxPad = 1;
@@ -300,28 +279,11 @@ constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_3_IRQn;			// this is the SS Low interrupt, the only one we use
 #define ESP_SPI_HANDLER		SERCOM4_3_Handler
 
-constexpr Pin EspResetPin = EthernetPhyResetPin;
+constexpr Pin EspResetPin = PortCPin(17);
 constexpr Pin EspEnablePin = PortCPin(20);
 constexpr Pin EspDataReadyPin = PortAPin(18);
 constexpr Pin SamTfrReadyPin = PortAPin(19);
 constexpr Pin SamCsPin = PortAPin(14);
-
-// SBC interface
-constexpr unsigned int SbcSpiSercomNumber = 0;
-Sercom * const SbcSpiSercom = SERCOM0;
-constexpr Pin SbcSSPin = PortAPin(6);
-
-constexpr Pin SbcTfrReadyPin = PortAPin(3);
-constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
-constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn SbcSpiSercomIRQn = SERCOM0_3_IRQn;			// this is the SS Low interrupt, the only one we use
-#define SBC_SPI_HANDLER		SERCOM0_3_Handler
-
-// CAN
-constexpr unsigned int CanDeviceNumber = 1;					// we use CAN1
-constexpr Pin CanTxPin = PortBPin(14);
-constexpr Pin CanRxPin = PortBPin(15);
-constexpr GpioPinFunction CanPinsMode = GpioPinFunction::H;
 
 // Function to look up a pin name and pass back the corresponding index into the pin table
 bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;

@@ -7,6 +7,9 @@
 
 
 #include "WiFiInterface.h"
+
+#if HAS_WIFI_NETWORKING
+
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -2150,5 +2153,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	digitalWrite(EspEnablePin, true);
 #endif
 }
+
+#endif	// HAS_WIFI_NETWORKING
 
 // End
