@@ -405,7 +405,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::m109WaitForTemperature:
-		if (cancelWait || IsSimulating() || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.LatestMachineState().waitWhileCooling, TEMPERATURE_CLOSE_ENOUGH))
+		if (cancelWait || IsSimulating() || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.LatestMachineState().waitWhileCooling, TemperatureCloseEnough))
 		{
 			cancelWait = isWaiting = false;
 			gb.SetState(GCodeState::normal);
@@ -562,7 +562,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.SetState(GCodeState::flashing2);
 			}
 		}
-# if HAS_AUX_DEVICES
+# if SUPPORT_PANELDUE_FLASH
 		else
 		{
 			PanelDueUpdater* const panelDueUpdater = platform.GetPanelDueUpdater();

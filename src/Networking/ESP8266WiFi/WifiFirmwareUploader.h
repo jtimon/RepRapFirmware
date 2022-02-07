@@ -10,6 +10,8 @@
 
 #include "RepRapFirmware.h"
 
+#if HAS_WIFI_NETWORKING
+
 class WiFiInterface;
 
 class WifiFirmwareUploader
@@ -109,5 +111,7 @@ private:
 	uint32_t *blkBuf32;
 #endif
 };
+
+#endif	// HAS_WIFI_NETWORKING
 
 #endif /* SRC_SAME70_WIFIFIRMWAREUPLOADER_H_ */
