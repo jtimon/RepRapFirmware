@@ -1,3 +1,9 @@
+Version 3.3.0_16
+================
+* STM32F4 Fix Fly E3 Pro V2 Pins
+* STM32F4 Added updated BTT SKR V2 signature
+
+
 Version 3.3.0_15
 ================
 * STM32F4 Fix number of drivers in Fly Gemini config

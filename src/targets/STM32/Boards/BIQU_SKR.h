@@ -484,7 +484,7 @@ constexpr PinEntry PinTable_BTT_SKR_2[] =
 };
 
 constexpr BoardDefaults btt_skr_2_Defaults = {
-    {0xb75b00a7},                 				// Signatures
+    {0xb75b00a7, 0x35f4602c},            	  // Signatures
     SD_SDIO,                                  // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
