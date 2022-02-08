@@ -75,7 +75,7 @@ namespace MassStorage
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
 	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
-	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
+	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess, uint32_t timeout = 5000) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 #endif

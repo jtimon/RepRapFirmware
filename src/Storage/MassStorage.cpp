@@ -1001,7 +1001,7 @@ bool MassStorage::IsCardDetected(size_t card) noexcept
 // Mount the specified SD card, returning true if done, false if needs to be called again.
 // If an error occurs, return true with the error message in 'reply'.
 // This may only be called to mount one card at a time.
-GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept
+GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportSuccess, uint32_t timeout) noexcept
 {
 	if (card >= GetNumVolumes())
 	{
@@ -1044,7 +1044,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	}
 
 	const sd_mmc_err_t err = sd_mmc_check(card);
-	if (err != SD_MMC_OK && millis() - inf.mountStartTime < 5000)
+	if (err != SD_MMC_OK && millis() - inf.mountStartTime < timeout)
 	{
 		delay(2);
 		return GCodeResult::notFinished;

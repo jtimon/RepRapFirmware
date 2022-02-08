@@ -771,7 +771,7 @@ constexpr PinEntry PinTable_FLY_GEMINI[] =
 
 constexpr BoardDefaults fly_gemini_Defaults = {
     {0xbfecc997},                       // Signatures
-    SD_NONE,                            // SD Card access
+    SD_SDIO,                            // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
         {PB_13, PB_14, PB_15},                  //SPI1

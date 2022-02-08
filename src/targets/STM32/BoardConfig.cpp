@@ -466,15 +466,16 @@ static bool TryConfig(uint32_t config, bool mount)
 
     GCodeResult rslt;
     String<100> reply;
-
+debugPrintf("Start mount\n");
     do
     {
         MassStorage::Spin();
-        rslt = MassStorage::Mount(0, reply.GetRef(), false);
+        rslt = MassStorage::Mount(0, reply.GetRef(), false, 0);
     } while (rslt == GCodeResult::notFinished);
+debugPrintf("End mount\n");
     if (rslt == GCodeResult::ok)
         return true;
-    // mount failed reset I/O pins to inputs
+    // mount failed but we leave the hardware configured as we may need it later
     if (conf->device != SSPSDIO)
         ((HardwareSPI *)(SPI::getSSPDevice(conf->device)))->disable();
     for (size_t i = 0; i < ARRAY_SIZE(conf->pins); i++)
@@ -555,34 +556,35 @@ void BoardConfig::Init() noexcept
     ClearPinArrays();
     uint32_t boardId = IdentifyBoard();
 #if HAS_SBC_INTERFACE
-    // Check for a configuration stored in RAM (supplied by the SBC),
-    // if found use it rather then any config on the SD card
-    InMemoryBoardConfiguration inMemoryConfig;
-    inMemoryConfig.loadFromBackupRAM();
-    if (inMemoryConfig.isValid())
+    // See if there is an (optional) config file on the SD card
+    sdChannel = InitSDCard(boardId, true, false);
+    if (sdChannel == SSPNONE)
     {
-        debugPrintf("Using RAM based configuration data\n");
-        inMemoryConfig.setConfiguration();
-        // Don't bother mounting the SD card at this time
-        sdChannel = InitSDCard(boardId, false, false);
+        // Device does not have an SD card
+        SbcLoadConfig = true;
     }
-    else
+    else if (!BoardConfig::LoadBoardConfigFromFile())
     {
-        // See if there is an (optional) config file on the SD card
-        sdChannel = InitSDCard(boardId, true, false);
-        if (sdChannel == SSPNONE)
+        // No SD card, or no board.txt
+        debugPrintf("Warning: unable to load configuration from file\n");
+        // Enable loading of config from the SBC
+        SbcLoadConfig = true;
+    }
+    if (SbcLoadConfig)
+    {
+        debugPrintf("Using SBC based configuration files\n");
+        // Check for a configuration stored in RAM (supplied by the SBC),
+        // if found use it over ride any config from the card
+        InMemoryBoardConfiguration inMemoryConfig;
+        inMemoryConfig.loadFromBackupRAM();
+        if (inMemoryConfig.isValid())
         {
-            SbcLoadConfig = true;
+            debugPrintf("Using RAM based configuration data\n");
+            inMemoryConfig.setConfiguration();
+            // Set SD config if we haven't already
+            if (!MassStorage::IsDriveMounted(0))
+                sdChannel = InitSDCard(boardId, false, false);
         }
-        else if (!BoardConfig::LoadBoardConfigFromFile())
-        {
-            debugPrintf("Warning: unable to load configuration from file\n");
-            // Enable loading of config from the SBC
-            SbcLoadConfig = true;
-        }
-        if (SbcLoadConfig)
-            debugPrintf("Using SBC based configuration files\n");
-
     }
     if (SbcCsPin == NoPin)
     {

@@ -661,7 +661,10 @@ void RepRap::Init() noexcept
 				start = millis();
 			}
 #if STM32F4 || LPC17xx
+			// At this point we may only have very limit hardware configuration loaded so avoid
+			// using the main Spin loop.
 			sbcInterface->Spin();
+			platform->FlushMessages();
 #else
 			Spin();
 #endif
