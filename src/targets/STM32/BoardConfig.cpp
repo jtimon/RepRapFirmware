@@ -266,36 +266,6 @@ bool InMemoryBoardConfiguration::isEqual(InMemoryBoardConfiguration& other) noex
 #endif
 
 
-#if !HAS_MASS_STORAGE
-// Provide dummy functions for locks etc. for ff when mass storage is disabled
-
-extern "C"
-{
-    // Create a sync object. We already created it, we just need to copy the handle.
-    int ff_cre_syncobj (BYTE vol, FF_SYNC_t* psy) noexcept
-    {
-        return 1;
-    }
-
-    // Lock sync object
-    int ff_req_grant (FF_SYNC_t sy) noexcept
-    {
-        return 1;
-    }
-
-    // Unlock sync object
-    void ff_rel_grant (FF_SYNC_t sy) noexcept
-    {
-    }
-
-    // Delete a sync object
-    int ff_del_syncobj (FF_SYNC_t sy) noexcept
-    {
-        return 1;        // nothing to do, we never delete the mutex
-    }
-}
-#endif
-
 static inline bool isSpaceOrTab(char c) noexcept
 {
     return (c == ' ' || c == '\t');
@@ -367,6 +337,21 @@ static void FatalError(const char* fmt, ...)
         va_end(vargs);
         delay(2000);
     }
+}
+
+static void MessageF(MessageType mtype, const char* fmt, ...)
+{
+    va_list vargs;
+    va_start(vargs, fmt);
+    reprap.GetPlatform().MessageV(mtype, fmt, vargs);
+    va_end(vargs);
+}
+
+static void FlushMessages()
+{
+    uint32_t start = millis();
+    while(reprap.GetPlatform().FlushMessages() && (millis() - start < 5000))
+        ;
 }
 
 #if 0
@@ -466,16 +451,14 @@ static bool TryConfig(uint32_t config, bool mount)
 
     GCodeResult rslt;
     String<100> reply;
-debugPrintf("Start mount\n");
     do
     {
         MassStorage::Spin();
-        rslt = MassStorage::Mount(0, reply.GetRef(), false, 0);
+        rslt = MassStorage::Mount(0, reply.GetRef(), false, 100);
     } while (rslt == GCodeResult::notFinished);
-debugPrintf("End mount\n");
     if (rslt == GCodeResult::ok)
         return true;
-    // mount failed but we leave the hardware configured as we may need it later
+    // mount failed, reset the hardware
     if (conf->device != SSPSDIO)
         ((HardwareSPI *)(SPI::getSSPDevice(conf->device)))->disable();
     for (size_t i = 0; i < ARRAY_SIZE(conf->pins); i++)
@@ -525,14 +508,13 @@ static SSPChannel InitSDCard(uint32_t boardId, bool mount, bool needed)
     {
         if (TryConfig(conf, mount))
         {
-            debugPrintf("SD card configured for config %d\n", conf);
             return SDCardConfigs[conf].device;
         }
         if (needed)
             FatalError("Unable to mount SD card, board signature is 0x%x, boardId %d config %d.\n", signature, (int)boardId, conf);
         else
         {
-            debugPrintf("Unable to mount SD card using config %d\n", conf);
+            MessageF(UsbMessage, "Unable to mount SD card using config %d\n", conf);
             return SDCardConfigs[conf].device;
         }
     }
@@ -540,7 +522,6 @@ static SSPChannel InitSDCard(uint32_t boardId, bool mount, bool needed)
     return SSPNONE;
 }
 
-extern HardwareTimer STimer;
 
 void BoardConfig::Init() noexcept
 {
@@ -551,7 +532,15 @@ void BoardConfig::Init() noexcept
 #endif
     signature = crc32((char *)0x8000000, 8192);
 #if STARTUP_DELAY
-    delay(STARTUP_DELAY);
+    for(int i = 0; i < STARTUP_DELAY; i++)
+    {
+        delay(1);
+        if (SERIAL_MAIN_DEVICE.IsConnected())
+        {
+            debugPrintf("RRF Started....\n");
+            break;
+        }
+    }
 #endif
     ClearPinArrays();
     uint32_t boardId = IdentifyBoard();
@@ -566,20 +555,20 @@ void BoardConfig::Init() noexcept
     else if (!BoardConfig::LoadBoardConfigFromFile())
     {
         // No SD card, or no board.txt
-        debugPrintf("Warning: unable to load configuration from file\n");
+        MessageF(UsbMessage, "Warning: unable to load configuration from file\n");
         // Enable loading of config from the SBC
         SbcLoadConfig = true;
     }
     if (SbcLoadConfig)
     {
-        debugPrintf("Using SBC based configuration files\n");
+        MessageF(UsbMessage, "Using SBC based configuration files\n");
         // Check for a configuration stored in RAM (supplied by the SBC),
         // if found use it over ride any config from the card
         InMemoryBoardConfiguration inMemoryConfig;
         inMemoryConfig.loadFromBackupRAM();
         if (inMemoryConfig.isValid())
         {
-            debugPrintf("Using RAM based configuration data\n");
+            MessageF(UsbMessage, "Using RAM based configuration data\n");
             inMemoryConfig.setConfiguration();
             // Set SD config if we haven't already
             if (!MassStorage::IsDriveMounted(0))
@@ -773,31 +762,31 @@ void BoardConfig::PrintValue(MessageType mtype, configValueType configType, void
                 Pin pin = *(Pin *)(variable);
                 if(pin == NoPin)
                 {
-                    reprap.GetPlatform().MessageF(mtype, "NoPin");
+                    MessageF(mtype, "NoPin");
                 }
                 else
                 {
-                    reprap.GetPlatform().MessageF(mtype, "%c.%d", 'A' + (pin >> 4), (pin & 0xF) );
+                    MessageF(mtype, "%c.%d", 'A' + (pin >> 4), (pin & 0xF) );
                 }
             }
             break;
         case cvBoolType:
-            reprap.GetPlatform().MessageF(mtype, "%s", (*(bool *)(variable) == true)?"true":"false" );
+            MessageF(mtype, "%s", (*(bool *)(variable) == true)?"true":"false" );
             break;
         case cvFloatType:
-            reprap.GetPlatform().MessageF(mtype, "%.2f",  (double) *(float *)(variable) );
+            MessageF(mtype, "%.2f",  (double) *(float *)(variable) );
             break;
         case cvUint8Type:
-            reprap.GetPlatform().MessageF(mtype, "%u",  *(uint8_t *)(variable) );
+            MessageF(mtype, "%u",  *(uint8_t *)(variable) );
             break;
         case cvUint16Type:
-            reprap.GetPlatform().MessageF(mtype, "%d",  *(uint16_t *)(variable) );
+            MessageF(mtype, "%d",  *(uint16_t *)(variable) );
             break;
         case cvUint32Type:
-            reprap.GetPlatform().MessageF(mtype, "%lu",  *(uint32_t *)(variable) );
+            MessageF(mtype, "%lu",  *(uint32_t *)(variable) );
             break;
         case cvStringType:
-            reprap.GetPlatform().MessageF(mtype, "%s",  (char *)(variable) );
+            MessageF(mtype, "%s",  (char *)(variable) );
             break;
         default:{
             
@@ -809,35 +798,35 @@ void BoardConfig::PrintValue(MessageType mtype, configValueType configType, void
 //Information printed by M122 P200
 void BoardConfig::Diagnostics(MessageType mtype) noexcept
 {
-    reprap.GetPlatform().Message(mtype, "=== Diagnostics ===\n");
+    MessageF(mtype, "=== Diagnostics ===\n");
 
 #ifdef DUET_NG
 # if HAS_SBC_INTERFACE
-	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
+	MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
 						(reprap.UsingSbcInterface()) ? "SBC" : "standalone");
 # else
-	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
+	MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
 # endif
 	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
-	reprap.GetPlatform().MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
+	MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
 #elif LPC17xx || STM32F4
-	reprap.GetPlatform().MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, reprap.GetPlatform().GetElectronicsString(), (int)SystemCoreClock/1000000);
+	MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, reprap.GetPlatform().GetElectronicsString(), (int)SystemCoreClock/1000000);
 #elif HAS_SBC_INTERFACE
-	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
+	MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
 						(reprap.UsingSbcInterface()) ? "SBC" : "standalone");
 #else
-	reprap.GetPlatform().MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
+	MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
 #endif
 
-    reprap.GetPlatform().MessageF(mtype, "\n== Supported boards ==\n");
+    MessageF(mtype, "\n== Supported boards ==\n");
     PrintBoards(mtype);
 
-    reprap.GetPlatform().MessageF(mtype, "\n== Configurable Board.txt Settings ==\n");
+    MessageF(mtype, "\n== Configurable Board.txt Settings ==\n");
     //Print the board name
     boardConfigEntry_t board = boardEntryConfig[1];
-    reprap.GetPlatform().MessageF(mtype, "%s = ", board.key );
+    MessageF(mtype, "%s = ", board.key );
     BoardConfig::PrintValue(mtype, board.type, board.variable);
-    reprap.GetPlatform().MessageF(mtype, "  Signature 0x%x\n\n", (unsigned int)signature);
+    MessageF(mtype, "  Signature 0x%x\n\n", (unsigned int)signature);
     
     //Print rest of board configurations
     const size_t numConfigs = ARRAY_SIZE(boardConfigs);
@@ -845,79 +834,79 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     {
         boardConfigEntry_t next = boardConfigs[i];
 
-        reprap.GetPlatform().MessageF(mtype, "%s = ", next.key );
+        MessageF(mtype, "%s = ", next.key );
         if(next.maxArrayEntries != nullptr)
         {
-            reprap.GetPlatform().MessageF(mtype, "{");
+            MessageF(mtype, "{");
             for(size_t p=0; p<*(next.maxArrayEntries); p++)
             {
                 //TODO:: handle other values
                 if(next.type == cvPinType){
                     if (p > 0)
-                        reprap.GetPlatform().MessageF(mtype, ", ");
+                        MessageF(mtype, ", ");
                     BoardConfig::PrintValue(mtype, next.type, (void *)&((Pin *)(next.variable))[p]);
                 }
             }
-            reprap.GetPlatform().MessageF(mtype, "}\n");
+            MessageF(mtype, "}\n");
         }
         else
         {
             BoardConfig::PrintValue(mtype, next.type, next.variable);
-            reprap.GetPlatform().MessageF(mtype, "\n");
+            MessageF(mtype, "\n");
 
         }
     }
 
     // Display all pins
-    reprap.GetPlatform().MessageF(mtype, "\n== Defined Pins ==\n");
+    MessageF(mtype, "\n== Defined Pins ==\n");
     for (size_t lp = 0; lp < NumNamedLPCPins; ++lp)
     {
-        reprap.GetPlatform().MessageF(mtype, "%s = ", PinTable[lp].names );
+        MessageF(mtype, "%s = ", PinTable[lp].names );
         BoardConfig::PrintValue(mtype, cvPinType, (void *)&PinTable[lp].pin);
-        reprap.GetPlatform().MessageF(mtype, "\n");
+        MessageF(mtype, "\n");
     }
     
 #if defined(SERIAL_AUX_DEVICE) || defined(SERIAL_AUX2_DEVICE) || HAS_WIFI_NETWORKING
-    reprap.GetPlatform().MessageF(mtype, "\n== Hardware Serial ==\n");
+    MessageF(mtype, "\n== Hardware Serial ==\n");
     #if defined(SERIAL_AUX_DEVICE)
-        reprap.GetPlatform().MessageF(mtype, "AUX Serial: %s%c\n", ((SERIAL_AUX_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_AUX_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_AUX_DEVICE.GetUARTPortNumber()));
+        MessageF(mtype, "AUX Serial: %s%c\n", ((SERIAL_AUX_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_AUX_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_AUX_DEVICE.GetUARTPortNumber()));
     #endif
     #if defined(SERIAL_AUX2_DEVICE)
-        reprap.GetPlatform().MessageF(mtype, "AUX2 Serial: %s%c\n", ((SERIAL_AUX2_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_AUX2_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_AUX2_DEVICE.GetUARTPortNumber()));
+        MessageF(mtype, "AUX2 Serial: %s%c\n", ((SERIAL_AUX2_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_AUX2_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_AUX2_DEVICE.GetUARTPortNumber()));
     #endif
     #if HAS_WIFI_NETWORKING
-        reprap.GetPlatform().MessageF(mtype, "WIFI Serial: %s%c\n", ((SERIAL_WIFI_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_WIFI_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_WIFI_DEVICE.GetUARTPortNumber()));
+        MessageF(mtype, "WIFI Serial: %s%c\n", ((SERIAL_WIFI_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_WIFI_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_WIFI_DEVICE.GetUARTPortNumber()));
     #endif
 #endif
     
     
 
-    reprap.GetPlatform().MessageF(mtype, "\n== PWM ==\n");
+    MessageF(mtype, "\n== PWM ==\n");
     for(uint8_t i=0; i<MaxPWMChannels; i++)
     {
 		String<StringLength256> status;
 		PWMPins[i].appendStatus(status.GetRef());
-		reprap.GetPlatform().MessageF(mtype, "%u: %s\n", i, status.c_str());
+		MessageF(mtype, "%u: %s\n", i, status.c_str());
 	}
 
-    reprap.GetPlatform().MessageF(mtype, "\n== MCU ==\n");
-    reprap.GetPlatform().MessageF(mtype, "AdcBits = %d\n", (int) LegacyAnalogIn::AdcBits);
-    reprap.GetPlatform().MessageF(mtype, "TS_CAL1 (30C) = %d\n", (int) (*TEMPSENSOR_CAL1_ADDR));
-    reprap.GetPlatform().MessageF(mtype, "TS_CAL2 (110C) = %d\n", (int) (*TEMPSENSOR_CAL2_ADDR));
-    reprap.GetPlatform().MessageF(mtype, "V_REFINCAL (30C 3.3V) = %d\n\n", (int) (*VREFINT_CAL_ADDR));
+    MessageF(mtype, "\n== MCU ==\n");
+    MessageF(mtype, "AdcBits = %d\n", (int) LegacyAnalogIn::AdcBits);
+    MessageF(mtype, "TS_CAL1 (30C) = %d\n", (int) (*TEMPSENSOR_CAL1_ADDR));
+    MessageF(mtype, "TS_CAL2 (110C) = %d\n", (int) (*TEMPSENSOR_CAL2_ADDR));
+    MessageF(mtype, "V_REFINCAL (30C 3.3V) = %d\n\n", (int) (*VREFINT_CAL_ADDR));
     uint32_t vrefintraw = AnalogInReadChannel(LegacyAnalogIn::GetVREFAdcChannel());
     float vref = 3.3f*((float)(GET_ADC_CAL(VREFINT_CAL_ADDR, VREFINT_CAL_DEF)))/(float)(vrefintraw >> (LegacyAnalogIn::AdcBits - 12));
-    reprap.GetPlatform().MessageF(mtype, "V_REFINT raw %d\n", (int) vrefintraw);
-    reprap.GetPlatform().MessageF(mtype, "V_REF  %f\n\n", (double)vref);
+    MessageF(mtype, "V_REFINT raw %d\n", (int) vrefintraw);
+    MessageF(mtype, "V_REF  %f\n\n", (double)vref);
     float tmcuraw = (float)AnalogInReadChannel(LegacyAnalogIn::GetTemperatureAdcChannel());
-    reprap.GetPlatform().MessageF(mtype, "T_MCU raw %d\n", (int) tmcuraw);
-    reprap.GetPlatform().MessageF(mtype, "T_MCU cal %f\n", (double)(((110.0f - 30.0f)/(((float)(GET_ADC_CAL(TEMPSENSOR_CAL2_ADDR, TEMPSENSOR_CAL2_DEF))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF))))) * ((float)(tmcuraw / (float) (1 << (LegacyAnalogIn::AdcBits - 12))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF)))) + 30.0f)); 
-    reprap.GetPlatform().MessageF(mtype, "T_MCU calc %f\n\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
+    MessageF(mtype, "T_MCU raw %d\n", (int) tmcuraw);
+    MessageF(mtype, "T_MCU cal %f\n", (double)(((110.0f - 30.0f)/(((float)(GET_ADC_CAL(TEMPSENSOR_CAL2_ADDR, TEMPSENSOR_CAL2_DEF))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF))))) * ((float)(tmcuraw / (float) (1 << (LegacyAnalogIn::AdcBits - 12))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF)))) + 30.0f)); 
+    MessageF(mtype, "T_MCU calc %f\n\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
     tmcuraw = tmcuraw*vref/3.3f; 
-    reprap.GetPlatform().MessageF(mtype, "T_MCU raw (corrected) %d\n", (int) tmcuraw);
-    reprap.GetPlatform().MessageF(mtype, "T_MCU cal (corrected) %f\n", (double)(((110.0f - 30.0f)/(((float)(GET_ADC_CAL(TEMPSENSOR_CAL2_ADDR, TEMPSENSOR_CAL2_DEF))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF))))) * ((float)(tmcuraw / (float) (1 << (LegacyAnalogIn::AdcBits - 12))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF)))) + 30.0f)); 
-    reprap.GetPlatform().MessageF(mtype, "T_MCU calc (corrected) %f\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
-    reprap.GetPlatform().MessageF(mtype, "Device Id %x Revison Id %x CPUId r%dp%d \n", (unsigned)LL_DBGMCU_GetDeviceID(), (unsigned)LL_DBGMCU_GetRevisionID(),  
+    MessageF(mtype, "T_MCU raw (corrected) %d\n", (int) tmcuraw);
+    MessageF(mtype, "T_MCU cal (corrected) %f\n", (double)(((110.0f - 30.0f)/(((float)(GET_ADC_CAL(TEMPSENSOR_CAL2_ADDR, TEMPSENSOR_CAL2_DEF))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF))))) * ((float)(tmcuraw / (float) (1 << (LegacyAnalogIn::AdcBits - 12))) - ((float)(GET_ADC_CAL(TEMPSENSOR_CAL1_ADDR, TEMPSENSOR_CAL1_DEF)))) + 30.0f)); 
+    MessageF(mtype, "T_MCU calc (corrected) %f\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
+    MessageF(mtype, "Device Id %x Revison Id %x CPUId r%dp%d \n", (unsigned)LL_DBGMCU_GetDeviceID(), (unsigned)LL_DBGMCU_GetRevisionID(),  
                                             (unsigned)((SCB->CPUID >> 20) & 0x0F), (unsigned)(SCB->CPUID & 0x0F));
 }
 
@@ -1002,10 +991,11 @@ bool BoardConfig::LoadBoardConfigFromFile() noexcept
     FileStore * const configFile = reprap.GetPlatform().OpenSysFile(boardConfigFile, OpenMode::read);        //Open File
     if (configFile == nullptr)
     {
-        reprap.GetPlatform().MessageF(UsbMessage, "Configuration file %s not found\n", boardConfigFile );
+        MessageF(UsbMessage, "Configuration file %s not found\n", boardConfigFile );
+        FlushMessages();
         return false;
     }
-    reprap.GetPlatform().MessageF(UsbMessage, "Loading config from %s...\n", boardConfigFile );
+    MessageF(UsbMessage, "Loading config from %s...\n", boardConfigFile );
 
     //First find the board entry to load the correct PinTable for looking up Pin by name
     BoardConfig::GetConfigKeys(configFile, boardEntryConfig, (size_t) ARRAY_SIZE(boardEntryConfig));
@@ -1020,6 +1010,7 @@ bool BoardConfig::LoadBoardConfigFromFile() noexcept
     configFile->Seek(0); //go back to beginning of config file
     BoardConfig::GetConfigKeys(configFile, boardConfigs, (size_t) ARRAY_SIZE(boardConfigs));
     configFile->Close();
+    FlushMessages();
     return true;
 }
 
@@ -1035,15 +1026,13 @@ bool BoardConfig::LoadBoardConfigFromSBC() noexcept
     //debugPrintf("Num smart drivers after %d\n", totalSmartDrivers);
     newConfig.getConfiguration();
     if (oldConfig.isEqual(newConfig))
-        reprap.GetPlatform().MessageF(UsbMessage, "Configurations match\n");
+        MessageF(UsbMessage, "Configurations match\n");
     else
     {
         // store new config into memory that will survive a reboot
         newConfig.saveToBackupRAM();
-        reprap.GetPlatform().MessageF(UsbMessage, "Configurations do not match rebooting to load new settings\n");
-        uint32_t start = millis();
-        while(reprap.GetPlatform().FlushMessages() && (millis() - start < 5000))
-            ;
+        MessageF(UsbMessage, "Configurations do not match rebooting to load new settings\n");
+        FlushMessages();
         delay(1000);
         SoftwareReset(SoftwareResetReason::erase); // Reboot
     }
