@@ -1,3 +1,8 @@
+Version 3.4rc1_1
+================
+* Duet 3D 3.4rc1
+* Board fixes from v3.3.0_16
+
 Version 3.4beta7+7_1
 ====================
 * Duet 3D 3.4beta7+7
@@ -47,6 +52,11 @@ Version 3.4beta2_2
 ==================
 * Improve SBC robustness when connection is dropped and reconnects
 * Pick up changes from 3.3.0_7
+
+Version 3.3.0_16
+================
+* STM32F4 Fix Fly E3 Pro V2 Pins
+* STM32F4 Added updated BTT SKR V2 signature
 
 Version 3.3.0_15
 ================

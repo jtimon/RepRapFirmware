@@ -669,8 +669,8 @@ constexpr PinEntry PinTable_FLY_E3_PROV2[] =
     {PB_7,  "fan3" },
 
     //EXP1
-    {PE_12, "beep"},
-    {PE_11, "btnenc"},
+    {PE_11, "beep"},
+    {PE_12, "btnenc"},
     {PE_10, "btnen1"},
     {PE_9, "btnen2"},
     {PE_8, "lcdd4"},
