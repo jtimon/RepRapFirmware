@@ -3,6 +3,7 @@ Version 3.3.0_16
 * STM32F4 Fix Fly E3 Pro V2 Pins
 * STM32F4 Added updated BTT SKR V2 signature
 * STM32F4 Improved error handling for SDIO SD card interface
+* STM32F4 Initial support for Fly Gemini V1.1
 
 
 Version 3.3.0_15
