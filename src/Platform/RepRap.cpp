@@ -2290,10 +2290,12 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 // It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
 // 'encapsulateThumbnail' defines whether the thumbnail shall be encapsulated as a "thumbnail" property of the root object
-OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset, bool encapsulateThumbnail) noexcept
+OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset, bool forM31point1) noexcept
 {
-	constexpr unsigned int ThumbnailMaxDataSize = 1024;
-	static_assert(ThumbnailMaxDataSize % 4 == 0, "must be a multiple of to guarantee base64 alignment");
+	constexpr unsigned int ThumbnailMaxDataSizeM31 = 1024;			// small enough for PanelDue to buffer
+	constexpr unsigned int ThumbnailMaxDataSizeRr = 2600;			// about two TCP messages
+	static_assert(ThumbnailMaxDataSizeM31 % 4 == 0, "must be a multiple of to guarantee base64 alignment");
+	static_assert(ThumbnailMaxDataSizeRr % 4 == 0, "must be a multiple of to guarantee base64 alignment");
 
 	// Need something to write to...
 	OutputBuffer *response;
@@ -2302,7 +2304,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		return nullptr;
 	}
 
-	if (encapsulateThumbnail)
+	if (forM31point1)
 	{
 		response->cat("{\"thumbnail\":");
 	}
@@ -2316,7 +2318,8 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		{
 			response->cat("\"data\":\"");
 
-			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < ThumbnailMaxDataSize; )
+			const unsigned int thumbnailMaxDataSize = (forM31point1) ? ThumbnailMaxDataSizeM31 : ThumbnailMaxDataSizeRr;
+			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
 				char lineBuffer[GCODE_LENGTH];
@@ -2355,7 +2358,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 				const unsigned int charsSkipped = p - lineBuffer;
 				const unsigned int charsAvailable = charsRead - charsSkipped;
 				unsigned int charsWrittenFromThisLine;
-				if (charsAvailable <= ThumbnailMaxDataSize - charsWrittenThisCall)
+				if (charsAvailable <= thumbnailMaxDataSize - charsWrittenThisCall)
 				{
 					// Write all the data in this line
 					charsWrittenFromThisLine = charsAvailable;
@@ -2363,7 +2366,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 				else
 				{
 					// Write just enough characters to fill the buffer
-					charsWrittenFromThisLine = ThumbnailMaxDataSize - charsWrittenThisCall;
+					charsWrittenFromThisLine = thumbnailMaxDataSize - charsWrittenThisCall;
 					offset = posOld + charsSkipped + charsWrittenFromThisLine;
 				}
 
@@ -2381,7 +2384,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		err = 1;
 	}
 
-	response->catf(encapsulateThumbnail ? "\"err\":%u}}\n" : "\"err\":%u}\n", err);
+	response->catf(forM31point1 ? "\"err\":%u}}\n" : "\"err\":%u}\n", err);
 	return response;
 }
 
