@@ -242,7 +242,7 @@ void PrintBoards(MessageType mtype) noexcept
         for(size_t j=0; j < ARRAY_SIZE(LPC_Boards[0].boardName); j++)
             if(LPC_Boards[i].boardName[j])
             {
-                reprap.GetPlatform().MessageF(mtype, "Board %d.%d: %s Signatures:", i, j, LPC_Boards[i].boardName[j]);
+                reprap.GetPlatform().MessageF(mtype, "Board %d.%d: %s iomode %d Signatures:", i, j, LPC_Boards[i].boardName[j], LPC_Boards[i].defaults.SDConfig);
                 for (size_t k = 0; k < MaxSignatures; k++)
                     if (LPC_Boards[i].defaults.signatures[k] != 0)
                         reprap.GetPlatform().MessageF(mtype, " 0x%x", (unsigned)LPC_Boards[i].defaults.signatures[k]);

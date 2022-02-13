@@ -34,9 +34,9 @@
 #include "stm32f4xx_ll_system.h"
 #include "core_cm4.h"
 #endif
-extern char _sccmram;						// defined in linker script
-extern char _eccmram;					// defined in linker script
 
+extern char _sccmram;					// defined in linker script
+extern char _eccmram;					// defined in linker script
 static constexpr char boardConfigFile[] = "board.txt";
 
 //Single entry for Board name
@@ -390,34 +390,23 @@ static void UnknownHardware(uint32_t sig)
     }
 }
 
+
+static const char *GetBootloaderString()
+{
+    const uint32_t *BootVectors = (const uint32_t *)0x8000000;
+    const char *BootloaderString = (const char *) BootVectors[8];
+    // make sure it looks valid...
+    if (BootloaderString == nullptr)
+        return nullptr;
+    if (Strnlen(BootloaderString, 128) >= 128)
+        return nullptr;
+    if (strstr(BootloaderString, " version ") == nullptr)
+        return nullptr;
+    return BootloaderString;
+}
+
 // Determine how to access the SD card
 static uint32_t signature;
-
-// Attempt to identify the board based upon the hardware we can see.
-// Note that this may not be correct, but it should be sufficient to allow
-// us to either connect to an SBC or mount an SD card from which we can get
-// an actual board configuration.
-static uint32_t IdentifyBoard()
-{
-    // We use the CRC of part of the bootloader to id the board
-    signature = crc32((char *)0x8000000, 8192);
-    // Try to find a matching board we accept the first match
-    for(uint32_t i = 0; i < NumBoardEntries; i++)
-        for(uint32_t j = 0; j < MaxSignatures; j++)
-            if (LPC_Boards[i].defaults.signatures[j] == signature)
-            {
-                debugPrintf("Sig match 0x%x %d board %s\n", (unsigned) signature, (int)i, LPC_Boards[i].boardName[0]);
-                SetBoard(LPC_Boards[i].boardName[0]);
-                return i;
-            }
-    debugPrintf("Board signature %x not found\n", (unsigned)signature);
-#if STM32H7
-    return 1;
-#endif
-    SetBoard("generic");
-    return UNKNOWN_BOARD;
-}
-            
 typedef struct {
     SSPChannel device;
     Pin pins[6];
@@ -432,6 +421,77 @@ static constexpr SDCardConfig SDCardConfigs[] = {
     {SSP3, {PC_10, PC_11, PC_12, PC_9, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // MKS?
     {SSP3, {PC_10, PC_11, PC_12, PA_15, NoPin, NoPin}, {0x602, 0x602, 0x602, 0x1}}, // BTT BX
 };
+
+static bool CheckPinConfig(uint32_t config)
+{
+    // check to see if the pins are currently set in the expected state
+    // The bootloader on many boards will leave the pins configured after
+    // accessing the SD card.
+    const SDCardConfig *conf = &SDCardConfigs[config];
+    for(size_t i = 0; i < ARRAY_SIZE(conf->pins); i++)
+        if (conf->pins[i] != NoPin && pin_get_function(conf->pins[i]) != conf->mode[i])
+            return false;
+    return true;
+}
+
+// Attempt to identify the board based upon the hardware we can see.
+// Note that this may not be correct, but it should be sufficient to allow
+// us to either connect to an SBC or mount an SD card from which we can get
+// an actual board configuration.
+static uint32_t IdentifyBoard()
+{
+    // We use the CRC of part of the bootloader to id the board
+    signature = crc32((char *)0x8000000, 8192);
+    // Try to find a matching board we accept the first match
+    for(uint32_t i = 0; i < NumBoardEntries; i++)
+        for(uint32_t j = 0; j < MaxSignatures; j++)
+            if (LPC_Boards[i].defaults.signatures[j] == signature)
+            {
+                debugPrintf("Sig match 0x%x board %d %s\n", (unsigned) signature, (int)i, LPC_Boards[i].boardName[0]);
+                SetBoard(LPC_Boards[i].boardName[0]);
+                return i;
+            }
+    debugPrintf("Board signature %x not found\n", (unsigned)signature);
+    // Look to see if it is our bootloader, if so we can use the IOMode to get to the SD card
+    const char *bootstr = GetBootloaderString();
+    uint32_t conf = SD_UNKNOWN;
+    if (bootstr != nullptr)
+    {
+        debugPrintf("Found bootloader string \"%s\"\n", bootstr);
+        char *iomodestr = strstr(bootstr, "IOMode:");
+        if (iomodestr != nullptr)
+        {
+            conf = (uint32_t)StrToI32(iomodestr+7);
+            debugPrintf("Got iomode %d\n", (unsigned)conf);
+        }
+    }
+    if (conf == SD_UNKNOWN)
+    {
+        // failed to find matching signature, see if the bootloader has left things configured
+        for(uint32_t i = 0; i < ARRAY_SIZE(SDCardConfigs); i++)
+            if (CheckPinConfig(i))
+            {
+                conf = i;
+                debugPrintf("loader match, iomode %d\n", (int)i);
+            }
+    }
+    // If we now have an SD mode use it to pick a board (we choose the first match)
+    if (conf != SD_UNKNOWN)
+    {
+        for(uint32_t i = 0; i < NumBoardEntries; i++)
+        {
+            if (LPC_Boards[i].defaults.SDConfig == conf)
+            {
+                debugPrintf("iomode match board %d %s\n", (int)i, LPC_Boards[i].boardName[0]);
+                SetBoard(LPC_Boards[i].boardName[0]);
+                return i;
+            }
+        }
+    }
+    // Unable to identify the board
+    SetBoard("generic");
+    return UNKNOWN_BOARD;
+}
 
 static bool TryConfig(uint32_t config, bool mount)
 {
@@ -467,32 +527,9 @@ static bool TryConfig(uint32_t config, bool mount)
     return false;
 }    
 
-static bool CheckPinConfig(uint32_t config)
-{
-    // check to see if the pins are currently set in the expected state
-    // The bootloader on many boards will leave the pins configured after
-    // accessing the SD card.
-    const SDCardConfig *conf = &SDCardConfigs[config];
-    for(size_t i = 0; i < ARRAY_SIZE(conf->pins); i++)
-        if (conf->pins[i] != NoPin && pin_get_function(conf->pins[i]) != conf->mode[i])
-            return false;
-    return true;
-}
-
 static SSPChannel InitSDCard(uint32_t boardId, bool mount, bool needed)
 {
-    int conf = SD_UNKNOWN;
-    conf = LPC_Boards[boardId].defaults.SDConfig;
-    if (conf == SD_UNKNOWN)
-    {
-        // failed to find matching signature, see if the bootloader has left things configured
-        for(uint32_t i = 0; i < ARRAY_SIZE(SDCardConfigs); i++)
-            if (CheckPinConfig(i))
-            {
-                conf = i;
-                debugPrintf("loader match %d\n", (int)i);
-            }
-    }
+    int conf = LPC_Boards[boardId].defaults.SDConfig;
 
     if (conf == SD_UNKNOWN)
     {
@@ -794,29 +831,19 @@ void BoardConfig::PrintValue(MessageType mtype, configValueType configType, void
     }
 }
 
-
 //Information printed by M122 P200
 void BoardConfig::Diagnostics(MessageType mtype) noexcept
 {
     MessageF(mtype, "=== Diagnostics ===\n");
-
-#ifdef DUET_NG
-# if HAS_SBC_INTERFACE
-	MessageF(mtype, "%s version %s running on %s (%s mode)", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
-						(reprap.UsingSbcInterface()) ? "SBC" : "standalone");
-# else
-	MessageF(mtype, "%s version %s running on %s", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
-# endif
-	const char* const expansionName = DuetExpansion::GetExpansionBoardName();
-	MessageF(mtype, (expansionName == nullptr) ? "\n" : " + %s\n", expansionName);
-#elif LPC17xx || STM32F4
-	MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, reprap.GetPlatform().GetElectronicsString(), (int)SystemCoreClock/1000000);
-#elif HAS_SBC_INTERFACE
-	MessageF(mtype, "%s version %s running on %s (%s mode)\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
-						(reprap.UsingSbcInterface()) ? "SBC" : "standalone");
+#if HAS_SBC_INTERFACE
+	MessageF(mtype, "%s version %s running on %s (%s mode) at %dMhz\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString(),
+						(reprap.UsingSbcInterface()) ? "SBC" : "standalone", (int)SystemCoreClock/1000000);
 #else
-	MessageF(mtype, "%s version %s running on %s\n", FIRMWARE_NAME, VERSION, reprap.GetPlatform().GetElectronicsString());
+	MessageF(mtype, "%s (%s) version %s running on %s at %dMhz\n", FIRMWARE_NAME, lpcBoardName, VERSION, reprap.GetPlatform().GetElectronicsString(), (int)SystemCoreClock/1000000);
 #endif
+    const char *Bootloader = GetBootloaderString();
+    MessageF(mtype, "Bootloader: %s\n", Bootloader == nullptr ? "Unknown" : Bootloader);
+
 
     MessageF(mtype, "\n== Supported boards ==\n");
     PrintBoards(mtype);
