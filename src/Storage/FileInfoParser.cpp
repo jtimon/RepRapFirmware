@@ -956,7 +956,7 @@ bool FileInfoParser::FindSimulatedTime(const char* bufp) noexcept
 // The overlap is small enough that we can discount the possibility of finding more than one thumbnail header in the overlap area.
 // Return true if we have no room to store further thumbnails, or we are certain that we have found all the thumbnails in the file.
 // Thumbnail data is preceded by comment lines of the following form:
-//	; QOI thumbnail begin 32x32 2140
+//	; thumbnail_QOI begin 32x32 2140
 // or
 //	; thumbnail begin 32x32 2140
 bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bufferStartFilePosition) noexcept
@@ -974,23 +974,30 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 
 	constexpr const char * PngThumbnailBegin = "; thumbnail begin ";
 	constexpr const char * QoiThumbnailBegin = "; thumbnail_QOI begin ";
+	constexpr const char * JpegThumbnailBegin = "; thumbnail_JPG begin ";
 	const char *_ecv_array pos = bufp;
 	while (true)
 	{
 		const char *_ecv_array qoiPos = strstr(pos, QoiThumbnailBegin);
 		const char *_ecv_array pngPos = strstr(pos, PngThumbnailBegin);
+		const char *_ecv_array jpegPos = strstr(pos, JpegThumbnailBegin);
 		GCodeFileInfo::ThumbnailInfo::Format fmt(GCodeFileInfo::ThumbnailInfo::Format::qoi);
-		if (qoiPos != nullptr && (pngPos == nullptr || qoiPos < pngPos))
+		if (qoiPos != nullptr && (pngPos == nullptr || qoiPos < pngPos) && (jpegPos == nullptr || qoiPos < jpegPos))
 		{
 			// found a QOI thumbnail
 			pos = qoiPos + strlen(QoiThumbnailBegin);
-			fmt = GCodeFileInfo::ThumbnailInfo::Format::qoi;
 		}
-		else if (pngPos != nullptr)
+		else if (pngPos != nullptr && (jpegPos == nullptr || pngPos < jpegPos))
 		{
 			// found a PNG thumbnail
 			pos = pngPos + strlen(PngThumbnailBegin);
 			fmt = GCodeFileInfo::ThumbnailInfo::Format::png;
+		}
+		else if (jpegPos != nullptr)
+		{
+			// found a JPEG thumbnail
+			pos = jpegPos + strlen(JpegThumbnailBegin);
+			fmt = GCodeFileInfo::ThumbnailInfo::Format::jpeg;
 		}
 		else
 		{
