@@ -113,7 +113,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "rotation",				OBJECT_MODEL_FUNC(self, 44),																	ObjectModelEntryFlags::none },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 3),								ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),					ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
@@ -764,6 +764,8 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 	{
 		zShift = 0.0;
 	}
+	float minError, maxError;
+	(void)heightMap.GetStatistics(latestMeshDeviation, minError, maxError);
 	reprap.MoveUpdated();
 	return err;
 }
@@ -1165,9 +1167,10 @@ void Move::SetInitialCalibrationDeviation(const Deviation& d) noexcept
 	reprap.MoveUpdated();
 }
 
+// Set the mesh deviation. Caller must call MoveUpdated() after calling this. We don't do that here because the caller may change Move in other ways first.
 void Move::SetLatestMeshDeviation(const Deviation& d) noexcept
 {
-	latestMeshDeviation = d; reprap.MoveUpdated();
+	latestMeshDeviation = d;
 }
 
 const char *Move::GetCompensationTypeString() const noexcept
