@@ -764,6 +764,8 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 	{
 		zShift = 0.0;
 	}
+	float minError, maxError;
+	(void)heightMap.GetStatistics(latestMeshDeviation, minError, maxError);
 	reprap.MoveUpdated();
 	return err;
 }
@@ -1165,9 +1167,10 @@ void Move::SetInitialCalibrationDeviation(const Deviation& d) noexcept
 	reprap.MoveUpdated();
 }
 
+// Set the mesh deviation. Caller must call MoveUpdated() after calling this. We don't do that here because the caller may change Move in other ways first.
 void Move::SetLatestMeshDeviation(const Deviation& d) noexcept
 {
-	latestMeshDeviation = d; reprap.MoveUpdated();
+	latestMeshDeviation = d;
 }
 
 const char *Move::GetCompensationTypeString() const noexcept

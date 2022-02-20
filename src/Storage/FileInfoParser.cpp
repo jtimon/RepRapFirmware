@@ -956,7 +956,7 @@ bool FileInfoParser::FindSimulatedTime(const char* bufp) noexcept
 // The overlap is small enough that we can discount the possibility of finding more than one thumbnail header in the overlap area.
 // Return true if we have no room to store further thumbnails, or we are certain that we have found all the thumbnails in the file.
 // Thumbnail data is preceded by comment lines of the following form:
-//	; QOI thumbnail begin 32x32 2140
+//	; thumbnail_QOI begin 32x32 2140
 // or
 //	; thumbnail begin 32x32 2140
 bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bufferStartFilePosition) noexcept
@@ -972,29 +972,42 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 		}
 	}
 
-	constexpr const char * PngThumbnailBegin = "; thumbnail begin ";
-	constexpr const char * QoiThumbnailBegin = "; thumbnail_QOI begin ";
+	constexpr const char *_ecv_array ThumbnailText = "; thumbnail";
+	constexpr const char *_ecv_array QoiBeginText = "_QOI begin ";
+	constexpr const char *_ecv_array JpegBeginText = "_JPG begin ";
+	constexpr const char *_ecv_array PngBeginText = " begin ";
+
 	const char *_ecv_array pos = bufp;
 	while (true)
 	{
-		const char *_ecv_array qoiPos = strstr(pos, QoiThumbnailBegin);
-		const char *_ecv_array pngPos = strstr(pos, PngThumbnailBegin);
+		pos = strstr(pos, ThumbnailText);
+		if (pos == nullptr)
+		{
+			return false;
+		}
+
+		pos += strlen(ThumbnailText);
 		GCodeFileInfo::ThumbnailInfo::Format fmt(GCodeFileInfo::ThumbnailInfo::Format::qoi);
-		if (qoiPos != nullptr && (pngPos == nullptr || qoiPos < pngPos))
+		if (StringStartsWith(pos, QoiBeginText))
 		{
 			// found a QOI thumbnail
-			pos = qoiPos + strlen(QoiThumbnailBegin);
-			fmt = GCodeFileInfo::ThumbnailInfo::Format::qoi;
+			pos += strlen(QoiBeginText);
 		}
-		else if (pngPos != nullptr)
+		else if (StringStartsWith(pos, PngBeginText))
 		{
 			// found a PNG thumbnail
-			pos = pngPos + strlen(PngThumbnailBegin);
+			pos += strlen(PngBeginText);
 			fmt = GCodeFileInfo::ThumbnailInfo::Format::png;
+		}
+		else if (StringStartsWith(pos, JpegBeginText))
+		{
+			// found a JPEG thumbnail
+			pos += strlen(JpegBeginText);
+			fmt = GCodeFileInfo::ThumbnailInfo::Format::jpeg;
 		}
 		else
 		{
-			return false;		// no more thumbnails in this buffer, but we have room to save more thumbnail details
+			continue;		// unrecognised format, so look for another one
 		}
 
 		// Store this thumbnail data
