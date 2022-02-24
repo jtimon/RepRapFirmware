@@ -1,3 +1,8 @@
+Version 3.4rc2_1
+================
+* Duet3d 3.4rc2
+* Retry SDIO initialization if switch to wide mode fails
+
 Version 3.4rc1_1
 ================
 * Duet 3D 3.4rc1
