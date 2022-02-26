@@ -333,7 +333,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
-	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), (int32_t)self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
+	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
 	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
 #if SUPPORT_LASER
@@ -2349,7 +2349,10 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 				}
 
 				// Check for end of thumbnail. We'd like to use a regex here but we can't afford the flash space of a regex parser in some build configurations.
-				if (StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end")|| StringStartsWith(p, "thumbnail_JPG end"))
+				if (   StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end") || StringStartsWith(p, "thumbnail_JPG end")
+					// Also stop if the base64 data has ended, to avoid sending to the end of file if the end marker is missing. We don't want to take too long so just look for space.
+					|| strchr(p, ' ') != nullptr
+				   )
 				{
 					offset = 0;
 					break;
