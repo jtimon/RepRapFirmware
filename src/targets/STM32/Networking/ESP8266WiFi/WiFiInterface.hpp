@@ -48,7 +48,7 @@ void ESP_SPI_HANDLER(HardwareSPI *spiDevice) noexcept
 void WiFiInterface::spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
 {
     //Find the largest transfer size
-    const uint32_t dsize = MAX(dataOutSize + sizeof(MessageHeaderSamToEsp), dataInSize + sizeof(MessageHeaderEspToSam));
+    const uint32_t dsize = max<uint32_t>(dataOutSize + sizeof(MessageHeaderSamToEsp), dataInSize + sizeof(MessageHeaderEspToSam));
     // clear any previous transaction
     spiDevice->flushRx();
     dmaActive = true;
