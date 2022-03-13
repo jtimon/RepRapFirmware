@@ -1390,7 +1390,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	AppendFloatArray(response, "extr", GetExtrudersInUse(), [this](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), currentTool); }, 1);
 
 	// Current speeds
-	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)InverseConvertSpeedToMmPerSec(move->GetRequestedSpeed()), (double)InverseConvertSpeedToMmPerSec(move->GetTopSpeed()));
+	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
 
 	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());
@@ -2313,7 +2313,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
-				char lineBuffer[GCODE_LENGTH];
+				char lineBuffer[MaxGCodeLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
 				if (charsRead <= 0)
 				{
@@ -2472,7 +2472,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 								((index == 0) ? '[' : ','), inf.height, inf.width, inf.format.ToString(), inf.offset, inf.size);
 				++index;
 			}
-			while (index < GCodeFileInfo::MaxThumbnails && info.thumbnails[index].IsValid());
+			while (index < MaxThumbnails && info.thumbnails[index].IsValid());
 			response->cat(']');
 		}
 
