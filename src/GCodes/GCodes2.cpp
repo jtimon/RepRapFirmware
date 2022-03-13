@@ -861,7 +861,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (
 #if HAS_SBC_INTERFACE
 						reprap.UsingSbcInterface()
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						||
 # endif
 #endif
@@ -1520,7 +1520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// 2020-02-04 Don't unlock movement if it was already locked, e.g. because M109 was used in a macro
 					if (!movementWasLocked)
 					{
-						UnlockMovement(gb);								// allow babystepping and pausing while heating
+						UnlockMovement(gb);							// allow babystepping and pausing while heating
 					}
 				}
 
@@ -1827,7 +1827,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 118:	// Echo message on host
 				{
 					gb.MustSee('S');
-					String<GCODE_LENGTH> message;
+					String<MaxGCodeLength> message;
 					gb.GetQuotedString(message.GetRef());
 
 					MessageType type = GenericMessage;
@@ -3782,6 +3782,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 
+#if SUPPORT_LINEAR_DELTA
 			case 665: // Set delta configuration
 				if (!LockMovementAndWaitForStandstill(gb))
 				{
@@ -3834,7 +3835,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = GetGCodeResultFromError(error);
 				}
 				break;
-
+#endif
 			case 667: // Set CoreXY mode
 				if (!LockMovementAndWaitForStandstill(gb))
 				{

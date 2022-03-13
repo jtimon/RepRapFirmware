@@ -69,7 +69,11 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_VOLTAGE_MONITOR
 	, powerFailScript(nullptr)
 #endif
-	, isFlashing(false), isFlashingPanelDue(false), lastWarningMillis(0)
+	, isFlashing(false),
+#if SUPPORT_PANELDUE_FLASH
+	isFlashingPanelDue(false),
+#endif
+	lastWarningMillis(0)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
@@ -300,7 +304,9 @@ void GCodes::Reset() noexcept
 	moveState.filePos = noFilePosition;
 	firmwareUpdateModuleMap.Clear();
 	isFlashing = false;
+#if SUPPORT_PANELDUE_FLASH
 	isFlashingPanelDue = false;
+#endif
 	currentZProbeNumber = 0;
 
 	buildObjects.Init();
@@ -449,7 +455,7 @@ void GCodes::Spin() noexcept
 		{
 			nextGcodeSource = 0;
 		}
-		if (gbp != nullptr && (gbp != auxGCode || !isFlashingPanelDue))		// skip auxGCode while flashing PanelDue is in progress
+		if (gbp != nullptr && (gbp != auxGCode || !IsFlashingPanelDue()))	// skip auxGCode while flashing PanelDue is in progress
 		{
 			if (SpinGCodeBuffer(*gbp))										// if we did something useful
 			{
@@ -3620,9 +3626,18 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	}
 #endif
 
-	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
-	// Also check that this response was triggered by a gcode
-	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode || gb.IsDoingFileMacro()))
+	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued, or to PanelDue
+	if (   reply[0] == 0
+		&& (   &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode
+#if HAS_AUX_DEVICES
+			|| (&gb == auxGCode && !platform.IsAuxRaw(0))
+# ifdef SERIAL_AUX2_DEVICE
+			|| (&gb == aux2GCode && !platform.IsAuxRaw(1))
+# endif
+#endif
+			|| gb.IsDoingFileMacro()
+		   )
+	   )
 	{
 		return;
 	}
@@ -3636,8 +3651,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		// In RepRapFirmware compatibility mode we suppress empty responses in most cases.
-		// However, DWC expects a reply from every code, so we must even send empty responses
+		// DWC expects a reply from every code, so we must even send empty responses
 		if (reply[0] != 0 || gb.IsLastCommand() || &gb == httpGCode)
 		{
 			platform.MessageF(mt, "%s\n", reply);
@@ -4629,17 +4643,9 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r) noexcept
 
 	if (resourceOwners[r] != &gb)
 	{
-		if (resourceOwners[r] != nullptr)
-		{
-			GCodeMachineState *m = &(resourceOwners[r]->LatestMachineState());
-			do
-			{
-				m->lockedResources.ClearBit(r);
-				m = m->GetPrevious();
-			}
-			while (m != nullptr);
-		}
+		// Note, we now leave the resource bit set in the original owning GCodeBuffer machine state
 		resourceOwners[r] = &gb;
+		gb.LatestMachineState().lockedResources.SetBit(r);
 	}
 }
 
@@ -4674,12 +4680,8 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 
 	if (resourceOwners[r] == &gb)
 	{
-		GCodeMachineState * mc = &gb.LatestMachineState();
-		do
-		{
-			mc->lockedResources.ClearBit(r);
-			mc = mc->GetPrevious();
-		} while (mc != nullptr);
+		// Note, we leave the bit set in previous stack levels! This is needed e.g. to allow M291 blocking messages to be used in homing files.
+		gb.LatestMachineState().lockedResources.ClearBit(r);
 		resourceOwners[r] = nullptr;
 	}
 }

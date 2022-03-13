@@ -315,7 +315,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
-	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
+	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																												ObjectModelEntryFlags::none },
@@ -826,12 +826,14 @@ void Platform::Init() noexcept
 
 	extrusionAncilliaryPwmValue = 0.0;
 
+#if SUPPORT_SPI_SENSORS
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
 	for (Pin p : SpiTempSensorCsPins)
 	{
 		pinMode(p, INPUT_PULLUP);
 	}
+#endif
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
 	// Enable the pullup resistor, with luck this will make it float high instead.
@@ -1313,7 +1315,7 @@ void Platform::Spin() noexcept
 					}
 					else if (logOnStallDrivers.Intersects(mask))
 					{
-						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
+						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
 					}
 				}
 # endif
@@ -1905,13 +1907,12 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
 		String<StringLength256> driverStatus;
-		driverStatus.printf("Driver %u: pos %" PRIi32, drive, reprap.GetMove().GetEndPoint(drive));
+		driverStatus.printf("Driver %u: ", drive);
 #ifdef DUET3_MB6XD
-		driverStatus.cat((HasDriverError(drive)) ? " error" : " ok");
+		driverStatus.cat((HasDriverError(drive)) ? "error" : "ok");
 #elif HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
-			driverStatus.cat(", ");
 			const StandardDriverStatus status = SmartDrivers::GetStatus(drive);
 			status.AppendText(driverStatus.GetRef(), 0);
 			if (!status.notPresent)
@@ -2941,11 +2942,10 @@ GCodeResult Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPerc
 #ifdef DUET3_MB6XD
 
 // Fetch the worst (longest) timings of any driver, set up the step pulse width timer, and convert the other timings from microseconds to step clocks
-void Platform::UpdateDriverTimings()
+void Platform::UpdateDriverTimings() noexcept
 {
-	float worstTimings[4];
-	memcpyf(worstTimings, driverTimingMicroseconds[0], 4);
-	for (size_t driver = 1; driver < NumDirectDrivers; ++driver)
+	float worstTimings[4] = { 0.1, 0.1, 0.0, 0.0 };					// minimum 100ns step high/step low time, zero direction setup/hold time
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		for (size_t i = 0; i < 4; ++i)
 		{
@@ -2973,6 +2973,17 @@ void Platform::UpdateDriverTimings()
 	directionHoldClocksFromLeadingEdge = MicrosecondsToStepClocks(worstTimings[3] + actualStepPulseMicroseconds);
 //DEBUG
 //	debugPrintf("Clocks: %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", stepPulseMinimumPeriodClocks, directionSetupClocks, directionHoldClocksFromLeadingEdge);
+}
+
+void Platform::GetActualDriverTimings(float timings[4]) noexcept
+{
+	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
+	constexpr float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
+	constexpr float StepClocksToMicroseconds = 1.0e6/(float)StepClockRate;
+	timings[0] = (float)STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC * MicrosecondsPerStepGateClock;
+	timings[1] = stepPulseMinimumPeriodClocks * StepClocksToMicroseconds - timings[0];
+	timings[2] = directionSetupClocks * StepClocksToMicroseconds;
+	timings[3] = directionHoldClocksFromLeadingEdge * StepClocksToMicroseconds - timings[0];
 }
 
 #endif
@@ -3773,7 +3784,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 			{
 				filename.copy(DEFAULT_LOG_FILE);
 			}
-			logger->Start(realTime, filename);
+			return logger->Start(realTime, filename, reply);
 		}
 	}
 	else

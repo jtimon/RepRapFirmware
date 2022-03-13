@@ -215,6 +215,7 @@ void SbcInterface::ExchangeData() noexcept
 
 		// Reset the controller
 		case SbcRequest::Reset:
+			reprap.EmergencyStop();							// turn off heaters and motors, tell expansion boards to reset
 			SoftwareReset(SoftwareResetReason::user);
 			break;
 
@@ -504,7 +505,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Evaluate an expression
 		case SbcRequest::EvaluateExpression:
 		{
-			String<GCODE_LENGTH> expression;
+			String<MaxGCodeLength> expression;
 			const GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expression.GetRef());
 			if (channel.IsValid())
 			{
@@ -646,7 +647,7 @@ void SbcInterface::ExchangeData() noexcept
 		{
 			bool createVariable;
 			String<MaxVariableNameLength> varName;
-			String<GCODE_LENGTH> expression;
+			String<MaxGCodeLength> expression;
 			const GCodeChannel channel = transfer.ReadSetVariable(createVariable, varName.GetRef(), expression.GetRef());
 
 			// Make sure we can access the gb safely...
@@ -1886,6 +1887,7 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 				if (codeHeader->channel == channel.RawValue())
 				{
 					bufHeader->isPending = false;
+					sendBufferUpdate = true;
 				}
 				else
 				{
@@ -1896,7 +1898,6 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 
 			if (updateRxPointer)
 			{
-				sendBufferUpdate = true;
 				if (readPointer == txPointer && txEnd == 0)
 				{
 					// Buffer is empty again, reset the pointers
