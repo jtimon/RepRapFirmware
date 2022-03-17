@@ -30,9 +30,6 @@
 
 const uint8_t memPattern = 0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
 
-extern char _end;						// defined in linker script
-extern char _estack;					// defined in linker script
-
 #if LPC17xx
 extern void *CoreAllocPermanent(size_t sz, std::align_val_t align) noexcept;
 #else
@@ -255,7 +252,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 // Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
 static ptrdiff_t GetHandlerFreeStack() noexcept
 {
-	const char * const ramend = &_estack;
+	const char * const ramend = (const char*)&_estack;
 	const char * stack_lwm = sysStackLimit;
 	while (stack_lwm < ramend && *stack_lwm == memPattern)
 	{
