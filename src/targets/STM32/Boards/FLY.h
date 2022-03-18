@@ -122,7 +122,7 @@ constexpr PinEntry PinTable_FLY_F407ZG[] =
     {PC_15, "zmax,zstopmax"},
     {PC_14, "z3"},
     {PA_3, "dljc"},
-	
+    
     //Heaters and Fans (Big and Small Mosfets}
     {PE_2,  "bed,hbed" },
     {PF_7,  "e0heat,he0" },
@@ -143,36 +143,36 @@ constexpr PinEntry PinTable_FLY_F407ZG[] =
     {PE_11,  "servo0" },
 
     //EXP1
-    {PB_10, "PB10"},
-    {PE_14, "PE14"},
-    {PE_10, "PE10"},
-    {PE_8, "PE8"},
-    {PE_15, "PE15"},
-    {PE_12, "PE12"},
-    {PE_9, "PE9"},
-    {PE_7, "PE7"},
+    {PB_10, "BEEP"},
+    {PE_14, "LCD_EN"},
+    {PE_10, "LCD_D4"},
+    {PE_8, "LCD_D6"},
+    {PE_15, "BTN_ENC"},
+    {PE_12, "LCD_RS"},
+    {PE_9, "LCD_D5"},
+    {PE_7, "LCD_D7"},
 
     //EXP2
-    {PB_14, "PB14"},
-    {PB_13, "PB13"},
-    {PC_5, "PC5"},
-    {PC_4, "PC4"},
-    {PF_11, "PF11"},
-    {PB_15, "PB15"},
-    {PB_2, "PB2"},
+    {PB_14, "LCD_MISO"},
+    {PB_13, "LCD_SCK"},
+    {PC_5, "BTN_EN1"},
+    {PC_4, "BTN_EN2"},
+    {PF_11, "LCD_SS"},
+    {PB_15, "LCD_MOSI"},
+    {PB_2, "LCD_CD"},
 
-	//SD
-	{PC_13, "SDCD"},
-	{PC_9, "SDD1"},
-	{PC_8, "SDD0"},
-	{PC_12, "SDSCK"},
-	{PD_2, "SDCMD"},
-	{PC_11, "SDD3"},
-	{PC_10, "SDD2"},
+    //SD
+    {PC_13, "SDCD"},
+    {PC_9, "SDD1"},
+    {PC_8, "SDD0"},
+    {PC_12, "SDSCK"},
+    {PD_2, "SDCMD"},
+    {PC_11, "SDD3"},
+    {PC_10, "SDD2"},
 
-	// UART
-	{PA_9, "TX1"},
-	{PA_10, "RX1"},
+    // UART
+    {PA_9, "TX1"},
+    {PA_10, "RX1"},
 };
 
 constexpr BoardDefaults fly_f407zg_Defaults = {
@@ -186,10 +186,10 @@ constexpr BoardDefaults fly_f407zg_Defaults = {
         {NoPin, NoPin, NoPin},                  //SPI4
         {NoPin, NoPin, NoPin},                  //SPI5
     },
-	9,											// Number of drivers
-    {PE_1, PG_12,  PD_7, PD_4,  PD_0, PG_8, PG_5, PG_2, PD_9},   	//enablePins
-    {PB_9, PB_8, PA_8, PC_7,  PC_6, PD_15, PD_14, PD_13, PD_12},	//stepPins
-    {PE_0, PG_11, PD_6, PD_3,  PA_15, PG_7, PG_4, PD_11, PD_8},    	//dirPins
+    9,                                          // Number of drivers
+    {PE_1, PG_12,  PD_7, PD_4,  PD_0, PG_8, PG_5, PG_2, PD_9},      //enablePins
+    {PB_9, PB_8, PA_8, PC_7,  PC_6, PD_15, PD_14, PD_13, PD_12},    //stepPins
+    {PE_0, PG_11, PD_6, PD_3,  PA_15, PG_7, PG_4, PD_11, PD_8},     //dirPins
 #if HAS_SMART_DRIVERS
     {PG_13, PG_10, PD_5, PD_1,
 #if STARTUP_DELAY
@@ -199,9 +199,9 @@ constexpr BoardDefaults fly_f407zg_Defaults = {
     PA_14,
 #endif
      PG_6, PG_3, PD_10, PB_12},                 //uartPins
-    9,                                      	// Smart drivers
+    9,                                          // Smart drivers
 #endif
-    0,                                       	//digiPot Factor
+    0,                                          //digiPot Factor
 #if HAS_VOLTAGE_MONITOR
     NoPin,
 #endif
@@ -223,60 +223,35 @@ constexpr PinEntry PinTable_FLY_E3[] =
     {PA_1, "ymin,ystop"},
     {PC_5, "zmin,zstop"},
 
-	// Servo
+    // Servo
     {PB_0,  "servo0" },
 
    // Porbe
     {PC_4, "probe"},
-	
+    
     //Heaters and Fans (Big and Small Mosfets}
     {PA_0,  "bed,hbed" },
     {PA_5,  "e0heat,he0" },
     {PA_7,  "fan0,fan" },
     {PA_6,  "fan1" },
 
-
-
     //EXP1
-    {PE_12, "beep"},
-    {PE_11, "btnenc"},
-    {PE_10, "btnen1"},
-    {PE_9, "btnen2"},
-    {PE_8, "lcdd4"},
-    {PE_7, "lcdrs"},
-    {PB_1, "lcden"},
+    {PE_12, "BEEP"},
+    {PE_11, "BTN_ENC"},
+    {PE_10, "LCD_EN"},
+    {PE_9, "LCD_D4"},
+    {PE_8, "LCD_D5"},
+    {PE_7, "LCD_D6"},
+    {PB_1, "LCD_D7"},
 
-	//SD
-	{PA_15, "SDCD"},
-	{PC_9, "SDD1"},
-	{PC_8, "SDD0"},
-	{PC_12, "SDSCK"},
-	{PD_2, "SDCMD"},
-	{PC_11, "SDD3"},
-	{PC_10, "SDD2"},
-
-	// UART
-	{PA_9, "TX1"},
-	{PA_10, "RX1"},
-
-    // WIFI UART	
-	{PD_8, "PD8"},
-	{PD_9, "PD9"},	
-	
-    //WIFI
-    {PE_13, "PE13"},
-    {PE_14, "PE14"},
-    {PE_15, "PE15"},
-
-    //soft spi 
-    {PC_0, "PC0"},
-    {PC_1, "PC1"},
-    {PC_2, "PC2"},
-    {PC_3, "PC3"},
-    {PC_7, "PC7"},
-
-    //Signal light
-     {PA_8, "PA8"},
+    //SD
+    {PA_15, "SDCD"},
+    {PC_9, "SDD1"},
+    {PC_8, "SDD0"},
+    {PC_12, "SDSCK"},
+    {PD_2, "SDCMD"},
+    {PC_11, "SDD3"},
+    {PC_10, "SDD2"},
 
     //FPC
     {PB_10, "FPC1"},
@@ -291,7 +266,6 @@ constexpr PinEntry PinTable_FLY_E3[] =
     {PD_0, "FPC10"},
     {PD_1, "FPC11"},
 
-
 };
 
 constexpr BoardDefaults fly_e3_Defaults = {
@@ -305,13 +279,13 @@ constexpr BoardDefaults fly_e3_Defaults = {
         {PE_8, NoPin, PB_1},                    //SPI4
         {PD_6, PD_4, PD_5},                     //SPI5
     },
-	4,											// Number of drivers
-    {PC_15, PE_5, PE_1, PB_5},   	            //enablePins
-    {PC_13, PE_3, PB_9, PB_3},	                //stepPins
-    {PC_14, PE_4, PE_0, PB_4},    	            //dirPins
+    4,                                          // Number of drivers
+    {PC_15, PE_5, PE_1, PB_5},                  //enablePins
+    {PC_13, PE_3, PB_9, PB_3},                  //stepPins
+    {PC_14, PE_4, PE_0, PB_4},                  //dirPins
 #if HAS_SMART_DRIVERS
     {PE_6, PE_2, PB_8, PD_7},                   //uartPins            
-	4,                                          // Smart drivers
+    4,                                          // Smart drivers
 #endif
     0, 
 #if HAS_VOLTAGE_MONITOR
@@ -340,12 +314,12 @@ constexpr PinEntry PinTable_FLY_CDYV2[] =
     {PB_10, "zmin,zstop"},
     {PB_11, "zmax,zstopmax"},
 
-	// Servo
+    // Servo
     {PE_6,  "servo0" },
 
-   // Probe
+    // Probe
     {PC_2, "probe"},
-	
+    
     //Heaters and Fans (Big and Small Mosfets}
     {PB_0,  "bed,hbed" },
     {PD_12,  "e0heat,he0" },
@@ -355,57 +329,43 @@ constexpr PinEntry PinTable_FLY_CDYV2[] =
     {PA_1,  "fan1" },
     {PA_2,  "fan2" },
 
-
     //EXP1
-    {PA_14, "lcdd7"},
-    {PA_13, "lcdd6"},
-    {PE_15, "lcdd4"},
-    {PE_14, "lcdd5"},
-    {PB_1, "lcden"},
-	{PE_13, "tfcd"},
+    {PA_14, "LCD_D7"},
+    {PA_13, "LCD_D6"},
+    {PE_15, "LCD_D4"},
+    {PE_14, "LCD_D5"},
+    {PB_2, "LCD_EN"},
+    {PE_13, "LCD_CD"},
 
-	//SD
-//	{PC_9, "SDD1"},
-//	{PC_8, "SDD0"},
-//	{PC_12, "SDSCK"},
-//	{PD_2, "SDCMD"},
-//	{PC_11, "SDD3"},
-//	{PC_10, "SDD2"},
+    // UART
+    {PA_9, "TX1,BTN_ENC"},
+    {PA_10, "RX1,LCD_RS"},
 
-	// UART
-	{PA_9, "TX1,btnenc"},
-	{PA_10, "RX1,lcdrs"},
-
-    // WIFI UART	
-	{PD_8, "PD8,btnen2"},
-	{PD_9, "PD9,btnen1"},	
-	
-    //WIFI
-    {PE_10, "PE10"},
-    {PE_11, "PE11"},
-    {PE_12, "PE12"},
+    // WIFI UART
+    {PD_8, "BTN_EN1"},
+    {PD_9, "BTN_EN2"},
 
     //spi 1  (SD,MAX311865,MAX6675)
-    {PA_4, "PA4,SPI1SDCS"},
-    {PA_5, "PA5,SPI1SCK"},
-    {PA_6, "PA6,SPI1MISO"},
-    {PA_7, "PA7,SPI1MOSI"},
-    {PE_7, "PE7,SPI1CS1"},
-    {PE_8, "PE8,SPI1CS2"},
+    {PA_4, "SPI1SDCS,LCD_SS"},
+    {PA_5, "SPI1SCK,LCD_SCK"},
+    {PA_6, "SPI1MISO,LCD_MISO"},
+    {PA_7, "SPI1MOSI,LCD_MOSI"},
+    {PE_7, "SPI1CS1"},
+    {PE_8, "SPI1CS2"},
 
     //spi 3  (MOT TMC2130 TMC5160)
-    {PB_3, "PB3,MOTSCK"},
-    {PB_4, "PB4,MOTMISO"},
-    {PB_5, "PB5,MOTMOSI"},
+    {PB_3, "MOTSCK"},
+    {PB_4, "MOTMISO"},
+    {PB_5, "MOTMOSI"},
 
     //Signal light   Neopixel
     {PD_15, "Neopixel,LED"},
 
     //Laser 
-    {PB_9, "PB9,Laser"},
-	
-	//Power ADC
-	{PC_3, "PowerADC,PC3"}
+    {PB_9, "Laser"},
+    
+    //Power ADC
+    {PC_3, "PowerADC"}
 };
 
 constexpr BoardDefaults fly_cdyv2_Defaults = {
@@ -419,13 +379,13 @@ constexpr BoardDefaults fly_cdyv2_Defaults = {
         {NoPin, NoPin, NoPin},                  //SPI4
         {NoPin, NoPin, NoPin},                  //SPI5
     },
-	6,											// Number of drivers
-    {PC_1, PC_14, PB_8, PD_7, PD_4, PD_0},   	//enablePins
-    {PE_5, PE_4, PE_3, PE_2, PE_1, PE_0},	    //stepPins
-    {PC_0, PC_13, PB_7, PD_6, PD_3, PA_15},    	//dirPins
+    6,                                          // Number of drivers
+    {PC_1, PC_14, PB_8, PD_7, PD_4, PD_0},      //enablePins
+    {PE_5, PE_4, PE_3, PE_2, PE_1, PE_0},       //stepPins
+    {PC_0, PC_13, PB_7, PD_6, PD_3, PA_15},     //dirPins
 #if HAS_SMART_DRIVERS
     {PC_15, PA_8, PB_6, PD_5, PD_1, PE_9},      //uartPins      
-	 6,                                       	// Smart drivers
+     6,                                         // Smart drivers
 #endif
     0,
 #if HAS_VOLTAGE_MONITOR
@@ -440,7 +400,6 @@ constexpr BoardDefaults fly_cdyv2_Defaults = {
 constexpr PinEntry PinTable_FLY_E3_PRO[] =
 {
 
-
     //Thermistors
     {PA_4, "e0temp,t0"},
     {PA_1, "e1temp,t1"},
@@ -452,12 +411,12 @@ constexpr PinEntry PinTable_FLY_E3_PRO[] =
     {PC_4, "zmin,zstop"},
     {PD_0, "e0min,e0stop"},
     {PD_1, "e1min,e1stop"},
-	// Servo
+    // Servo
     {PB_0,  "servo0" },
 
    // Porbe
     {PC_5, "probe"},
-	
+    
     //Heaters and Fans (Big and Small Mosfets}
     {PA_0,  "bed,hbed" },
     {PA_5,  "e0heat,he0" },
@@ -468,26 +427,25 @@ constexpr PinEntry PinTable_FLY_E3_PRO[] =
     {PB_7,  "fan3" },
 
     //EXP1
-    {PE_12, "beep"},
-    {PE_11, "btnenc"},
-    {PE_10, "btnen1"},
-    {PE_9, "btnen2"},
-    {PE_8, "lcdd4"},
-    {PE_7, "lcdrs"},
-    {PB_1, "lcden"},
+    {PE_12, "BEEP"},
+    {PE_11, "BTN_ENC"},
+    {PE_10, "LCD_EN"},
+    {PE_9, "LCD_D4"},
+    {PE_8, "LCD_D5"},
+    {PE_7, "LCD_D6"},
+    {PB_1, "LCD_D7"},
 
-	//SD
+    //SD
+    {PC_9, "SDD1"},
+    {PC_8, "SDD0"},
+    {PC_12, "SDSCK"},
+    {PD_2, "SDCMD"},
+    {PC_11, "SDD3"},
+    {PC_10, "SDD2"},
 
-	{PC_9, "SDD1"},
-	{PC_8, "SDD0"},
-	{PC_12, "SDSCK"},
-	{PD_2, "SDCMD"},
-	{PC_11, "SDD3"},
-	{PC_10, "SDD2"},
-
-	// UART
-	{PA_9, "TX1"},
-	{PA_10, "RX1"},
+    // UART
+    {PA_9, "TX1"},
+    {PA_10, "RX1"},
 
     //Signal light
      {PA_8, "LED"},
@@ -502,7 +460,7 @@ constexpr PinEntry PinTable_FLY_E3_PRO[] =
 };
 
 constexpr BoardDefaults fly_e3_pro_Defaults = {
-	{0xd0c680ae},                   // Signatures
+    {0xd0c680ae},                   // Signatures
     SD_SDIO,                                    // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
@@ -512,13 +470,13 @@ constexpr BoardDefaults fly_e3_pro_Defaults = {
         {PE_8, NoPin, PB_1},                    //SPI4
         {PD_6, PD_4, PD_6},                     //SPI5
     },
-    5,											// Number of drivers
-    {PE_5, PE_1, PB_5, PD_6 ,PC_15},   	    //enablePins
-    {PE_3, PB_9, PB_3, PD_4, PC_13},	    //stepPins
-    {PE_2, PB_8, PD_7, PD_3, PC_0 },    	//dirPins
+    5,                                          // Number of drivers
+    {PE_5, PE_1, PB_5, PD_6 ,PC_15},            //enablePins
+    {PE_3, PB_9, PB_3, PD_4, PC_13},            //stepPins
+    {PE_2, PB_8, PD_7, PD_3, PC_0 },            //dirPins
 #if TMC_SOFT_UART
-    {PE_4, PE_0, PB_4, PD_5, PC_14},           
-	 5, 			                         //uartPins                                          	// Smart drivers
+    {PE_4, PE_0, PB_4, PD_5, PC_14},            // uartPins 
+     5,                                         // Smart drivers
 #endif
     0,  
 #if HAS_VOLTAGE_MONITOR
@@ -540,7 +498,6 @@ constexpr PinEntry PinTable_FLY_SUPER8[] =
     {PC_0, "ADC4,out4"},
     {PC_1, "ADC5,out5"},
  
-
     //Endstops
     {PG_12, "io0"},
     {PG_11, "io1"},
@@ -554,7 +511,7 @@ constexpr PinEntry PinTable_FLY_SUPER8[] =
     // Servo
     {PC_6,  "pwmout0,pwm0,servo,out0" },
 
-   // Probe
+    // Probe
     {PC_3, "probe"},
 
     //Heaters and Fans (Big and Small Mosfets}
@@ -575,37 +532,24 @@ constexpr PinEntry PinTable_FLY_SUPER8[] =
     {PD_14,  "fan8" },
     {PD_15,  "fan9" },
     
-
     //EXP1
- //   {PA_14, "lcdd7"},
- //   {PA_13, "lcdd6"},
- //   {PE_15, "lcdd4"},
-//    {PE_14, "lcdd5"},
-//    {PB_1, "lcden"},
-//	{PE_13, "tfcd"},
+    {PG_13, "LCD_D7"},
+    {PC_13, "LCD_D5"},
+    {PG_8, "LCD_RS"},
+    {PE_13, "BTN_ENC"},
+    {PE_12, "BEEP"},
+    {PB_2, "LCD_EN"},
+    {PC_14, "LCD_D4"},
+    {PG_14, "LCD_D6"},
 
-	//SD
-//	{PC_9, "SDD1"},
-//	{PC_8, "SDD0"},
-//	{PC_12, "SDSCK"},
-//	{PD_2, "SDCMD"},
-//	{PC_11, "SDD3"},
-//	{PC_10, "SDD2"},
-
-	// UART
-	{PA_9, "TX1"},
-	{PA_10, "RX1"},
-
-    // WIFI UART	
-//	{PD_8, "PD8"},
-//	{PD_9, "PD9"},	
-	
-    //WIFI
-//    {PD_10, "PD10"},
-//    {PD_11, "PDE11"},
-//    {PD_13, "PD13"},
-
- 
+    //EXP2
+    {PG_15, "LCD_CD"},
+    {PB_6, "BTN_EN2"},
+    {PB_7, "BTN_EN1"},
+    {PA_6, "LCD_MISO"},
+    {PA_5, "LCD_SCK"},
+    {PA_4, "LCD_SS"},
+    {PA_7, "LCD_MOSI"},
 
 };
 
@@ -616,17 +560,17 @@ constexpr BoardDefaults fly_super8_Defaults = {
         {PA_5, PA_6, PA_7},                     //SPI0
         {PB_13, PB_14, PB_15},                  //SPI1
         {PB_3, PB_4, PB_5},                     //SPI2
-        {PD_3, PD_4, PD_5},                   //SPI3
+        {PD_3, PD_4, PD_5},                     //SPI3
         {NoPin, NoPin, NoPin},                  //SPI4
         {NoPin, NoPin, NoPin},                  //SPI5
     },
-	8,											// Number of drivers
-    {PF_11, PF_14, PG_1, PE_9, PF_2, PC_15, PG_4, PG_7},   	//enablePins
-    {PE_2, PE_3, PE_4, PE_14, PE_15, PE_1, PE_0, PE_6},	    //stepPins
-    {PC_5, PF_13, PG_0, PE_8, PE_11, PF_0, PG_3, PG_6},    	//dirPins
+    8,                                          // Number of drivers
+    {PF_11, PF_14, PG_1, PE_9, PF_2, PC_15, PG_4, PG_7},    //enablePins
+    {PE_2, PE_3, PE_4, PE_14, PE_15, PE_1, PE_0, PE_6},     //stepPins
+    {PC_5, PF_13, PG_0, PE_8, PE_11, PF_0, PG_3, PG_6},     //dirPins
 #if HAS_SMART_DRIVERS
-    {PC_4, PF_12, PF_15, PE_7, PE_10, PF_1, PG_2, PG_5},      //uartPins      
-	 8,                                       	// Smart drivers
+    {PC_4, PF_12, PF_15, PE_7, PE_10, PF_1, PG_2, PG_5},    //uartPins      
+     8,                                         // Smart drivers
 #endif
     0,
 #if HAS_VOLTAGE_MONITOR
@@ -638,25 +582,26 @@ constexpr BoardDefaults fly_super8_Defaults = {
 #endif
 };
 
-constexpr PinEntry PinTable_FLY_E3_PROV2[] =
+constexpr PinEntry PinTable_FLY_E3_PROV3[] =
 {
-
 
     //Thermistors
     {PA_4, "e0temp,t0"},
     {PA_1, "e1temp,t1"},
     {PA_3, "bedtemp,tb"},
     {PC_1, "boardtemp,tboard"},
+    
     //Endstops
     {PA_2, "xmin,xstop"},
     {PB_10, "ymin,ystop"},
     {PC_4, "zmin,zstop"},
     {PD_0, "e0min,e0stop"},
     {PD_1, "e1min,e1stop"},
+    
     // Servo
     {PB_0,  "servo0" },
 
-   // Porbe
+    // Porbe
     {PC_5, "probe"},
     
     //Heaters and Fans (Big and Small Mosfets}
@@ -669,16 +614,23 @@ constexpr PinEntry PinTable_FLY_E3_PROV2[] =
     {PB_7,  "fan3" },
 
     //EXP1
-    {PE_11, "beep"},
-    {PE_12, "btnenc"},
-    {PE_10, "btnen1"},
-    {PE_9, "btnen2"},
-    {PE_8, "lcdd4"},
-    {PE_7, "lcdrs"},
-    {PB_1, "lcden"},
+    {PE_11, "BEEP"},
+    {PE_12, "BTN_ENC"},
+    {PE_10, "LCD_D5"},
+    {PE_6, "LCD_RS"},
+    {PE_8, "LCD_D7"},
+    {PA_14, "LCD_EN"},
+    {PE_9, "LCD_D4"},
+    {PE_7, "LCD_D6"},
+    
+    //EXP2
+    {PA_13, "LCD_CD"},
+    {PB_4, "LCD_MISO"},
+    {PB_3, "LCD_SCK"},
+    {PB_2, "LCD_SS"},
+    {PB_5, "LCD_MOSI"},
 
     //SD
-
     {PC_9, "SDD1"},
     {PC_8, "SDD0"},
     {PC_12, "SDSCK"},
@@ -687,10 +639,8 @@ constexpr PinEntry PinTable_FLY_E3_PROV2[] =
     {PC_10, "SDD2"},
 
     // UART
-    {PA_9, "TX1"},
-    {PA_10, "RX1"},
-
-
+    {PA_9, "TX1,BTN_EN2"},
+    {PA_10, "RX1,BTN_EN1"},
 
     //FPC
     {PB_11, "neopixel"},
@@ -700,7 +650,7 @@ constexpr PinEntry PinTable_FLY_E3_PROV2[] =
 
 };
 
-constexpr BoardDefaults fly_e3_prov2_Defaults = {
+constexpr BoardDefaults fly_e3_prov3_Defaults = {
     {0xd0c680ae},                   // Signatures
     SD_SDIO,                                    // SD Card access
     {   //CLK, MISO, MOSI
@@ -744,14 +694,13 @@ constexpr PinEntry PinTable_FLY_GEMINI[] =
     // Servo
     {PB_0,  "servo0" },
 
-   // Porbe
+    // Porbe
     {PA_1, "probe"},
 
     //Heaters and Fans (Big and Small Mosfets}
     {PA_2,  "bed,hbed" },
     {PA_0,  "e0heat,he0" },
     {PC_6,  "fan0,fan" },
-
 
     //SD
     {PC_9, "SDD1"},
@@ -762,10 +711,22 @@ constexpr PinEntry PinTable_FLY_GEMINI[] =
     {PC_10, "SDD2"},
 
     // UART
-    {PA_9, "TX1"},
-    {PA_10, "RX1"},
-
-
+    {PA_9, "TX1,LCD_D4"},
+    {PA_10, "RX1,LCD_RS"},
+    
+    //EXP1
+    {PA_8, "LCD_D5"},
+    {PA_4, "BTN_ENC"},
+    {PA_13, "LCD_EN"},
+    
+    //EXP2
+    {PB_3, "LCD_CD"},
+    {PA_14, "BTN_EN2"},
+    {PA_15, "BTN_EN1"},
+    {PB_14, "LCD_MISO"},
+    {PB_13, "LCD_SCK"},
+    {PB_12, "LCD_SS"},
+    {PB_15, "LCD_MOSI"},
 
 };
 
@@ -812,7 +773,7 @@ constexpr PinEntry PinTable_FLY_GEMINI_V1_1[] =
     // Servo
     {PB_0,  "servo0" },
 
-   // Porbe
+    // Porbe
     {PA_1, "probe"},
 
     //Heaters and Fans (Big and Small Mosfets}
@@ -821,19 +782,23 @@ constexpr PinEntry PinTable_FLY_GEMINI_V1_1[] =
     {PC_6,  "fan0,fan" },
     {PC_7,  "fan1" },
 
-    //SD
- //   {PC_9, "SDD1"},
-    // {PC_8, "SDD0"},
-    // {PC_12, "SDSCK"},
-    // {PD_2, "SDCMD"},
-    // {PC_11, "SDD3"},
-    // {PC_10, "SDD2"},
-
     // UART
     {PA_9, "TX1"},
     {PA_10, "RX1"},
 
-
+    //EXP1
+    {PA_8, "LCD_D5"},
+    {PA_4, "BTN_ENC"},
+    {PA_13, "LCD_EN"},
+    
+    //EXP2
+    {PB_3, "LCD_CD"},
+    {PA_14, "BTN_EN2"},
+    {PA_15, "BTN_EN1"},
+    {PB_14, "LCD_MISO"},
+    {PB_13, "LCD_SCK"},
+    {PB_12, "LCD_SS"},
+    {PB_15, "LCD_MOSI"},
 
 };
 

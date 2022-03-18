@@ -1,3 +1,8 @@
+Version 3.4.0_1
+===============
+* Duet3d 3.4.0
+* Updated pins files
+
 Version 3.4rc2_1
 ================
 * Duet3d 3.4rc2
