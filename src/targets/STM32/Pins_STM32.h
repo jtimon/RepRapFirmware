@@ -34,7 +34,11 @@
 #define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
 #define IAP_IMAGE_START         0x20018000
 
+#if STM32H7
+#define FLASH_DATA_LENGTH (128*1024) //size of the Software Reset Data in Flash
+#else
 #define FLASH_DATA_LENGTH (16*1024) //size of the Software Reset Data in Flash
+#endif
 
 
 #if defined(ESP8266WIFI)
