@@ -1,3 +1,8 @@
+Version 3.4.0_2
+===============
+* Updated Gemini V1.1 pins
+
+
 Version 3.4.0_1
 ===============
 * Duet3d 3.4.0

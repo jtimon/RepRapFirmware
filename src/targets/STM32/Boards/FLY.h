@@ -783,8 +783,8 @@ constexpr PinEntry PinTable_FLY_GEMINI_V1_1[] =
     {PC_7,  "fan1" },
 
     // UART
-    {PA_9, "TX1"},
-    {PA_10, "RX1"},
+    {PA_9, "TX1,LCD_D4"},
+    {PA_10, "RX1,LCD_RS"},
 
     //EXP1
     {PA_8, "LCD_D5"},
