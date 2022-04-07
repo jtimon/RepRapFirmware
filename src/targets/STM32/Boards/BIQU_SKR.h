@@ -99,6 +99,98 @@ constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
 #endif
 };
 
+constexpr PinEntry PinTable_BTT_SKR_3[] =
+{
+    //Thermistors
+    {PA_1, "bedtemp,tb"},
+    {PA_2, "e0temp,th0"},
+    {PA_3, "e1temp,th1"},
+
+    //Endstops
+    {PC_1, "xstop,x-stop"},
+    {PC_3, "ystop,y-stop"},
+    {PC_0, "zstop,z-stop"},
+    {PC_2, "e0stop,e0det"},
+    {PA_0, "e1stop,e1det"},
+
+    //Servos
+    {PE_5,  "servo0" },
+
+    //Probe
+    {PC_13, "probe"},
+
+    //Heaters and Fans (Big and Small Mosfets}
+    {PD_7,  "bed,hbed" },
+    {PB_3,  "e0heat,heat0" },
+    {PB_4,  "e1heat,heat1" },
+    {PB_7,  "fan0,fan" },
+    {PB_6,  "fan1" },
+    {PB_5,  "fan2" },
+
+    //Neopixel
+    {PE_6, "Neopixel"},
+
+    //PSON
+    {PE_4, "PSON"},
+
+    //PWRDET
+    {PC_15, "PWRDET"},
+
+    //Status LED
+    {PA_13, "LED"},
+	
+    //EXP1
+    {PC_5, "BEEP"},
+    {PB_0, "BTN_ENC"},
+    {PB_1, "LCD_EN"},
+    {PE_8, "LCD_RS"},
+    {PE_9, "LCD_D4"},
+    {PE_10, "LCD_D5"},
+    {PE_11, "LCD_D6"},
+    {PE_12, "LCD_D7"},
+
+    //EXP2
+    {PA_6, "LCD_MISO"},
+    {PA_5, "LCD_SCK"},
+    {PE_7, "BTN_EN1"},
+    {PA_4, "LCD_SS"},
+    {PB_2, "BTN_EN2"},
+    {PA_7, "LCD_MOSI"},
+    {PC_4, "LCD_CD"},
+};
+
+constexpr BoardDefaults btt_skr_3_Defaults = {
+    {0xaa36a0c4},                  // Signatures
+    SD_SDIO,                                  // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {NoPin, NoPin, NoPin},                  //SPI2
+        {NoPin, NoPin, NoPin},                  //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+        {NoPin, NoPin, NoPin},                  //SPI6
+        {NoPin, NoPin, NoPin},                  //SPI7
+        {NoPin, NoPin, NoPin},                  //SPI8
+    },
+    5,                            // Number of drivers
+    {PD_6, PD_1, PE_0, PC_7, PD_13}, // enablePins
+    {PD_4, PA_15, PE_2, PD_15, PD_11},  // stepPins
+    {PD_3, PA_8, PE_3, PD_14, PD_10},    // dirPins
+#if TMC_SOFT_UART
+    {PD_5, PD_0, PE_1, PC_6, PD_12},    // uartpins
+    5,                            // Smart drivers
+#endif
+    0,                            // digiPot Factor
+#if HAS_VOLTAGE_MONITOR
+    NoPin,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
+};
+
 #else
 constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
 {
