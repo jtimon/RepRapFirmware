@@ -360,6 +360,7 @@ private:
 
 	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
+	volatile uint32_t lastValidDriveStatus;					// Last validated drive status
 	volatile uint32_t accumulatedDriveStatus;				// the accumulated drive status bits
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
@@ -408,7 +409,7 @@ const uint8_t Tmc51xxDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_PWM_AUTO
 };
 
-Tmc51xxDriverState::Tmc51xxDriverState() noexcept : TmcDriverState(), accumulatedDriveStatus(0), configuredChopConfReg(0), maxStallStepInterval(0),
+Tmc51xxDriverState::Tmc51xxDriverState() noexcept : TmcDriverState(), lastValidDriveStatus(0), accumulatedDriveStatus(0), configuredChopConfReg(0), maxStallStepInterval(0),
 	minSgLoadRegister(0), newRegistersToUpdate(0), registersToUpdate(0), axisNumber(0), microstepShiftFactor(0),
 	motorCurrent(0), enabled(0)
 {
@@ -451,7 +452,7 @@ pre(!driversPowered)
 	{
 		readRegisters[i] = 0;
 	}
-	accumulatedDriveStatus = 0;
+	lastValidDriveStatus = accumulatedDriveStatus = 0;
 
 	regIndexBeingUpdated = regIndexRequested = previousRegIndexRequested = NoRegIndex;
 	numReads = numWrites = numWriteErrors = 0;
@@ -736,7 +737,7 @@ StandardDriverStatus Tmc51xxDriverState::ReadStatus(bool accumulated, bool clear
 		status = accumulatedDriveStatus;
 		if (clearAccumulated)
 		{
-			accumulatedDriveStatus = readRegisters[ReadDrvStat];
+			accumulatedDriveStatus = lastValidDriveStatus;
 		}
 	}
 	else
@@ -901,7 +902,12 @@ void Tmc51xxDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 			// Only add bits to the accumulator if they appear in 2 successive samples. This is to avoid seeing transient S2G, S2VS, STST and open load errors.
 			const uint32_t oldDrvStat = readRegisters[ReadDrvStat];
 			readRegisters[ReadDrvStat] = regVal;
+if (regVal & TMC51xx_RR_S2G)
+{
+	debugPrintf("Status returns possible short val 0x%x prev reading 0x%x combined 0x%x\n", regVal, oldDrvStat, regVal & oldDrvStat);
+}
 			regVal &= oldDrvStat;
+			lastValidDriveStatus = regVal;
 			accumulatedDriveStatus |= regVal;
 		}
 		else
@@ -932,12 +938,14 @@ void Tmc51xxDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	   )
 	{
 		readRegisters[ReadDrvStat] |= TMC51xx_RR_SG;
+		lastValidDriveStatus |= TMC51xx_RR_SG;
 		accumulatedDriveStatus |= TMC51xx_RR_SG;
 		EndstopOrZProbe::SetDriversStalled(driverBit);
 	}
 	else
 	{
 		readRegisters[ReadDrvStat] &= ~TMC51xx_RR_SG;
+		lastValidDriveStatus &= ~TMC51xx_RR_SG;
 		EndstopOrZProbe::SetDriversNotStalled(driverBit);
 	}
 
@@ -960,7 +968,7 @@ DriversState Tmc51xxDriverState::SetupDriver(bool reset) noexcept
 {
 	if (reset)
 	{
-		accumulatedDriveStatus = 0;
+		lastValidDriveStatus = accumulatedDriveStatus = 0;
 		if (TMC_PINS[driverNumber] == NoPin)
 			ready = false;
 		else
@@ -978,7 +986,7 @@ DriversState Tmc51xxDriverState::SetupDriver(bool reset) noexcept
 		if (reprap.Debug(moduleDriver))
 			debugPrintf("TMC5160: Too many write errors drive %d error cnt %d driver disabled\n", driverNumber, numWriteErrors);
 		// Too many write errors, probably means no driver or config error
-		accumulatedDriveStatus = 0;
+		lastValidDriveStatus = accumulatedDriveStatus = 0;
 		for(size_t i = 0; i < NumReadRegisters; i++)
 			readRegisters[i] = 0;
 		ready = false;
@@ -1064,6 +1072,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			spiDevice->Deselect();
 			// Give other tasks a chance to run.
 			delay(1);
+
 		}
 	}
 }
