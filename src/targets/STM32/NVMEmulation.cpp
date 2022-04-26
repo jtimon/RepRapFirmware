@@ -167,7 +167,7 @@ static bool FlashWrite(const uint32_t addr, const uint8_t *data, const size_t le
 		return false;
 	}
 	bool ret = true;
-	debugPrintf("Write flash addr %x len %d\n", (unsigned)addr, (int)len);
+	//debugPrintf("Write flash addr %x len %d\n", (unsigned)addr, (int)len);
 	WatchdogReset();
     bool cacheEnabled = Cache::Disable();
 	HAL_FLASH_Unlock();
