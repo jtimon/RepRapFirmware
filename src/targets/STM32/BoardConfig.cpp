@@ -42,7 +42,7 @@ static constexpr char boardConfigFile[] = "board.txt";
 //Single entry for Board name
 static const boardConfigEntry_t boardEntryConfig[]=
 {
-    {"lpc.board", &lpcBoardName, nullptr, cvStringType},
+//    {"lpc.board", &lpcBoardName, nullptr, cvStringType},
     {"board", &lpcBoardName, nullptr, cvStringType},
 };
 
@@ -96,7 +96,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"lcd.spiChannel", &LcdSpiChannel, nullptr, cvUint8Type},
 #endif
     
-    {"softwareSPI.pins", SPIPins[3], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
+//    {"softwareSPI.pins", SPIPins[3], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI0.pins", SPIPins[0], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI1.pins", SPIPins[1], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI2.pins", SPIPins[2], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
@@ -120,7 +120,7 @@ static const boardConfigEntry_t boardConfigs[]=
 #endif
 
 #if HAS_SBC_INTERFACE
-    {"sbc.lpcTfrReadyPin", &SbcTfrReadyPin, nullptr, cvPinType},
+//    {"sbc.lpcTfrReadyPin", &SbcTfrReadyPin, nullptr, cvPinType},
     {"sbc.TfrReadyPin", &SbcTfrReadyPin, nullptr, cvPinType},
     {"sbc.csPin", &SbcCsPin, nullptr, cvPinType},
     {"sbc.spiChannel", &SbcSpiChannel, nullptr, cvUint8Type},    
@@ -134,7 +134,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"serial.aux2.rxTxPins", &Aux2SerialRxTxPins, &NumberSerialPins, cvPinType},
 #endif
     
-    {"adc.prefilter.enable", &ADCEnablePreFilter, nullptr, cvBoolType},
+//    {"adc.prefilter.enable", &ADCEnablePreFilter, nullptr, cvBoolType},
 
 #if SUPPORT_LED_STRIPS
     {"led.neopixelPin", &NeopixelOutPin, nullptr, cvPinType},
