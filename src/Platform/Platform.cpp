@@ -1994,8 +1994,13 @@ static uint32_t TimedSqrt(uint64_t arg, uint32_t& timeAcc) noexcept
 	return ret;
 }
 
+extern "C" uint32_t usbWrite, usbBulk, usbZP, usbWT, usbZPF;
+
 GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException)
 {
+	debugPrintf("USB writes %d Bulk %d ZP %d ZPF %d Write time %d\n", usbWrite, usbBulk, usbZP, usbZPF, usbWT);
+	usbWrite = usbBulk = usbZP = usbWT = 0;
+
 	switch (d)
 	{
 	case (unsigned int)DiagnosticTestType::PrintTestReport:
