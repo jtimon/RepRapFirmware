@@ -15,10 +15,15 @@
 #include <Movement/StepTimer.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
+#include <TMCSoftUART.h>
 
-
+#undef SUPPORT_DMA_NEOPIXEL
+#define SUPPORT_DMA_NEOPIXEL 1
 namespace LedStripDriver
 {
+	constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
+	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2400000;		// must be between about 2MHz and about 4MHz
+
 	constexpr size_t ChunkBufferSize = 180;								// the size of our buffer NeoPixels use 3 bytes per pixel
 	enum class LedType : unsigned int
 	{
@@ -63,7 +68,7 @@ namespace LedStripDriver
 #elif SUPPORT_BITBANG_NEOPIXEL
 	constexpr auto DefaultLedType = LedType::neopixelRGBBitBang;
 #endif
-
+	static uint32_t currentFrequency;									// the SPI frequency we are using
 	static LedType ledType = DefaultLedType;
 	static unsigned int numAlreadyInBuffer = 0;							// number of pixels already store in the buffer (NeoPixel only)
 	static uint8_t *chunkBuffer = nullptr;								// buffer for sending data to LEDs
@@ -83,13 +88,15 @@ namespace LedStripDriver
 			return ChunkBufferSize/16;
 
 		case LedType::neopixelRGBBitBang:
+		case LedType::neopixelRGB:
 			return ChunkBufferSize/3;
 
-		case LedType::neopixelRGB:
+		//case LedType::neopixelRGB:
 		default:
 			return ChunkBufferSize/12;
 		}
 	}
+
 
 	// Send data to NeoPixel LEDs by bit banging
 	static GCodeResult BitBangNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint8_t white, uint32_t numLeds, bool rgbw, bool following) noexcept
@@ -129,16 +136,20 @@ namespace LedStripDriver
 					{
 						lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
 						fastDigitalWriteHigh(NeopixelOutPin);
+						__DSB();
 						lastTransitionTime = DelayCycles(lastTransitionTime, T1H);
 						fastDigitalWriteLow(NeopixelOutPin);
+						__DSB();
 						nextDelay = T1L;
 					}
 					else
 					{
 						lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
 						fastDigitalWriteHigh(NeopixelOutPin);
+						__DSB();
 						lastTransitionTime = DelayCycles(lastTransitionTime, T0H);
 						fastDigitalWriteLow(NeopixelOutPin);
+						__DSB();
 						nextDelay = T0L;
 					}
 					c <<= 1;
@@ -149,6 +160,35 @@ namespace LedStripDriver
 			whenOutputFinished = StepTimer::GetTimerTicks();
 			needStartFrame = true;
 		}
+		return GCodeResult::ok;
+	}
+
+	// Send data to NeoPixel LEDs by bit banging
+	static GCodeResult DmaNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint8_t white, uint32_t numLeds, bool rgbw, bool following) noexcept
+	{
+		const unsigned int bytesPerLed = (rgbw) ? 4 : 3;
+		uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
+		while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + ChunkBufferSize)
+		{
+			*p++ = green;
+			*p++ = red;
+			*p++ = blue;
+			if (rgbw)
+			{
+				*p++ = white;
+			}
+			--numLeds;
+			++numAlreadyInBuffer;
+		}
+
+		if (!following) 
+		{
+			NeopixelDMAWrite(NeopixelOutPin, currentFrequency, chunkBuffer, p-chunkBuffer, PixelTimings[0], PixelTimings[1], 100);
+			numAlreadyInBuffer = 0;
+			whenOutputFinished = StepTimer::GetTimerTicks();
+			needStartFrame = true;
+		}
+
 		return GCodeResult::ok;
 	}
 }
@@ -228,6 +268,16 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 			return GCodeResult::error;
 		}
 #endif
+#if SUPPORT_DMA_NEOPIXEL
+# if SUPPORT_BITBANG_NEOPIXEL
+		if (newType != (unsigned int)LedType::neopixelRGBBitBang && newType != (unsigned int)LedType::neopixelRGBWBitBang)
+# endif
+		{
+			bool setFrequency = typeChanged;
+			currentFrequency = (newType == (unsigned int)LedType::dotstar) ? DefaultDotStarSpiClockFrequency : DefaultNeoPixelSpiClockFrequency;
+			gb.TryGetUIValue('Q', currentFrequency, setFrequency);
+		}
+#endif
 		if (typeChanged)
 		{
 			ledType = (LedType)newType;
@@ -252,7 +302,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		numAlreadyInBuffer = 0;
 		needInit = false;
 
-#if SUPPORT_BITBANG_NEOPIXEL
+#if SUPPORT_BITBANG_NEOPIXEL || SUPPORT_DMA_NEOPIXEL
 		if (ledType == LedType::neopixelRGBBitBang || ledType == LedType::neopixelRGBWBitBang)
 		{
 			// Set the data output low to start a WS2812 reset sequence
@@ -310,6 +360,15 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 
 	case LedType::neopixelRGB:
 	case LedType::neopixelRGBW:
+#if SUPPORT_BITBANG_NEOPIXEL
+		// Scale RGB by the brightness
+		return DmaNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
+									(uint8_t)((green * brightness + 255) >> 8),
+									(uint8_t)((blue * brightness + 255) >> 8),
+									(uint8_t)((white * brightness + 255) >> 8),
+									numLeds, (ledType == LedType::neopixelRGBWBitBang), following
+							      );
+#endif
 		break;
 
 	case LedType::neopixelRGBBitBang:
