@@ -1109,7 +1109,7 @@ void Tmc51xxDriver::Init(size_t firstDrive, size_t numDrivers) noexcept
 		return;
 	}
 	spiDevice = new SharedSpiClient(SharedSpiDevice::GetSharedSpiDevice(SmartDriversSpiChannel), DriversSpiClockFrequency, SPI_MODE_3, NoPin, false);
-	tmcTask.Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcPriority);
+	tmcTask.Create(TmcLoop, "TMC51xx", nullptr, TaskPriority::TmcPriority);
 }
 
 // Shut down the drivers and stop any related interrupts

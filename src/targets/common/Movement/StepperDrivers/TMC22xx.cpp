@@ -24,7 +24,7 @@
 #endif
 #include "Platform/MessageType.h"
 #include "TmcDriverState.h"
-#include "TMCSoftUART.h"
+#include "DMABitIO.h"
 #include "TMC22xxDriver.h"
 #include <functional>
 
@@ -596,7 +596,7 @@ inline bool Tmc22xxDriverState::DMASend(uint8_t regNum, uint32_t regVal, uint8_t
 	sendData[6] = (uint8_t)regVal;
 	sendData[7] = crc;
 
-	return TMCSoftUARTTransfer(driverNumber, sendData, 12, receiveData + 12, 8, TransferTimeout);
+	return TMCSoftUARTTransfer(TMC_PINS[driverNumber], sendData, 12, receiveData + 12, 8, TransferTimeout);
 }
 
 // Set up the PDC or DMAC to send a register and receive the status
@@ -605,7 +605,7 @@ inline bool Tmc22xxDriverState::DMAReceive(uint8_t regNum, uint8_t crc) noexcept
 	sendData[2] = regNum;
 	sendData[3] = crc;
 
-	return TMCSoftUARTTransfer(driverNumber, sendData, 4, receiveData + 4, 8, TransferTimeout);
+	return TMCSoftUARTTransfer(TMC_PINS[driverNumber], sendData, 4, receiveData + 4, 8, TransferTimeout);
 }
 
 // Update the maximum step pulse interval at which we consider open load detection to be reliable
@@ -1285,8 +1285,6 @@ void Tmc22xxDriver::Init(size_t firstDrive, size_t numDrivers) noexcept
 	driverStates = (Tmc22xxDriverState *)	Tasks::AllocPermanent(sizeof(Tmc22xxDriverState)*numTmc22xxDrivers);
 	memset((void *)driverStates, 0, sizeof(Tmc22xxDriverState)*numTmc22xxDrivers);
 	
-	TMCSoftUARTInit();
-
 	driversState = DriversState::noPower;
 	for (size_t drive = 0; drive < numTmc22xxDrivers; ++drive)
 	{
@@ -1300,7 +1298,7 @@ void Tmc22xxDriver::Init(size_t firstDrive, size_t numDrivers) noexcept
 #endif
 								);
 	}
-	tmc22Task.Create(Tmc22Loop, "TMC22", nullptr, TaskPriority::TmcPriority);
+	tmc22Task.Create(Tmc22Loop, "TMC22xx", nullptr, TaskPriority::TmcPriority);
 }
 
 // Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
@@ -1309,7 +1307,6 @@ void Tmc22xxDriver::Exit() noexcept
 	if (numTmc22xxDrivers > 0)
 	{
 		TurnDriversOff();
-		TMCSoftUARTShutdown();
 		tmc22Task.TerminateAndUnlink();
 	}
 	driversState = DriversState::noPower;

@@ -1,13 +1,15 @@
 /*
- * TMCSoftUart.cpp
- * Software UART implementations for TMC22XX chips for the LPC17XX MCU.
+ * DMABitIO.cpp
+ * Permform bit streming I/O operations to a GPIO pin via DMA:
+ * * Software UART implementations for TMC22XX.
+ * * Neopixel bit I/O
  * 
  * Note: The DMA version of this code is based upon an original implementation from Artem-B:
  * https://github.com/Artem-B/TMC2208Stepper/tree/soft-uart
  * However this version differs considerably to avoid problems with the original implementation
  * and in particular to allow it to run without disabling interrupts during operation.
  * 
- * This version re-worked for STM32 DMA controllers.
+ * This version re-worked for STM32 DMA controllers. Added Neopixel support
  * 
  *  Created on: 1 Aug 2020
  *      Author: gloomyandy
@@ -15,17 +17,14 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_TMC22xx
-#include "TMCSoftUART.h"
+#if SUPPORT_TMC22xx || SUPPORT_DMA_NEOPIXEL
+#include "DMABitIO.h"
 #include "TMC22xx.h"
 #include "Platform/RepRap.h"
 #include "HardwareTimer.h"
 #include "Movement/Move.h"
 #include "Movement/StepTimer.h"
 #include "Cache.h"
-
-// Soft UART implementation
-#if TMC_SOFT_UART
 
 #define SU_OVERSAMPLE 4
 
@@ -66,6 +65,19 @@ static TaskHandle SUWaitingTask;
 static Mutex SUMutex;
 
 __nocache uint32_t SUDmaBits[SU_BUFFER_SZ];
+
+static constexpr uint32_t NEO_OVERSAMPLE = 6;
+static constexpr uint32_t NEO_WORDS_PER_BYTE = (8*NEO_OVERSAMPLE);
+// We use a double buffer, work out how big it can be
+static constexpr uint32_t NEO_BYTES_PER_BUFF = (SU_BUFFER_SZ/2)/NEO_WORDS_PER_BYTE;
+static constexpr uint32_t NEO_BASE_TIME = 400/(NEO_OVERSAMPLE/3);
+
+static uint8_t *NEOWritePtr = nullptr;
+static uint32_t NEOWriteCnt = 0;
+static uint32_t NEOOneBits[NEO_OVERSAMPLE];
+static uint32_t NEOZeroBits[NEO_OVERSAMPLE];
+
+
 
 static void SetupPins()
 {
@@ -155,54 +167,44 @@ static uint32_t DecodeBytes(uint8_t *outp, uint32_t outlen)
     return outcnt;
 }
 
-static constexpr uint32_t SU_NEO_OVERSAMPLE = 6;
-static constexpr uint32_t SU_NEO_WORDS_PER_BYTE = (8*SU_NEO_OVERSAMPLE);
-static constexpr uint32_t SU_NEO_BYTES_PER_BUFF = (SU_BUFFER_SZ/2)/SU_NEO_WORDS_PER_BYTE;
-static constexpr uint32_t SU_NEO_BASE_TIME = 400/(SU_NEO_OVERSAMPLE/3);
-
-static uint8_t *NEOWritePtr = nullptr;
-static uint32_t NEOWriteCnt = 0;
-static uint32_t NEOOneBits[SU_NEO_OVERSAMPLE];
-static uint32_t NEOZeroBits[SU_NEO_OVERSAMPLE];
-
-static void WriteNeoByte(uint8_t val) noexcept
+static void NeoWriteByte(uint8_t val) noexcept
 {
     for(int i = 0; i < 8; i++)
     {
         if (val & 0x80)
         {
-            for(uint32_t i = 0; i < SU_NEO_OVERSAMPLE; i++)
+            for(uint32_t i = 0; i < NEO_OVERSAMPLE; i++)
                 SUDmaBits[SUBitCnt++] = NEOOneBits[i];
         }
         else
         {
-            for(uint32_t i = 0; i < SU_NEO_OVERSAMPLE; i++)
+            for(uint32_t i = 0; i < NEO_OVERSAMPLE; i++)
                 SUDmaBits[SUBitCnt++] = NEOZeroBits[i];
         }
         val <<= 1;
     }
 }
 
-static void WriteZeroByte() noexcept
+static void NeoWriteZeroByte() noexcept
 {
     for(int i = 0; i < 8; i++)
     {
-        for(uint32_t i = 0; i < SU_NEO_OVERSAMPLE; i++)
+        for(uint32_t i = 0; i < NEO_OVERSAMPLE; i++)
             SUDmaBits[SUBitCnt++] = SUClrBit;
     }
 }
 
-static bool AddToBuffer(uint32_t cnt)
+static bool NeoAddToBuffer(uint32_t cnt)
 {
     while (cnt-- > 0)
     {
         if (NEOWriteCnt > 0)
         {
-            WriteNeoByte(*NEOWritePtr++);
+            NeoWriteByte(*NEOWritePtr++);
             NEOWriteCnt--;
         }
         else
-            WriteZeroByte();
+            NeoWriteZeroByte();
     }
     // Flip buffer back to start if needed
     if (SUBitCnt > SU_BUFFER_SZ/2) SUBitCnt = 0;
@@ -238,7 +240,7 @@ static void DmaInterrupt(DMA_HandleTypeDef *_hdma)
         break;
     case SUStates::neowrite1:
     case SUStates::neowrite2:
-        if (AddToBuffer(SU_NEO_BYTES_PER_BUFF)) SUState = (SUStates)((int)SUState+1);
+        if (NeoAddToBuffer(NEO_BYTES_PER_BUFF)) SUState = (SUStates)((int)SUState+1);
         break;
     case SUStates::neowrite3:
         SUTimer.pause();
@@ -279,10 +281,10 @@ static void DmaStart()
 }
 
 
-bool TMCSoftUARTTransfer(uint8_t driver, volatile uint8_t *WritePtr, uint32_t WriteCnt, volatile uint8_t *ReadPtr, uint32_t ReadCnt, uint32_t timeout) noexcept
+bool TMCSoftUARTTransfer(Pin pin, volatile uint8_t *WritePtr, uint32_t WriteCnt, volatile uint8_t *ReadPtr, uint32_t ReadCnt, uint32_t timeout) noexcept
 {
     bool ret = false;
-	SUPin = TMC_PINS[driver];
+	SUPin = pin;
 	if (SUPin != NoPin)
 	{
         MutexLocker lock(SUMutex, timeout);
@@ -313,10 +315,10 @@ bool TMCSoftUARTTransfer(uint8_t driver, volatile uint8_t *WritePtr, uint32_t Wr
     return ret;
 }
 
-void TMCSoftUARTInit() noexcept
+void DMABitIOInit() noexcept
 {
-    debugPrintf("SUInit....\n");
-    SUMutex.Create("SoftUART");
+    debugPrintf("BIOInit....\n");
+    SUMutex.Create("BITIO");
     uint32_t period = SUTimer.getTimerClkFreq()/(SU_BAUD_RATE*SU_OVERSAMPLE);
 	//debugPrintf("SU base freq %d setting period %d\n", static_cast<int>(SUTimer.getTimerClkFreq()), static_cast<int>(period));
     SUPeriod = period;
@@ -353,23 +355,23 @@ void TMCSoftUARTInit() noexcept
     NVIC_EnableIRQ(DMA2_Stream5_IRQn);
 }
 
-void TMCSoftUARTShutdown() noexcept
+void DMABitIOShutdown() noexcept
 {
     SUTimer.pause();
     NVIC_DisableIRQ(DMA2_Stream5_IRQn);
 }
 
-static void SetupBitTiming(uint32_t *bits, uint32_t threshold)
+static void NeoSetupBitTiming(uint32_t *bits, uint32_t threshold)
 {
-    if (threshold > SU_NEO_OVERSAMPLE)
+    if (threshold > NEO_OVERSAMPLE)
     {
-        debugPrintf("Neopixel timing too high %d > %d\n", threshold, SU_NEO_OVERSAMPLE);
-        threshold = SU_NEO_OVERSAMPLE;
+        debugPrintf("Neopixel timing too high %d > %d\n", threshold, NEO_OVERSAMPLE);
+        threshold = NEO_OVERSAMPLE;
     }
     debugPrintf("Set timing threshold %d\n", threshold);
     for(uint32_t i = 0; i < threshold; i++)
         bits[i] = SUSetBit;
-    for(uint32_t i = threshold; i < SU_NEO_OVERSAMPLE; i++)
+    for(uint32_t i = threshold; i < NEO_OVERSAMPLE; i++)
         bits[i] = SUClrBit;
 }
 
@@ -382,30 +384,30 @@ bool NeopixelDMAWrite(Pin pin, uint32_t freq, uint8_t *bits, uint32_t cnt, uint3
         return false;
     }
     // Setup timer frequency, note that we adjust timing from the default Duet 3 times oversample
-    uint32_t period = SUTimer.getTimerClkFreq()/(freq*(SU_NEO_OVERSAMPLE/3));
+    uint32_t period = SUTimer.getTimerClkFreq()/(freq*(NEO_OVERSAMPLE/3));
 	debugPrintf("SU base freq %d setting period %d\n", static_cast<int>(SUTimer.getTimerClkFreq()), static_cast<int>(period));
     debugPrintf("SuState %d\n", SUState);
     SUPin = pin;
     pinMode(SUPin, OUTPUT_LOW);
     pin_speed(SUPin, GPIO_SPEED_FREQ_LOW);
     SetupPins();
-    SetupBitTiming(NEOZeroBits, (zeroTime+SU_NEO_BASE_TIME-1)/SU_NEO_BASE_TIME);
-    SetupBitTiming(NEOOneBits, (oneTime+SU_NEO_BASE_TIME-1)/SU_NEO_BASE_TIME);
+    NeoSetupBitTiming(NEOZeroBits, (zeroTime+NEO_BASE_TIME-1)/NEO_BASE_TIME);
+    NeoSetupBitTiming(NEOOneBits, (oneTime+NEO_BASE_TIME-1)/NEO_BASE_TIME);
     SUBitCnt = 0;
     NEOWritePtr = bits;
     NEOWriteCnt = cnt;
     // Write dummy bytes to avoid odd longer first pulse
-    WriteZeroByte();
+    NeoWriteZeroByte();
 	SUState = SUStates::neowrite1;
-    if (AddToBuffer(SU_NEO_BYTES_PER_BUFF - 1)) SUState = (SUStates)((int)SUState+1);
+    if (NeoAddToBuffer(NEO_BYTES_PER_BUFF - 1)) SUState = (SUStates)((int)SUState+1);
     debugPrintf("SUBitCnt %d\n", SUBitCnt);
-    if (AddToBuffer(SU_NEO_BYTES_PER_BUFF)) SUState = (SUStates)((int)SUState+1);    
-    debugPrintf("SUBitCnt %d total buffer size (words) %d state %d\n", SUBitCnt, SU_NEO_BYTES_PER_BUFF*SU_NEO_WORDS_PER_BYTE*2, SUState);
+    if (NeoAddToBuffer(NEO_BYTES_PER_BUFF)) SUState = (SUStates)((int)SUState+1);    
+    debugPrintf("SUBitCnt %d total buffer size (words) %d state %d\n", SUBitCnt, NEO_BYTES_PER_BUFF*NEO_WORDS_PER_BYTE*2, SUState);
     SUDma.Init.Direction = DMA_MEMORY_TO_PERIPH;
     SUDma.Init.Mode = DMA_CIRCULAR;
     HAL_DMA_RegisterCallback(&SUDma, HAL_DMA_XFER_HALFCPLT_CB_ID, DmaInterrupt);
     SUWaitingTask = TaskBase::GetCallerTaskHandle();
-    HAL_DMA_Start_IT(&SUDma, (uint32_t)SUDmaBits, (uint32_t)SUPinSetClrPtr, SU_NEO_BYTES_PER_BUFF*SU_NEO_WORDS_PER_BYTE*2);
+    HAL_DMA_Start_IT(&SUDma, (uint32_t)SUDmaBits, (uint32_t)SUPinSetClrPtr, NEO_BYTES_PER_BUFF*NEO_WORDS_PER_BYTE*2);
 	SUTimer.setOverflow(period - 1, TICK_FORMAT);
     SUTimer.setCount(0, TICK_FORMAT);
     SUTimer.resume();    
@@ -421,4 +423,4 @@ extern "C" void DMA2_Stream5_IRQHandler()
 }
 
 #endif
-#endif
+

@@ -15,10 +15,9 @@
 #include <Movement/StepTimer.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
-#include <TMCSoftUART.h>
+#include <DMABitIO.h>
 
-#undef SUPPORT_DMA_NEOPIXEL
-#define SUPPORT_DMA_NEOPIXEL 1
+
 namespace LedStripDriver
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default

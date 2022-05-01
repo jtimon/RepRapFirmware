@@ -28,11 +28,15 @@
 #include "pinmap.h"
 
 #if STM32H7
-#include "stm32h7xx_ll_system.h"
-#include "core_cm7.h"
+# include "stm32h7xx_ll_system.h"
+# include "core_cm7.h"
 #else
-#include "stm32f4xx_ll_system.h"
-#include "core_cm4.h"
+# include "stm32f4xx_ll_system.h"
+# include "core_cm4.h"
+#endif
+
+#if SUPPORT_TMC22xx || SUPPORT_DMA_NEOPIXEL
+# include "DMABitIO.h"
 #endif
 
 extern char _sccmram;					// defined in linker script
@@ -733,6 +737,10 @@ void BoardConfig::Init() noexcept
 #endif
 
     ConfigureGPIOPins();
+
+#if SUPPORT_TMC22xx || SUPPORT_DMA_NEOPIXEL
+    DMABitIOInit();
+#endif
 }
 
 
