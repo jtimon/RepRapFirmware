@@ -167,7 +167,7 @@ bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 
 void Int1Interrupt(CallbackParameter p) noexcept;						// forward declaration
 
-// Start collecting data
+// Start collecting data, returning true if successful
 bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 {
 	// Clear the fifo
@@ -175,7 +175,10 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 	int cnt = 0;
 	while (ReadRegister(LisRegister::FifoSource, val) && ((val & (1u << 5)) == 0) && (cnt < 128))	// while fifo not empty
 	{
-		ReadRegisters(LisRegister::OutXL, 6);
+		if (!ReadRegisters(LisRegister::OutXL, 6))
+		{
+			return false;
+		}
 	}
 	totalNumRead = 0;
 

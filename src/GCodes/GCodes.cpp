@@ -277,7 +277,7 @@ void GCodes::Reset() noexcept
 		rp.Init();
 	}
 
-	for (Trigger& tr : triggers)
+	for (TriggerItem& tr : triggers)
 	{
 		tr.Init();
 	}
@@ -960,7 +960,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 #if SUPPORT_LASER
 	if (machineType == MachineType::laser)
 	{
-		moveState.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+		moveState.laserPwmOrIoBits.laserPwm = 0;										// turn off the laser when we start moving
 	}
 #endif
 
@@ -990,6 +990,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		// Make sure we expose usable values (which noFilePosition is not)
 		pauseRestorePoint.filePos = 0;
 	}
+
+	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
 }
 
 // Check if a pause is pending, action it if so
@@ -3120,7 +3122,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const noexcept
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept
 {
-	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), fileName, OpenMode::read);
+	FileStore * const f = platform.OpenFile(Platform::GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
 	{
 		fileToPrint.Set(f);
@@ -3135,7 +3137,9 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
+#endif
 	restartMoveFractionDone = 0.0;
 
 	buildObjects.Init();
@@ -3227,10 +3231,10 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 // Get the tool specified by the P parameter, or the current tool if no P parameter
 ReadLockedPointer<Tool> GCodes::GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException)
 {
-	unsigned int tNumber;
+	int tNumber;
 	if (gb.Seen('P'))
 	{
-		tNumber = gb.GetUIValue();
+		tNumber = (int)gb.GetUIValue();
 	}
 	else
 	{
@@ -3692,7 +3696,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	case Compatibility::Sprinter:
 	case Compatibility::Repetier:
 	default:
-		platform.MessageF(mt, "Emulation of %s is not yet supported.\n", gb.LatestMachineState().compatibility.ToString());
+		platform.MessageF(mt, "Emulation of %s is not supported\n", gb.LatestMachineState().compatibility.ToString());
 		break;
 	}
 }
@@ -3738,36 +3742,41 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 
 	case Compatibility::Marlin:
 	case Compatibility::NanoDLP:
-		if (gb.GetCommandLetter() =='M' && gb.GetCommandNumber() == 20)
+		if (gb.GetCommandLetter() == 'M')
 		{
-			platform.Message(type, "Begin file list\n");
-			platform.Message(type, reply);
-			platform.MessageF(type, "End file list\n%s\n", response);
-			return;
+			// The response to some M-codes is handled differently in Marlin mode
+			if (   gb.GetCommandNumber() == 20											// M20 in Marlin mode adds text around the file list
+				&& ((*reply)[0] != '{' || (*reply)[1] != '"')							// ...but don't if it looks like a JSON response
+			   )
+			{
+				platform.Message(type, "Begin file list\n");
+				platform.Message(type, reply);
+				platform.MessageF(type, "End file list\n%s\n", response);
+				return;
+			}
+
+			if (gb.GetCommandNumber() == 28)
+			{
+				platform.MessageF(type, "%s\n", response);
+				platform.Message(type, reply);
+				return;
+			}
+
+			if (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998)
+			{
+				platform.MessageF(type, "%s ", response);
+				platform.Message(type, reply);
+				return;
+			}
 		}
 
-		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
-		{
-			platform.MessageF(type, "%s\n", response);
-			platform.Message(type, reply);
-			return;
-		}
-
-		if (gb.GetCommandLetter() =='M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
-		{
-			platform.MessageF(type, "%s ", response);
-			platform.Message(type, reply);
-			return;
-		}
-
-		if (reply->Length() != 0 && !gb.IsDoingFileMacro())
+		if (reply->Length() != 0)
 		{
 			platform.Message(type, reply);
-			platform.MessageF(type, "\n%s\n", response);
-		}
-		else if (reply->Length() != 0)
-		{
-			platform.Message(type, reply);
+			if (!gb.IsDoingFileMacro())
+			{
+				platform.MessageF(type, "\n%s\n", response);
+			}
 		}
 		else
 		{
@@ -3780,7 +3789,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	case Compatibility::Sprinter:
 	case Compatibility::Repetier:
 	default:
-		platform.MessageF(type, "Emulation of %s is not yet supported.\n", gb.LatestMachineState().compatibility.ToString());
+		platform.MessageF(type, "Emulation of %s is not supported\n", gb.LatestMachineState().compatibility.ToString());
 		break;
 	}
 
@@ -4795,7 +4804,7 @@ GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexc
 	const float bytesReq = (gb.Seen('S')) ? gb.GetFValue() : 10.0;
 	const bool useCrc = (gb.Seen('C') && gb.GetUIValue() != 0);
 	timingBytesRequested = (uint32_t)(bytesReq * (float)(1024 * 1024));
-	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), TimingFileName, (useCrc) ? OpenMode::writeWithCrc : OpenMode::write, timingBytesRequested);
+	FileStore * const f = platform.OpenFile(Platform::GetGCodeDir(), TimingFileName, (useCrc) ? OpenMode::writeWithCrc : OpenMode::write, timingBytesRequested);
 	if (f == nullptr)
 	{
 		reply.copy("Failed to create file");
