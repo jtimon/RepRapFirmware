@@ -333,7 +333,7 @@ typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing 
 typedef Bitmap<uint32_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if defined(DUET3) || defined(DUET3MINI) || STM32F4
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;

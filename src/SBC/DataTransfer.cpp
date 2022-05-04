@@ -738,24 +738,44 @@ void DataTransfer::ExchangeData() noexcept
 	setup_spi(rxBuffer, txBuffer, bytesToExchange);
 }
 
-void DataTransfer::ResetTransfer(bool ownRequest) noexcept
+void DataTransfer::RestartTransfer(bool ownRequest) noexcept
 {
 	if (reprap.Debug(moduleSbcInterface))
 	{
 		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Sbc request\n");
 	}
+
+	failedTransfers++;
 	if (ownRequest)
 	{
-		// Invalidate the data to send
-		txResponse = TransferResponse::BadResponse;
-		Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
-		state = InternalTransferState::Resetting;
-		setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
+		if (rxHeader.dataLength > 0 || txPointer > 0)
+		{
+			// Transfer bad data response and restart the transfer
+			txResponse = TransferResponse::BadResponse;
+			Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
+			state = InternalTransferState::Resetting;
+			setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
+		}
+		else
+		{
+			// No data was transferred so we are still in sync. Continue with the next transfer
+			lastTransferNumber = rxHeader.sequenceNumber - 1;
+			ExchangeHeader();
+		}
 	}
 	else
 	{
-		// Sbc wants to reset the state
-		ExchangeHeader();
+		if (state != InternalTransferState::ExchangingHeader)
+		{
+			// SBC wants to restart the transfer
+			ExchangeHeader();
+		}
+		else
+		{
+			// Last data response exchange failed, try to perform it again
+			ExchangeResponse(TransferResponse::Success);
+			state = InternalTransferState::ExchangingDataResponseRetry;
+		}
 	}
 }
 
@@ -796,13 +816,17 @@ TransferState DataTransfer::DoTransfer() noexcept
 		{
 		case InternalTransferState::ExchangingHeader:
 		{
-			Cache::InvalidateAfterDMAReceive(&rxHeader, sizeof(rxHeader));
 			// (1) Exchanged transfer headers
+			Cache::InvalidateAfterDMAReceive(&rxHeader, sizeof(rxHeader));
 			const uint32_t headerResponse = *reinterpret_cast<const uint32_t*>(&rxHeader);
 			if (headerResponse == TransferResponse::BadResponse)
 			{
-				// Sbc wants to restart the transfer
-				ResetTransfer(false);
+				// SBC received a bad response code. We must have been happy if we got here, else RRF would have complained
+				if (reprap.Debug(moduleSbcInterface))
+				{
+					debugPrintf("Retrying data response exchange\n");
+				}
+				RestartTransfer(false);
 				break;
 			}
 
@@ -859,11 +883,6 @@ TransferState DataTransfer::DoTransfer() noexcept
 					return IsConnectionReset() ? TransferState::connectionReset : TransferState::finished;
 				}
 			}
-			else if (rxResponse == TransferResponse::BadResponse)
-			{
-				// Sbc wants to restart the transfer
-				ResetTransfer(false);
-			}
 			else if (rxResponse == TransferResponse::BadHeaderChecksum || txResponse == TransferResponse::BadHeaderChecksum)
 			{
 				// Failed to exchange header, restart the full transfer
@@ -872,23 +891,18 @@ TransferState DataTransfer::DoTransfer() noexcept
 			}
 			else
 			{
-				// Received invalid response code
-				ResetTransfer(true);
+				// Restart the full transfer
+				RestartTransfer(rxResponse != TransferResponse::BadResponse);
 			}
 			break;
 
 		case InternalTransferState::ExchangingData:
 		{
-			Cache::InvalidateAfterDMAReceive(rxBuffer, rxHeader.dataLength);
 			// (3) Exchanged data
+			Cache::InvalidateAfterDMAReceive(rxBuffer, rxHeader.dataLength);
 			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)
 			{
-				if (reprap.Debug(moduleSbcInterface))
-				{
-					debugPrintf("Resetting state due to Sbc request\n");
-				}
-				failedTransfers++;
-				ExchangeHeader();
+				RestartTransfer(false);
 				break;
 			}
 
@@ -911,7 +925,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 		}
 
 		case InternalTransferState::ExchangingDataResponse:
-			// (4) Exchanged response to data transfer
+			// (4a) Exchanged response to data transfer
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
 			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
 			{
@@ -922,27 +936,52 @@ TransferState DataTransfer::DoTransfer() noexcept
 				return IsConnectionReset() ? TransferState::connectionReset : TransferState::finished;
 			}
 
-			if (rxResponse == TransferResponse::BadResponse)
-			{
-				// Sbc wants to restart the transfer
-				ResetTransfer(false);
-			}
-			else if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
+			if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
 			{
 				// Resend the data if a checksum error occurred
 				checksumErrors++;
 				ExchangeData();
 			}
+			else if (rxResponse == TransferResponse::BadResponse)
+			{
+				// Restart the full transfer
+				RestartTransfer(false);
+			}
 			else
 			{
-				// Received invalid response, reset the SPI transfer
-				ResetTransfer(true);
+				// Restart the data response transfer
+				RestartTransfer(true);
+				state = InternalTransferState::ResettingDataResponse;
+			}
+			break;
+
+		case InternalTransferState::ExchangingDataResponseRetry:
+			// (4b) Exchanged response to data transfer when new transfer is being started (fallback on bad response)
+			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
+			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
+			{
+				// Retry succeeded
+				ExchangeHeader();
+			}
+			else
+			{
+				// Retry failed, reset the connection
+				if (reprap.Debug(moduleSbcInterface))
+				{
+					debugPrintf("Data response retry failed (sent %08" PRIx32 ", got %08" PRIx32 ")\n", txResponse, rxResponse);
+				}
+				return TransferState::connectionReset;
 			}
 			break;
 
 		case InternalTransferState::Resetting:
-			// Transmitted bad response, attempt to start a new transfer
+			// Transmitted bad response, attempt to restart the connection
 			ExchangeHeader();
+			break;
+
+		case InternalTransferState::ResettingDataResponse:
+			// Transmitted bad response after data response exchange, attempt to restart the data response exchange
+			ExchangeResponse(TransferResponse::Success);
 			break;
 
 		default:
@@ -974,28 +1013,26 @@ void DataTransfer::StartNextTransfer() noexcept
 	txHeader.crcData = CalcCRC32(txBuffer, txPointer);
 	txHeader.crcHeader = CalcCRC32(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint32_t));
 
-	// Begin SPI transfe
+	// Begin SPI transfer
 	ExchangeHeader();
 }
 
 void DataTransfer::ResetConnection(bool fullReset) noexcept
 {
-	// The Sbc interface is no longer connected...
+	// Clear the remaining data to send
 	disable_spi();
 	dataReceived = false;
-
-	// Reset the sequence numbers and clear the data to send
-	lastTransferNumber = 0;
-	rxHeader.sequenceNumber = 0;
-	txHeader.sequenceNumber = 0;
 	rxPointer = txPointer = 0;
 	packetId = 0;
 
-	// Kick off a new transfer
+	// Reset the TfrRdy pin level and the seq numbers only if no communication is taking place
 	if (fullReset)
 	{
 		transferReadyHigh = false;
+		lastTransferNumber = rxHeader.sequenceNumber = txHeader.sequenceNumber = 0;
 	}
+
+	// Kick off a new transfer
 	StartNextTransfer();
 }
 
