@@ -7,7 +7,7 @@
 * --DMA memory buffers (re-enable dcache currently disabled)--
 * --TMC2209 interface--
 * --Test TMC5160 interface--
-* Check neopixel timing (consider using dma)
+* --Check neopixel timing (consider using dma)
 * Sort out STM32F4 and STM32H7 defines consider having base STM32 define
 * --WiFi interface--
 * --Check clock timing--
@@ -16,14 +16,14 @@
 * --Check UART code--
 * Consider using FIFOs for UARTS
 * --Common STM32 Core?--
-* Crash dump flash interface
+* --Crash dump flash interface
 * --CAN support--
 * Investigate SD Card SPI mode high speed switching
 * Test SBC mode
 * Build H7 IAP for SBC mode
 * --Sort out a H7 bootloader for Fly boards--
 * --Check H7 timer allocation--
-* use QSPI for neoplixels
+* --use QSPI for neoplixels or use DMA
 * Allow use of shared timers per pin (find best match)
 * Update hardware usage for H7
 * Allow DMA with SPI1, SPI5, SPI6
