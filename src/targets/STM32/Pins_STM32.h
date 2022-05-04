@@ -114,7 +114,7 @@
 
 
 // The physical capabilities of the machine
-constexpr size_t NumDirectDrivers = 11;               // The maximum number of drives supported by the electronics
+constexpr size_t NumDirectDrivers = 14;               // The maximum number of drives supported by the electronics
 #if defined(SUPPORT_TMC22xx)
     constexpr size_t MaxSmartDrivers = NumDirectDrivers;            // The maximum number of smart drivers
     constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -146,22 +146,22 @@ constexpr size_t NumDirectDrivers = 11;               // The maximum number of d
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
-constexpr size_t MaxSensors = 32;
+constexpr size_t MaxSensors = 56;
 
-constexpr size_t MaxHeaters = 9;                     // The maximum number of heaters in the machine
+constexpr size_t MaxHeaters = 32;                     // The maximum number of heaters in the machine
 constexpr size_t MaxPortsPerHeater = 2;
 constexpr size_t MaxMonitorsPerHeater = 3;
 
-constexpr size_t MaxBedHeaters = 1;
-constexpr size_t MaxChamberHeaters = 1;
+constexpr size_t MaxBedHeaters = 4;
+constexpr size_t MaxChamberHeaters = 4;
 constexpr int8_t DefaultBedHeater = 0;
 constexpr int8_t DefaultE0Heater = 1;                // Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 9;
 
-constexpr size_t MaxZProbes = 2;
-constexpr size_t MaxGpInPorts = 10;
-constexpr size_t MaxGpOutPorts = 10;
+constexpr size_t MaxZProbes = 4;
+constexpr size_t MaxGpInPorts = 32;
+constexpr size_t MaxGpOutPorts = 32;
 
 constexpr size_t MinAxes = 3;                        // The minimum and default number of axes
 constexpr size_t MaxAxes = 10;                       // The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -173,9 +173,9 @@ constexpr size_t NumDefaultExtruders = 1;            // The number of drivers th
 constexpr size_t MaxAxesPlusExtruders = 14;
 
 constexpr size_t MaxHeatersPerTool = 4;
-constexpr size_t MaxExtrudersPerTool = 4;
+constexpr size_t MaxExtrudersPerTool = 8;
 
-constexpr size_t MaxFans = 8;
+constexpr size_t MaxFans = 20;
 
 constexpr unsigned int MaxTriggers = 16;            // Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 

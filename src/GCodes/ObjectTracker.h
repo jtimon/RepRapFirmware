@@ -66,7 +66,7 @@ protected:
 #endif
 
 private:
-#if SAME70 || SAME5x
+#if SAME70 || SAME5x || STM32F4
 	typedef Bitmap<uint64_t> ObjectCancellationBitmap;	// Type of a bitmap used to represent objects on the build plate that have been cancelled
 #else
 	typedef Bitmap<uint32_t> ObjectCancellationBitmap;	// Type of a bitmap used to represent objects on the build plate that have been cancelled
