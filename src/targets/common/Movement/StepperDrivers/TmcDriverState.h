@@ -28,5 +28,11 @@ public:
 	virtual void SetStandstillCurrentPercent(float percent) noexcept = 0;
 
 	virtual StandardDriverStatus ReadStatus(bool accumulated, bool clearAccumulated) noexcept = 0;
+
+	virtual float GetSenseResistor() const noexcept = 0;
+	virtual void SetSenseResistor(float value) noexcept = 0;
+	virtual float GetMaxCurrent() const noexcept = 0;
+	virtual void SetMaxCurrent(float value) noexcept = 0;
+
 };
 #endif

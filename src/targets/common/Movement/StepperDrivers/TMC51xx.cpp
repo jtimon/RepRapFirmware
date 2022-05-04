@@ -57,14 +57,15 @@ constexpr uint32_t TmcClockSpeed = 12000000; 				// the rate at which the TMC dr
 #if TMC_TYPE == 5130
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 #elif TMC_TYPE == 5160
-// We now define MaxTmc5160Current in the board configuration file because it varies between boards
-constexpr float MaximumStandstillCurrent = MaxTmc5160Current * 0.707;
 #if STM32F4
-constexpr float SenseResistor = 0.075;						// This seems to be common for most modules
+constexpr float DefaultSenseResistor = 0.075;						// This seems to be common for most modules
 #else
-constexpr float SenseResistor = 0.050;						// assume same as we use for TMC2660
+constexpr float DefaultSenseResistor = 0.050;						// assume same as we use for TMC2660
 #endif
-constexpr float RecipFullScaleCurrent = SenseResistor/325.0;		// 1.0 divided by full scale current in mA
+// Max current and sense resistor values can now be set via gcode, so we calculate other values as needed
+//constexpr float MaximumStandstillCurrent = MaxTmc5160Current * 0.707;
+//constexpr float RecipFullScaleCurrent = SenseResistor/325.0;		// 1.0 divided by full scale current in mA
+constexpr float Vfs = 325.0;										// Full scale voltage from 5160 datasheet
 #endif
 
 // The SPI clock speed is a compromise:
@@ -289,6 +290,10 @@ public:
 	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
 	StandardDriverStatus ReadStatus(bool accumulated, bool clearAccumulated) noexcept;
+	float GetSenseResistor() const noexcept;
+	void SetSenseResistor(float value) noexcept;
+	float GetMaxCurrent() const noexcept;
+	void SetMaxCurrent(float value) noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	bool UpdatePending() const noexcept { return (registersToUpdate | newRegistersToUpdate) != 0; }
 #if HAS_STALL_DETECT
@@ -380,6 +385,9 @@ private:
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
 	uint8_t previousRegIndexRequested;						// the register we asked to read in the previous transaction, or 0xFF
 	bool enabled;											// true if driver is enabled
+
+	float maxCurrent;
+	float senseResistor;
 };
 
 const uint8_t Tmc51xxDriverState::WriteRegNumbers[NumWriteRegisters] =
@@ -410,7 +418,7 @@ const uint8_t Tmc51xxDriverState::ReadRegNumbers[NumReadRegisters] =
 
 Tmc51xxDriverState::Tmc51xxDriverState() noexcept : TmcDriverState(), accumulatedDriveStatus(0), configuredChopConfReg(0), maxStallStepInterval(0),
 	minSgLoadRegister(0), newRegistersToUpdate(0), registersToUpdate(0), axisNumber(0), microstepShiftFactor(0),
-	motorCurrent(0), enabled(0)
+	motorCurrent(0), enabled(0), maxCurrent(0), senseResistor(0)
 {
 }
 
@@ -425,6 +433,8 @@ pre(!driversPowered)
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
 	motorCurrent = 0;
+	senseResistor = DefaultSenseResistor;
+	maxCurrent = MaxTmc5160Current;
 	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 
 	// Set default values for all registers and flag them to be updated
@@ -663,7 +673,7 @@ DriverMode Tmc51xxDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void Tmc51xxDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaxTmc5160Current));
+	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, maxCurrent));
 	UpdateCurrent();
 }
 
@@ -679,6 +689,7 @@ void Tmc51xxDriverState::UpdateCurrent() noexcept
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 #elif TMC_TYPE == 5160
+	const float RecipFullScaleCurrent = senseResistor/Vfs;
 	// See if we can set IRUN to 31 and do the current adjustment in the global scaler
 	uint32_t gs = lrintf(motorCurrent * 256 * RecipFullScaleCurrent);
 	uint32_t iRun = 31;
@@ -694,11 +705,13 @@ void Tmc51xxDriverState::UpdateCurrent() noexcept
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
-	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
+	const uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)(maxCurrent * 0.707); // *0.707 to convert peak to RMS 
 	const uint16_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
 														? standstillCurrentFraction
 															: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
 	const uint32_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
+	if (reprap.Debug(moduleDriver))
+		debugPrintf("5160 motor current %d max %f msc %f IRun %d gs %d iHold %d\n", (int)motorCurrent, (double)maxCurrent, (double)(maxCurrent * 0.707), (int)iRun, (int)gs, (int)iHold);
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
 	UpdateRegister(Write5160GlobalScaler, gs);
@@ -716,6 +729,31 @@ void Tmc51xxDriverState::Enable(bool en) noexcept
 		UpdateChopConfRegister();
 	}
 }
+
+float Tmc51xxDriverState::GetSenseResistor() const noexcept
+{
+	return senseResistor;
+}
+
+void Tmc51xxDriverState::SetSenseResistor(float value) noexcept
+{
+	if (value > 0.0f) senseResistor = value;
+	// Max current may have changed due to sense resistor change
+	SetMaxCurrent(maxCurrent);
+}
+
+float Tmc51xxDriverState::GetMaxCurrent() const noexcept
+{
+	return maxCurrent;
+}
+
+void Tmc51xxDriverState::SetMaxCurrent(float value) noexcept
+{
+	if (value > 0.0f) maxCurrent = value;
+	if (maxCurrent > Vfs/senseResistor) maxCurrent = Vfs/senseResistor;
+	SetCurrent(motorCurrent);
+}
+
 
 // Read the status
 StandardDriverStatus Tmc51xxDriverState::ReadStatus(bool accumulated, bool clearAccumulated) noexcept

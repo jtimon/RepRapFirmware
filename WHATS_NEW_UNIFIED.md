@@ -1,16 +1,14 @@
-<<<<<<< HEAD
-Version 3.4.0_2
-===============
-* Updated Gemini V1.1 pins
-=======
 Version 3.4.1RC1_1
 ==================
 * Duet3d 3.4.1RC1
 * Added Fly Gemini V2 board
 * Incresed various system limits
 * Fixed BTT Octopus naming
->>>>>>> v3.4-dev-test
+* Allow configuration of sense resistor and max driver current
 
+Version 3.4.0_2
+===============
+* Updated Gemini V1.1 pins
 
 Version 3.4.0_1
 ===============
