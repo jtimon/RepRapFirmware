@@ -170,9 +170,30 @@ constexpr size_t NumDirectDrivers = 14;               // The maximum number of d
 
 
 #include <Duet3Common.h>
+#if STM32H7
+constexpr size_t MaxPortsPerHeater = 2;
 
-constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr size_t MaxBedHeaters = 12;
+constexpr size_t MaxChamberHeaters = 4;
+constexpr int8_t DefaultBedHeater = 0;
+constexpr int8_t DefaultE0Heater = 1;                // Index of the default first extruder heater, used only for the legacy status response
 
+constexpr size_t NumThermistorInputs = 9;
+
+constexpr size_t MinAxes = 3;                        // The minimum and default number of axes
+constexpr size_t MaxAxes = 15;                       // The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+constexpr size_t MaxDriversPerAxis = 8;              // The maximum number of stepper drivers assigned to one axis
+
+constexpr size_t MaxExtruders = 16;                  // The maximum number of extruders
+constexpr size_t NumDefaultExtruders = 1;            // The number of drivers that we configure as extruders by default
+
+constexpr size_t MaxAxesPlusExtruders = 25;          // May be <= MaxAxes + MaxExtruders
+
+constexpr size_t MaxHeatersPerTool = 20;
+constexpr size_t MaxExtrudersPerTool = 10;
+
+constexpr unsigned int MaxTriggers = 32;            // Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+#else
 constexpr size_t MaxPortsPerHeater = 2;
 
 constexpr size_t MaxBedHeaters = 4;
@@ -195,6 +216,9 @@ constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;            // Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+#endif
+
+constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxCanDrivers = 20;

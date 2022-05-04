@@ -323,7 +323,7 @@ typedef double floatc_t;						// type of matrix element used for calibration
 typedef float floatc_t;							// type of matrix element used for calibration
 #endif
 
-#ifdef DUET3
+#if defined(DUET3) || STM32H7
 typedef Bitmap<uint32_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
 #else
 typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
