@@ -1516,7 +1516,25 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				return GCodeResult::error;
 			}
 		}
-
+#if STM32F4
+		if (gb.Seen('I'))								// set max current and rsense value
+		{
+			seen = true;
+			float ivalues[2];
+			size_t numIvalues = 3;
+			gb.GetFloatArray(ivalues, numIvalues, false);
+			if (numIvalues > 2)
+			{
+				reply.copy("Expected 1 or 2 I values");
+				return GCodeResult::error;
+			}
+			if (numIvalues > 1)
+			{
+				SmartDrivers::SetSenseResistor(drive, ivalues[1]);
+			}
+			SmartDrivers::SetMaxCurrent(drive, ivalues[0]);
+		}
+#endif
 #if SUPPORT_TMC51xx
 		if (gb.TryGetUIValue('H', val, seen))		// set coolStep threshold
 		{
@@ -1615,7 +1633,9 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
 						  );
 			}
-
+# if STM32F4
+			reply.catf(", rsense %.4f, max current %.1f", (double)SmartDrivers::GetSenseResistor(drive), (double)SmartDrivers::GetMaxCurrent(drive));
+# endif
 # if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 			if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
 			{

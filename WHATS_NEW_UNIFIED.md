@@ -4,6 +4,7 @@ Version 3.4.1RC1_1
 * Added Fly Gemini V2 board
 * Incresed various system limits
 * Fixed BTT Octopus naming
+* Allow configuration of sense resistor and max driver current
 
 Version 3.4.0_2
 ===============

@@ -62,16 +62,18 @@ constexpr uint32_t TransferTimeout = 10;				// any transfer should complete with
 // The TMC2224 does _not_ handle back-to-back read requests, it needs a short delay between them.
 
 // Motor current calculations
+// Note that we now allow both the sense resistor value and max current to be configued,
+// so the following are default values only.
 // Full scale current has two ranges (VSENSE 1 or 0) and is given by
 // iMax = 0.32/(RSense + 0.02) (for VSENSE 0) iMax = 0.18/(RSense + 0.02) (for VSENSE = 1)
 // On typical TMC2209 driver boards RSense is 0.11Ohms on the Duet it is 0.082 Ohms
 constexpr float RSense = 0.11;
 
 // Which gives iMax values in mA of...
-constexpr int32_t iMax_VS1 = (int32_t)((0.18/(RSense + 0.02))*1000 + 0.5);
-constexpr int32_t iMax_VS0 = (int32_t)((0.32/(RSense + 0.02))*1000 + 0.5);
+constexpr int32_t DefaultiMax_VS1 = (int32_t)((0.18/(RSense + 0.02))*1000 + 0.5);
+constexpr int32_t DefaultiMax_VS0 = (int32_t)((0.32/(RSense + 0.02))*1000 + 0.5);
 
-constexpr float MaximumMotorCurrent = iMax_VS0;
+constexpr float MaximumMotorCurrent = DefaultiMax_VS0;
 constexpr float MaximumStandstillCurrent = 1400.0;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
@@ -393,6 +395,10 @@ public:
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 #endif
 	StandardDriverStatus ReadStatus(bool accumulated, bool clearAccumulated) noexcept;
+	float GetSenseResistor() const noexcept;
+	void SetSenseResistor(float value) noexcept;
+	float GetMaxCurrent() const noexcept;
+	void SetMaxCurrent(float value) noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	uint8_t GetDriverNumber() const noexcept { return driverNumber; }
 	bool UpdatePending() const noexcept;
@@ -514,6 +520,9 @@ private:
 	volatile uint8_t writeRegCRCs[NumWriteRegisters];		// CRCs of the messages needed to update the registers
 	static const uint8_t ReadRegCRCs[NumReadRegisters];		// CRCs of the messages needed to read the registers
 	bool enabled;											// true if driver is enabled
+
+	float senseResistor;
+	float maxCurrent;
 };
 
 // Static data members of class Tmc22xxDriverState
@@ -679,6 +688,8 @@ pre(!driversPowered)
 	registersToUpdate = 0;
 	motorCurrent = 0;
 	standstillCurrentFraction = (256 * 3)/4;							// default to 75%
+	maxCurrent = MaximumMotorCurrent;
+	senseResistor = RSense;
 	UpdateRegister(WriteGConf, DefaultGConfReg);
 	UpdateRegister(WriteSlaveConf, DefaultSlaveConfReg);
 	configuredChopConfReg = DefaultChopConfReg;
@@ -896,13 +907,16 @@ DriverMode Tmc22xxDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void Tmc22xxDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = static_cast<uint32_t>(constrain<float>(current, 50.0, MaximumMotorCurrent));
+	motorCurrent = static_cast<uint32_t>(constrain<float>(current, 50.0, maxCurrent));
 	UpdateCurrent();
 }
 
 void Tmc22xxDriverState::UpdateCurrent() noexcept
 {
 	// Set run and hold currents, adjust vsense as needed to keep bits in range.
+	const uint32_t iMax_VS1 = (uint32_t)((0.18/(senseResistor + 0.02))*1000 + 0.5);
+	const uint32_t iMax_VS0 = (uint32_t)((0.32/(senseResistor + 0.02))*1000 + 0.5);
+
 	uint32_t vsense;
 	uint32_t iRunCsBits;
 	uint32_t iHoldCsBits;
@@ -922,7 +936,8 @@ void Tmc22xxDriverState::UpdateCurrent() noexcept
 		iHoldCsBits = (32 * iHoldCurrent - iMax_VS0/2)/iMax_VS0;
 		vsense = 0;
 	}
-	//debugPrintf("TMC current iMax %d %d, set I %d IH %d csBits 0x%x 0x%x vsense 0x%x\n", (int)iMax_VS0, (int)iMax_VS1, (int)motorCurrent, (int)iHoldCurrent, (unsigned)iRunCsBits, (unsigned)iHoldCsBits, (unsigned)vsense);
+	if (reprap.Debug(moduleDriver))
+		debugPrintf("TMC current iMax %d %d, set I %d IH %d csBits 0x%x 0x%x vsense 0x%x\n", (int)iMax_VS0, (int)iMax_VS1, (int)motorCurrent, (int)iHoldCurrent, (unsigned)iRunCsBits, (unsigned)iHoldCsBits, (unsigned)vsense);
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK))
 					| (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) 
@@ -943,6 +958,31 @@ void Tmc22xxDriverState::Enable(bool en) noexcept
 		}
 		UpdateChopConfRegister();
 	}
+}
+
+float Tmc22xxDriverState::GetSenseResistor() const noexcept
+{
+	return senseResistor;
+}
+
+void Tmc22xxDriverState::SetSenseResistor(float value) noexcept
+{
+	if (value > 0.0f) senseResistor = value;
+	// Max current may have changed due to sense resistor change
+	SetMaxCurrent(maxCurrent);
+}
+
+float Tmc22xxDriverState::GetMaxCurrent() const noexcept
+{
+	return maxCurrent;
+}
+
+void Tmc22xxDriverState::SetMaxCurrent(float value) noexcept
+{
+	if (value > 0.0f) maxCurrent = value;
+	const int32_t iMax_VS0 = (int32_t)((0.32/(senseResistor + 0.02))*1000 + 0.5);
+	if (maxCurrent > iMax_VS0) maxCurrent = iMax_VS0;
+	SetCurrent(motorCurrent);
 }
 
 StandardDriverStatus Tmc22xxDriverState::ReadStatus(bool accumulated, bool clearAccumulated) noexcept

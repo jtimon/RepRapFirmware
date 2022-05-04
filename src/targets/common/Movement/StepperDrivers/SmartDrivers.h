@@ -15,18 +15,6 @@
 
 #include "StepperDrivers/DriverMode.h"
 
-#if 0
-// DRV_STATUS register bit assignments
-// Note: These values are identical to those used by TMC22XX devices.
-// All other devices must convert the return from GetAccumulatedStatus() to match
-const uint32_t TMC_RR_OT = 1u << 1;			// over temperature shutdown
-const uint32_t TMC_RR_OTPW = 1u << 0;		// over temperature warning
-const uint32_t TMC_RR_S2G = 15u << 2;		// short to ground counter (4 bits)
-const uint32_t TMC_RR_OLA = 1u << 6;		// open load A
-const uint32_t TMC_RR_OLB = 1u << 7;		// open load B
-const uint32_t TMC_RR_SG = 1u << 12;		// this is a reserved bit, which we use to signal a stall
-const uint32_t TMC_RR_STST = 1u << 31;      // driver standstill
-#endif
 namespace SmartDrivers
 {
 	void Init(size_t numSmartDrivers) noexcept;
@@ -59,6 +47,10 @@ namespace SmartDrivers
 #if HAS_STALL_DETECT
 	DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
 #endif
+	void SetSenseResistor(size_t driver, float value) noexcept;
+	float GetSenseResistor(size_t driver) noexcept;
+	void SetMaxCurrent(size_t driver, float value) noexcept;
+	float GetMaxCurrent(size_t driver) noexcept;
 };
 
 #endif

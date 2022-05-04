@@ -257,5 +257,28 @@ DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) n
 #endif
 }
 #endif
+
+void SmartDrivers::SetSenseResistor(size_t driver, float value) noexcept
+{
+	if (driver < numDrivers)
+		driverStates[driver]->SetSenseResistor(value);
+}
+
+void SmartDrivers::SetMaxCurrent(size_t driver, float value) noexcept
+{
+	if (driver < numDrivers)
+		driverStates[driver]->SetMaxCurrent(value);
+}
+
+float SmartDrivers::GetSenseResistor(size_t driver) noexcept
+{
+	return (driver < numDrivers ? driverStates[driver]->GetSenseResistor() : 0.0f);
+}
+
+float SmartDrivers::GetMaxCurrent(size_t driver) noexcept
+{
+	return (driver < numDrivers ? driverStates[driver]->GetMaxCurrent() : 0.0f);
+}
+
 #endif
 
