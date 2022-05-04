@@ -837,10 +837,7 @@ void Platform::Init() noexcept
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
 	// Enable the pullup resistor, with luck this will make it float high instead.
-#if SAM3XA
-	pinMode(APIN_SHARED_SPI_MISO, INPUT_PULLUP);
-#elif LPC17xx || SAME5x || STM32F4
-	// nothing to do here
+#if LPC17xx || SAME5x || STM32F4
 #else
 	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
 #endif
@@ -1587,8 +1584,6 @@ float Platform::GetCpuTemperature() const noexcept
 	const float voltage = (float)adcFilters[CpuTempFilterIndex].GetSum() * (3.3/(float)((1u << AnalogIn::AdcBits) * ThermistorAverageReadings));
 # if SAM4E || SAM4S
 	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
-# elif SAM3XA
-	return (voltage - 0.8) * (1000.0/2.65) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-45C
 # elif SAME70
 	return (voltage - 0.72) * (1000.0/2.33) + 25.0 + mcuTemperatureAdjust;			// accuracy at 25C is +/-34C
 # elif STM32F4
@@ -4017,8 +4012,8 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 #elif defined(DUET3_MB6XD)
 		board = BoardType::Duet3_6XD;
-#elif defined(DUET3MINI4)
-		board = BoardType::Duet3Mini4;
+#elif defined(FMDC_V02)
+		board = BoardType::FMDC;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -4097,12 +4092,12 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
 #elif defined(DUET3_MB6HC)
-	case BoardType::Duet3_6HC_v06_100:			return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
-	case BoardType::Duet3_6HC_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
+	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
+	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD:				return "Duet 3 " BOARD_SHORT_NAME;					// we have only one version at present
-#elif defined(DUET3MINI4)
-	case BoardType::Duet3Mini4:				return "Duet 3 " BOARD_SHORT_NAME;
+#elif defined(FMDC_V02)
+	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -4141,12 +4136,12 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3Mini_WiFi:			return "duet5lcwifi";
 	case BoardType::Duet3Mini_Ethernet:		return "duet5lcethernet";
 #elif defined(DUET3_MB6HC)
-	case BoardType::Duet3_6HC_v06_100:			return "duet3mb6hc100";
-	case BoardType::Duet3_6HC_v101:				return "duet3mb6hc101";
+	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
+	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD:				return "duet3mb6xd";					// we have only one version at present
-#elif defined(DUET3MINI4)
-	case BoardType::Duet3Mini4:				return "duet3mini4";
+#elif defined(FMDC_V02)
+	case BoardType::FMDC:					return "fmdc";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)

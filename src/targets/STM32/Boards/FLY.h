@@ -830,5 +830,78 @@ constexpr BoardDefaults fly_gemini_v1_1_Defaults = {
     PB_3, PB_12, SSP2,
 #endif
 };
+
+
+constexpr PinEntry PinTable_FLY_GEMINI_V2_0[] =
+{
+    //Thermistors
+    {PC_0, "e0temp,t0"},
+    {PC_2, "bedtemp,tb"},
+ 
+    //Endstops
+    {PA_3, "xstop"},
+    {PB_1, "ystop"},
+    {PB_10, "zstop"},
+
+    // Servo
+    {PB_0,  "servo0" },
+
+    // Porbe
+    {PA_1, "probe"},
+
+    //Heaters and Fans (Big and Small Mosfets}
+    {PA_2,  "bed,hbed" },
+    {PA_0,  "e0heat,he0" },
+    {PC_6,  "fan0,fan" },
+    {PC_7,  "fan1" },
+
+    // UART
+    {PA_9, "TX1,LCD_D4"},
+    {PA_10, "RX1,LCD_RS"},
+
+    //EXP1
+    {PA_8, "LCD_D5"},
+    {PB_6, "BTN_ENC"},
+    {PA_13, "LCD_EN"},
+    
+    //EXP2
+    {PC_10, "LCD_CD"},
+    {PA_14, "BTN_EN2"},
+    {PA_15, "BTN_EN1"},
+    {PB_14, "LCD_MISO"},
+    {PB_13, "LCD_SCK"},
+    {PB_12, "LCD_SS"},
+    {PB_15, "LCD_MOSI"},
+
+};
+
+constexpr BoardDefaults fly_gemini_v2_0_Defaults = {
+    {0x318f4fbe},                         // Signatures
+    SD_SPI1_B,                            // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {PB_3, PB_4, PB_5},                     //SPI2
+        {NoPin, NoPin, NoPin},                  //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+    },
+    4,                                          // Number of drivers
+    {PB_2, PD_2, PC_12, PC_11},                   //enablePins
+    {PC_13, PC_14, PC_15, PC_3},                //stepPins
+    {PC_1, PC_4, PC_5, PC_8},                   //dirPins
+#if TMC_SOFT_UART
+    {PB_11, PB_9, PB_8, PB_7},
+     4,                                         //uartPins                                              // Smart drivers
+#endif
+    0,
+#if HAS_VOLTAGE_MONITOR
+    NoPin,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    PB_3, PB_12, SSP2,
+#endif
+};
 #endif
 #endif
