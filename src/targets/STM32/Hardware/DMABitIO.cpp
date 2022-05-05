@@ -365,10 +365,10 @@ static void NeoSetupBitTiming(uint32_t *bits, uint32_t threshold)
 {
     if (threshold > NEO_OVERSAMPLE)
     {
-        debugPrintf("Neopixel timing too high %d > %d\n", threshold, NEO_OVERSAMPLE);
+        debugPrintf("Neopixel timing too high %d > %d\n", (int)threshold, (int)NEO_OVERSAMPLE);
         threshold = NEO_OVERSAMPLE;
     }
-    debugPrintf("Set timing threshold %d\n", threshold);
+    //debugPrintf("Set timing threshold %d\n", threshold);
     for(uint32_t i = 0; i < threshold; i++)
         bits[i] = SUSetBit;
     for(uint32_t i = threshold; i < NEO_OVERSAMPLE; i++)
@@ -385,8 +385,8 @@ bool NeopixelDMAWrite(Pin pin, uint32_t freq, uint8_t *bits, uint32_t cnt, uint3
     }
     // Setup timer frequency, note that we adjust timing from the default Duet 3 times oversample
     uint32_t period = SUTimer.getTimerClkFreq()/(freq*(NEO_OVERSAMPLE/3));
-	debugPrintf("SU base freq %d setting period %d\n", static_cast<int>(SUTimer.getTimerClkFreq()), static_cast<int>(period));
-    debugPrintf("SuState %d\n", SUState);
+	//debugPrintf("SU base freq %d setting period %d\n", static_cast<int>(SUTimer.getTimerClkFreq()), static_cast<int>(period));
+    //debugPrintf("SuState %d\n", SUState);
     SUPin = pin;
     pinMode(SUPin, OUTPUT_LOW);
     pin_speed(SUPin, GPIO_SPEED_FREQ_LOW);
@@ -400,9 +400,9 @@ bool NeopixelDMAWrite(Pin pin, uint32_t freq, uint8_t *bits, uint32_t cnt, uint3
     NeoWriteZeroByte();
 	SUState = SUStates::neowrite1;
     if (NeoAddToBuffer(NEO_BYTES_PER_BUFF - 1)) SUState = (SUStates)((int)SUState+1);
-    debugPrintf("SUBitCnt %d\n", SUBitCnt);
+    //debugPrintf("SUBitCnt %d\n", SUBitCnt);
     if (NeoAddToBuffer(NEO_BYTES_PER_BUFF)) SUState = (SUStates)((int)SUState+1);    
-    debugPrintf("SUBitCnt %d total buffer size (words) %d state %d\n", SUBitCnt, NEO_BYTES_PER_BUFF*NEO_WORDS_PER_BYTE*2, SUState);
+    //debugPrintf("SUBitCnt %d total buffer size (words) %d state %d\n", SUBitCnt, NEO_BYTES_PER_BUFF*NEO_WORDS_PER_BYTE*2, SUState);
     SUDma.Init.Direction = DMA_MEMORY_TO_PERIPH;
     SUDma.Init.Mode = DMA_CIRCULAR;
     HAL_DMA_RegisterCallback(&SUDma, HAL_DMA_XFER_HALFCPLT_CB_ID, DmaInterrupt);

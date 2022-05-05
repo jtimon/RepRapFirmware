@@ -942,7 +942,7 @@ void Tmc51xxDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 			readRegisters[ReadDrvStat] = regVal;
 if (regVal & TMC51xx_RR_S2G)
 {
-	debugPrintf("Status returns possible short val 0x%x prev reading 0x%x combined 0x%x\n", regVal, oldDrvStat, regVal & oldDrvStat);
+	debugPrintf("Status returns possible short val 0x%x prev reading 0x%x combined 0x%x\n", (unsigned)regVal, (unsigned)oldDrvStat, (unsigned)(regVal & oldDrvStat));
 }
 			regVal &= oldDrvStat;
 			lastValidDriveStatus = regVal;
