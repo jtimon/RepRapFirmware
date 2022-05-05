@@ -41,7 +41,7 @@ namespace LedStripDriver
 		nullptr,
 #endif
 #if SUPPORT_DMA_NEOPIXEL
-		"NeoPixel RGB on LED port",
+		"NeoPixel RGB",
 #else
 		nullptr,
 #endif
@@ -51,7 +51,7 @@ namespace LedStripDriver
 		nullptr,
 #endif
 #if SUPPORT_DMA_NEOPIXEL
-		"NeoPixel RGBW on LED port",
+		"NeoPixel RGBW",
 #else
 		nullptr,
 #endif
@@ -357,7 +357,8 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		if (!seenType)
 		{
 			// Report the current configuration
-			reply.printf("Led type is %s, timing %ld:%ld:%ld:%ld", LedTypeNames[(unsigned int)ledType], PixelTimings[0], PixelTimings[1], PixelTimings[2], PixelTimings[3]);
+			reply.printf("Led type is %s, timing %ld:%ld:%ld:%ld, ", LedTypeNames[(unsigned int)ledType], PixelTimings[0], PixelTimings[1], PixelTimings[2], PixelTimings[3]);
+			ledPort.AppendBasicDetails(reply);
 		}
 		return GCodeResult::ok;
 	}
