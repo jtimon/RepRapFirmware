@@ -30,3 +30,5 @@
 * --Replace ST USB library--
 * Allow use of embeded config
 * Set initial pin state from board.txt
+* Add support for humidity sensors
+* --Allow setting of neopixel pins--
