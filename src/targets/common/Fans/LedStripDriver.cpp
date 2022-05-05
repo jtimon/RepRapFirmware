@@ -17,7 +17,6 @@
 #include <GCodes/GCodes.h>
 #include <DMABitIO.h>
 
-
 namespace LedStripDriver
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
@@ -74,6 +73,7 @@ namespace LedStripDriver
 	static uint32_t whenOutputFinished = 0;								// the time in step clocks when we determined that the Output had finished
 	static bool needStartFrame;											// true if we need to send a start frame with the next command
 	static int32_t PixelTimings[4] = {350, 800, 1250, 250};
+	static IoPort ledPort;
 
 	static size_t MaxLedsPerBuffer() noexcept
 	{
@@ -117,44 +117,48 @@ namespace LedStripDriver
 
 		if (!following)
 		{
-			const uint32_t T0H = NanosecondsToCycles(PixelTimings[0]);
-			const uint32_t T0L = NanosecondsToCycles(PixelTimings[2] - PixelTimings[0]);
-			const uint32_t T1H = NanosecondsToCycles(PixelTimings[1]);
-			const uint32_t T1L = NanosecondsToCycles(PixelTimings[2] - PixelTimings[1]);
-			const uint8_t *q = chunkBuffer;
-			uint32_t nextDelay = T0L;
-			IrqDisable();
-			uint32_t lastTransitionTime = GetCurrentCycles();
-
-			while (q < p)
+			if (ledPort.IsValid())
 			{
-				uint8_t c = *q++;
-				for (unsigned int i = 0; i < 8; ++i)
+				Pin pin = ledPort.GetPin();
+				const uint32_t T0H = NanosecondsToCycles(PixelTimings[0]);
+				const uint32_t T0L = NanosecondsToCycles(PixelTimings[2] - PixelTimings[0]);
+				const uint32_t T1H = NanosecondsToCycles(PixelTimings[1]);
+				const uint32_t T1L = NanosecondsToCycles(PixelTimings[2] - PixelTimings[1]);
+				const uint8_t *q = chunkBuffer;
+				uint32_t nextDelay = T0L;
+				IrqDisable();
+				uint32_t lastTransitionTime = GetCurrentCycles();
+
+				while (q < p)
 				{
-					if (c & 0x80)
+					uint8_t c = *q++;
+					for (unsigned int i = 0; i < 8; ++i)
 					{
-						lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
-						fastDigitalWriteHigh(NeopixelOutPin);
-						__DSB();
-						lastTransitionTime = DelayCycles(lastTransitionTime, T1H);
-						fastDigitalWriteLow(NeopixelOutPin);
-						__DSB();
-						nextDelay = T1L;
+						if (c & 0x80)
+						{
+							lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
+							fastDigitalWriteHigh(pin);
+							__DSB();
+							lastTransitionTime = DelayCycles(lastTransitionTime, T1H);
+							fastDigitalWriteLow(pin);
+							__DSB();
+							nextDelay = T1L;
+						}
+						else
+						{
+							lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
+							fastDigitalWriteHigh(pin);
+							__DSB();
+							lastTransitionTime = DelayCycles(lastTransitionTime, T0H);
+							fastDigitalWriteLow(pin);
+							__DSB();
+							nextDelay = T0L;
+						}
+						c <<= 1;
 					}
-					else
-					{
-						lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
-						fastDigitalWriteHigh(NeopixelOutPin);
-						__DSB();
-						lastTransitionTime = DelayCycles(lastTransitionTime, T0H);
-						fastDigitalWriteLow(NeopixelOutPin);
-						__DSB();
-						nextDelay = T0L;
-					}
-					c <<= 1;
 				}
+				IrqEnable();
 			}
-			IrqEnable();
 			numAlreadyInBuffer = 0;
 			whenOutputFinished = StepTimer::GetTimerTicks();
 			needStartFrame = true;
@@ -182,7 +186,8 @@ namespace LedStripDriver
 
 		if (!following) 
 		{
-			NeopixelDMAWrite(NeopixelOutPin, currentFrequency, chunkBuffer, p-chunkBuffer, PixelTimings[0], PixelTimings[1], 100);
+			if (ledPort.IsValid())
+				NeopixelDMAWrite(ledPort.GetPin(), currentFrequency, chunkBuffer, p-chunkBuffer, PixelTimings[0], PixelTimings[1], 100);
 			numAlreadyInBuffer = 0;
 			whenOutputFinished = StepTimer::GetTimerTicks();
 			needStartFrame = true;
@@ -196,9 +201,9 @@ void LedStripDriver::Init() noexcept
 {
 	if (NeopixelOutPin != NoPin)
 	{
-		IoPort::SetPinMode(NeopixelOutPin, PinMode::OUTPUT_LOW);
-		chunkBuffer = new uint8_t[ChunkBufferSize];
-	}
+        String<1> dummy;
+        ledPort.AssignPort(GetPinNames(NeopixelOutPin), dummy.GetRef(), PinUsedBy::gpout, PinAccess::write0);
+    }
 	whenOutputFinished = StepTimer::GetTimerTicks();
 	needStartFrame = true;
 }
@@ -293,6 +298,16 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 				return GCodeResult::error;
 			}
 		}
+		if (gb.Seen('C'))
+		{
+			Pin pin = ledPort.GetPin();
+			if (!ledPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0))
+			{
+				return GCodeResult::error;
+			}
+			needInit = ledPort.GetPin() != pin;
+		}
+
 	}
 
 	if (needInit)
@@ -302,10 +317,11 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		needInit = false;
 
 #if SUPPORT_BITBANG_NEOPIXEL || SUPPORT_DMA_NEOPIXEL
-		if (ledType == LedType::neopixelRGBBitBang || ledType == LedType::neopixelRGBWBitBang)
+		if (ledType == LedType::neopixelRGBBitBang || ledType == LedType::neopixelRGBWBitBang || ledType == LedType::neopixelRGB || ledType == LedType::neopixelRGBW)
 		{
 			// Set the data output low to start a WS2812 reset sequence
-			IoPort::SetPinMode(NeopixelOutPin, PinMode::OUTPUT_LOW);
+			if (ledPort.IsValid())
+				ledPort.WriteDigital(false);
 			whenOutputFinished = StepTimer::GetTimerTicks();
 		}
 #endif
@@ -351,6 +367,10 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 	{
 		return GCodeResult::ok;
 	}
+	
+	// Allocate the buffer on first use
+	if (chunkBuffer == nullptr)
+		chunkBuffer = new uint8_t[ChunkBufferSize];
 
 	switch (ledType)
 	{
