@@ -3873,7 +3873,12 @@ GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	{
 		rslt = GetGCodeResultFromSuccess(PsOnPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0));
 	}
+// on STM/LPC port we allow use of M80/M81 to control "virtual power", so it is not an error to have no pin defined
+#if STM32F4 || LPC17xx
+	else if (1)
+#else
 	else if (PsOnPort.IsValid())
+#endif
 	{
 		deferredPowerDown = gb.Seen('S') && gb.GetUIValue() != 0;
 		if (!deferredPowerDown)
