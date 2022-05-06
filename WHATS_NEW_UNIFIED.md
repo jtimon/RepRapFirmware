@@ -2,7 +2,7 @@ Version 3.4.1RC1_1
 ==================
 * Duet3d 3.4.1RC1
 * Added Fly Gemini V2 board
-* Incresed various system limits
+* Increased various system limits
 * Fixed BTT Octopus naming
 * Allow configuration of sense resistor and max driver current
 
