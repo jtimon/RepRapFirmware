@@ -193,6 +193,7 @@ constexpr size_t MaxHeatersPerTool = 20;
 constexpr size_t MaxExtrudersPerTool = 10;
 
 constexpr unsigned int MaxTriggers = 32;            // Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+constexpr size_t MaxLedPorts = 32;                  // Max number of LED ports
 #else
 constexpr size_t MaxPortsPerHeater = 2;
 
@@ -216,6 +217,7 @@ constexpr size_t MaxHeatersPerTool = 4;
 constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;            // Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
+constexpr size_t MaxLedPorts = 32;                  // Max number of LED ports
 #endif
 
 constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to

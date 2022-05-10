@@ -66,18 +66,27 @@ namespace LedStripDriver
 #elif SUPPORT_BITBANG_NEOPIXEL
 	constexpr auto DefaultLedType = LedType::neopixelRGBBitBang;
 #endif
-	static uint32_t currentFrequency;									// the SPI frequency we are using
-	static LedType ledType = DefaultLedType;
+	constexpr int32_t DefaultPixelTimings[] = {350, 800, 1250, 250};
+
 	static unsigned int numAlreadyInBuffer = 0;							// number of pixels already store in the buffer (NeoPixel only)
 	static uint8_t *chunkBuffer = nullptr;								// buffer for sending data to LEDs
 	static uint32_t whenOutputFinished = 0;								// the time in step clocks when we determined that the Output had finished
+	static uint32_t startFrameTime = 0;								// how long in step clocks for the start frame
 	static bool needStartFrame;											// true if we need to send a start frame with the next command
-	static int32_t PixelTimings[4] = {350, 800, 1250, 250};
-	static IoPort ledPort;
+	static int32_t currentPort = -1;
+
+	typedef struct
+	{
+		IoPort ledPort;
+		int32_t pixelTimings[4];
+		uint32_t frequency;
+		LedType ledType;
+	} LedPort;
+	LedPort *ledPorts[MaxLedPorts];
 
 	static size_t MaxLedsPerBuffer() noexcept
 	{
-		switch (ledType)
+		switch (ledPorts[currentPort]->ledType)
 		{
 		case LedType::dotstar:
 		case LedType::neopixelRGBWBitBang:
@@ -94,6 +103,17 @@ namespace LedStripDriver
 		default:
 			return ChunkBufferSize/12;
 		}
+	}
+
+	static void StartNeoPixelStartFrame()
+	{
+		LedPort &port = *ledPorts[currentPort];
+		if (port.ledPort.IsValid())
+			port.ledPort.WriteDigital(false);
+		whenOutputFinished = StepTimer::GetTimerTicks();
+		needStartFrame = true;
+		startFrameTime = (((uint32_t)port.pixelTimings[3] * StepClockRate)/1000000);
+		numAlreadyInBuffer = 0;
 	}
 
 
@@ -117,13 +137,14 @@ namespace LedStripDriver
 
 		if (!following)
 		{
-			if (ledPort.IsValid())
+			LedPort &port = *ledPorts[currentPort];
+			if (port.ledPort.IsValid())
 			{
-				Pin pin = ledPort.GetPin();
-				const uint32_t T0H = NanosecondsToCycles(PixelTimings[0]);
-				const uint32_t T0L = NanosecondsToCycles(PixelTimings[2] - PixelTimings[0]);
-				const uint32_t T1H = NanosecondsToCycles(PixelTimings[1]);
-				const uint32_t T1L = NanosecondsToCycles(PixelTimings[2] - PixelTimings[1]);
+				Pin pin = port.ledPort.GetPin();
+				const uint32_t T0H = NanosecondsToCycles(port.pixelTimings[0]);
+				const uint32_t T0L = NanosecondsToCycles(port.pixelTimings[2] - port.pixelTimings[0]);
+				const uint32_t T1H = NanosecondsToCycles(port.pixelTimings[1]);
+				const uint32_t T1L = NanosecondsToCycles(port.pixelTimings[2] - port.pixelTimings[1]);
 				const uint8_t *q = chunkBuffer;
 				uint32_t nextDelay = T0L;
 				IrqDisable();
@@ -159,9 +180,7 @@ namespace LedStripDriver
 				}
 				IrqEnable();
 			}
-			numAlreadyInBuffer = 0;
-			whenOutputFinished = StepTimer::GetTimerTicks();
-			needStartFrame = true;
+			StartNeoPixelStartFrame();
 		}
 		return GCodeResult::ok;
 	}
@@ -186,11 +205,10 @@ namespace LedStripDriver
 
 		if (!following) 
 		{
-			if (ledPort.IsValid())
-				NeopixelDMAWrite(ledPort.GetPin(), currentFrequency, chunkBuffer, p-chunkBuffer, PixelTimings[0], PixelTimings[1], 100);
-			numAlreadyInBuffer = 0;
-			whenOutputFinished = StepTimer::GetTimerTicks();
-			needStartFrame = true;
+			LedPort &port = *ledPorts[currentPort];
+			if (port.ledPort.IsValid())
+				NeopixelDMAWrite(port.ledPort.GetPin(), port.frequency, chunkBuffer, p-chunkBuffer, port.pixelTimings[0], port.pixelTimings[1], 100);
+			StartNeoPixelStartFrame();
 		}
 
 		return GCodeResult::ok;
@@ -202,10 +220,15 @@ void LedStripDriver::Init() noexcept
 	if (NeopixelOutPin != NoPin)
 	{
         String<1> dummy;
-        ledPort.AssignPort(GetPinNames(NeopixelOutPin), dummy.GetRef(), PinUsedBy::gpout, PinAccess::write0);
+		ledPorts[0] = new LedPort;
+		LedPort &port = *ledPorts[0];
+        port.ledPort.AssignPort(GetPinNames(NeopixelOutPin), dummy.GetRef(), PinUsedBy::gpout, PinAccess::write0);
+		memcpy(port.pixelTimings, DefaultPixelTimings, sizeof(DefaultPixelTimings));
+		port.frequency = DefaultNeoPixelSpiClockFrequency;
+		port.ledType = DefaultLedType;
+		currentPort = 0;
+		StartNeoPixelStartFrame();
     }
-	whenOutputFinished = StepTimer::GetTimerTicks();
-	needStartFrame = true;
 }
 
 // Return true if we must stop movement before we handle this command
@@ -214,7 +237,8 @@ bool LedStripDriver::MustStopMovement(GCodeBuffer& gb) noexcept
 #if SUPPORT_BITBANG_NEOPIXEL
 	try
 	{
-		const LedType lt = (gb.Seen('X')) ? (LedType)gb.GetLimitedUIValue('X', 0, ARRAY_SIZE(LedTypeNames)) : ledType;
+		const uint32_t ledPortNumber = gb.Seen('K') ? gb.GetLimitedUIValue('K', MaxLedPorts) : currentPort;
+		const LedType lt = ledPortNumber >= 0 ? ledPorts[ledPortNumber]->ledType : DefaultLedType;
 		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang) & gb.SeenAny("RUBWPYSF");
 	}
 	catch (const GCodeException&)
@@ -224,6 +248,60 @@ bool LedStripDriver::MustStopMovement(GCodeBuffer& gb) noexcept
 #else
 	return false;
 #endif
+}
+
+// This function handles M950 operations for LED ports
+GCodeResult LedStripDriver::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	const uint32_t ledPortNumber = gb.GetLimitedUIValue('E', MaxLedPorts);
+	if (ledPorts[ledPortNumber] == nullptr)
+		ledPorts[ledPortNumber] = new LedPort;
+	LedPort &port = *ledPorts[ledPortNumber];
+	bool seen = false;
+	if (gb.Seen('C'))
+	{
+		if (!port.ledPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+		seen = true;
+		memcpy(port.pixelTimings, DefaultPixelTimings, sizeof(DefaultPixelTimings));
+		port.frequency = DefaultNeoPixelSpiClockFrequency;
+		port.ledType = DefaultLedType;
+	}
+	if (gb.Seen('T'))
+	{
+		seen = true;
+		const uint32_t newType = gb.GetLimitedUIValue('T', 0, ARRAY_SIZE(LedTypeNames));
+		if (LedTypeNames[newType] == nullptr)
+		{
+			reply.copy("Unsupported LED strip type");
+			return GCodeResult::error;
+		}
+		port.ledType = (LedType)newType;
+	}
+	if (gb.Seen('Q'))
+	{
+		seen = true;
+		port.frequency = gb.GetLimitedUIValue('Q', 1000000, 4000000);
+	}
+	if (gb.Seen('L'))
+	{
+		size_t numTimings = ARRAY_SIZE(DefaultPixelTimings);
+		gb.GetIntArray(port.pixelTimings, numTimings, true);
+		if (numTimings != ARRAY_SIZE(DefaultPixelTimings))
+		{
+			reply.copy("bad timing parameter");
+			return GCodeResult::error;
+		}
+	}
+	if (!seen)
+	{
+		// Report the current configuration
+		reply.printf("Led type is %s, timing %ld:%ld:%ld:%ld, frequency %u, ", LedTypeNames[(unsigned int)port.ledType], port.pixelTimings[0], port.pixelTimings[1], port.pixelTimings[2], port.pixelTimings[3], (unsigned)port.frequency);
+		port.ledPort.AppendBasicDetails(reply);
+	}
+	return GCodeResult::ok;
 }
 
 // This function handles M150
@@ -247,86 +325,38 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		}
 	}
 #endif
+	// Handle start frame
 	if (needStartFrame
-		&& ((StepTimer::GetTimerTicks() - whenOutputFinished) < (((uint32_t)PixelTimings[3] * StepClockRate)/1000000))
+		&& ((StepTimer::GetTimerTicks() - whenOutputFinished) < startFrameTime)
 	   )
 	{
 		return GCodeResult::notFinished;									// give the NeoPixels time to reset
 	}
 	needStartFrame = false;
-
+	bool seenPort = false;
 	// Deal with changing the LED type first
-	bool seenType = false;
-	bool needInit = false;
-	if (gb.Seen('X'))
+	if (gb.Seen('K'))
 	{
-		seenType = true;
-		const uint32_t newType = gb.GetLimitedUIValue('X', 0, ARRAY_SIZE(LedTypeNames));
-		const bool typeChanged = (newType != (unsigned int)ledType);
-
-#if !SUPPORT_DMA_NEOPIXEL || !SUPPORT_BITBANG_NEOPIXEL
-		// Check whether the new type is supported
-		if (LedTypeNames[newType] == nullptr)
+		const uint32_t ledPortNumber = gb.GetLimitedUIValue('K', MaxLedPorts);
+		if (ledPorts[ledPortNumber] == nullptr || !ledPorts[ledPortNumber]->ledPort.IsValid())
 		{
-			reply.copy("Unsupported LED strip type");
+			reply.copy("Invalid led port");
+			currentPort = -1;
 			return GCodeResult::error;
 		}
-#endif
-#if SUPPORT_DMA_NEOPIXEL
-# if SUPPORT_BITBANG_NEOPIXEL
-		if (newType != (unsigned int)LedType::neopixelRGBBitBang && newType != (unsigned int)LedType::neopixelRGBWBitBang)
-# endif
+		if (currentPort != (int32_t)ledPortNumber)
 		{
-			bool setFrequency = typeChanged;
-			currentFrequency = (newType == (unsigned int)LedType::dotstar) ? DefaultDotStarSpiClockFrequency : DefaultNeoPixelSpiClockFrequency;
-			gb.TryGetUIValue('Q', currentFrequency, setFrequency);
+			currentPort = ledPortNumber;
+			StartNeoPixelStartFrame();
+			return GCodeResult::notFinished;
 		}
-#endif
-		if (typeChanged)
-		{
-			ledType = (LedType)newType;
-			needInit = true;
-		}
-
-		if (gb.Seen('T'))
-		{
-			size_t numTimings = ARRAY_SIZE(PixelTimings);
-			gb.GetIntArray(PixelTimings, numTimings, true);
-			if (numTimings != ARRAY_SIZE(PixelTimings))
-			{
-				reply.copy("bad timing parameter");
-				return GCodeResult::error;
-			}
-		}
-		if (gb.Seen('C'))
-		{
-			Pin pin = ledPort.GetPin();
-			if (!ledPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0))
-			{
-				return GCodeResult::error;
-			}
-			needInit = ledPort.GetPin() != pin;
-		}
-
-	}
-
-	if (needInit)
-	{
-		// Either we changed the type, or this is first-time initialisation
 		numAlreadyInBuffer = 0;
-		needInit = false;
-
-#if SUPPORT_BITBANG_NEOPIXEL || SUPPORT_DMA_NEOPIXEL
-		if (ledType == LedType::neopixelRGBBitBang || ledType == LedType::neopixelRGBWBitBang || ledType == LedType::neopixelRGB || ledType == LedType::neopixelRGBW)
-		{
-			// Set the data output low to start a WS2812 reset sequence
-			if (ledPort.IsValid())
-				ledPort.WriteDigital(false);
-			whenOutputFinished = StepTimer::GetTimerTicks();
-		}
-#endif
-		needStartFrame = true;
-		return GCodeResult::notFinished;
+	}
+	// Check to make sure we have a port selected
+	if (currentPort < 0)
+	{
+		reply.copy("No led port selected");
+		return GCodeResult::error;
 	}
 
 	// Get the RGB and brightness values
@@ -354,11 +384,10 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 
 	if (!seenColours)
 	{
-		if (!seenType)
+		if (!seenPort)
 		{
 			// Report the current configuration
-			reply.printf("Led type is %s, timing %ld:%ld:%ld:%ld, ", LedTypeNames[(unsigned int)ledType], PixelTimings[0], PixelTimings[1], PixelTimings[2], PixelTimings[3]);
-			ledPort.AppendBasicDetails(reply);
+			reply.printf("Led port is %d", (int)currentPort);
 		}
 		return GCodeResult::ok;
 	}
@@ -373,33 +402,50 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 	if (chunkBuffer == nullptr)
 		chunkBuffer = new uint8_t[ChunkBufferSize];
 
-	switch (ledType)
+	// Apply brightness
+	red = ((red * brightness + 255) >> 8);
+	green = ((green * brightness + 255) >> 8);
+	blue = ((blue * brightness + 255) >> 8);
+	white = ((white * brightness + 255) >> 8);
+	switch (ledPorts[currentPort]->ledType)
 	{
 	case LedType::dotstar:
 		break;
 
 	case LedType::neopixelRGB:
-	case LedType::neopixelRGBW:
-#if SUPPORT_BITBANG_NEOPIXEL
+#if SUPPORT_DMA_NEOPIXEL
 		// Scale RGB by the brightness
-		return DmaNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
-									(uint8_t)((green * brightness + 255) >> 8),
-									(uint8_t)((blue * brightness + 255) >> 8),
-									(uint8_t)((white * brightness + 255) >> 8),
-									numLeds, (ledType == LedType::neopixelRGBWBitBang), following
+		return DmaNeoPixelData(	(uint8_t)red, (uint8_t)green, (uint8_t)blue, (uint8_t)white,
+									numLeds, false, following
 							      );
-#endif
+#else
 		break;
+#endif
+
+	case LedType::neopixelRGBW:
+#if SUPPORT_DMA_NEOPIXEL
+		// Scale RGB by the brightness
+		return DmaNeoPixelData(	(uint8_t)red, (uint8_t)green, (uint8_t)blue, (uint8_t)white,
+									numLeds, true, following
+							      );
+#else
+		break;
+#endif
 
 	case LedType::neopixelRGBBitBang:
+#if SUPPORT_BITBANG_NEOPIXEL
+		// Scale RGB by the brightness
+		return BitBangNeoPixelData(	(uint8_t)red, (uint8_t)green, (uint8_t)blue, (uint8_t)white,
+									numLeds, false, following
+							      );
+#else
+		break;
+#endif	
 	case LedType::neopixelRGBWBitBang:
 #if SUPPORT_BITBANG_NEOPIXEL
 		// Scale RGB by the brightness
-		return BitBangNeoPixelData(	(uint8_t)((red * brightness + 255) >> 8),
-									(uint8_t)((green * brightness + 255) >> 8),
-									(uint8_t)((blue * brightness + 255) >> 8),
-									(uint8_t)((white * brightness + 255) >> 8),
-									numLeds, (ledType == LedType::neopixelRGBWBitBang), following
+		return BitBangNeoPixelData(	(uint8_t)red, (uint8_t)green, (uint8_t)blue, (uint8_t)white,
+									numLeds, true, following
 							      );
 #else
 		break;

@@ -59,6 +59,7 @@ using LegacyAnalogIn::AdcBits;
 # include "STM32/BoardConfig.h"
 # include <sd_mmc.h>
 # include "ResetCause.h"
+# include "common/Fans/LedStripDriver.h"
 #else
 #if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
@@ -4711,6 +4712,8 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 	for (char c :
 #ifdef DUET3_MB6HC
 		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
+#elif STM32F4
+		(const char[]){'E', 'R', 'J', 'F', 'H', 'P', 'S'}
 #else
 		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
 #endif
@@ -4762,6 +4765,9 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 		{
 			return MassStorage::ConfigureSdCard(gb, reply);
 		}
+#elif STM32F4
+	case 64:	// E
+			return LedStripDriver::Configure(gb, reply);
 #endif
 		//no break
 
