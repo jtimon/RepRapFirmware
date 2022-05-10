@@ -1,3 +1,7 @@
+Version 3.4.1RC1_2
+==================
+* Switched rsense and max current configuration to M569.8
+
 Version 3.4.1RC1_1
 ==================
 * Duet3d 3.4.1RC1
