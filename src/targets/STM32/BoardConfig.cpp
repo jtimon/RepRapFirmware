@@ -839,6 +839,8 @@ void BoardConfig::PrintValue(MessageType mtype, configValueType configType, void
     }
 }
 
+
+extern "C" uint32_t USBReadOverrun;
 //Information printed by M122 P200
 void BoardConfig::Diagnostics(MessageType mtype) noexcept
 {
@@ -943,6 +945,9 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     MessageF(mtype, "T_MCU calc (corrected) %f\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
     MessageF(mtype, "Device Id %x Revison Id %x CPUId r%dp%d \n", (unsigned)LL_DBGMCU_GetDeviceID(), (unsigned)LL_DBGMCU_GetRevisionID(),  
                                             (unsigned)((SCB->CPUID >> 20) & 0x0F), (unsigned)(SCB->CPUID & 0x0F));
+    MessageF(mtype, "\n== USB ==\n");
+    MessageF(mtype, "Read overrun %d\n", (int)USBReadOverrun);
+    USBReadOverrun = 0;
 }
 
 //Set a variable from a string using the specified data type
