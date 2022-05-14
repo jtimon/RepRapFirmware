@@ -4,6 +4,92 @@
 #include "../Pins_STM32.h"
 
 #if STM32H7
+constexpr PinEntry PinTable_FLY_SUPER5[] =
+{
+    //Thermistors
+    {PC_4, "ADC0"},
+    {PC_5, "ADC1"},
+    {PB_1, "ADC2"},
+	
+
+    //Endstops
+    {PB_7, "IO0"},
+    {PC_7, "IO1"},
+    {PC_6, "IO2"},
+    {PC_13, "IO3"},
+    {PC_14, "IO4"},
+    {PC_15, "IO5"},
+    {PB_2, "NEOPIXEL"},
+ 
+    // Servo
+    {PE_6,  "SERVO0" },
+
+    // Probe
+    {PC_2, "probe"},
+
+    //Heaters and Fans (Big and Small Mosfets}
+    {PD_12,  "heat0" },
+    {PD_13,  "heat1" },
+    {PE_5,  "bedout,bed" }, 
+    {PA_0,  "fan0" },
+    {PA_1,  "fan1" },
+    {PA_2,  "fan2" },
+    {PA_3,  "fan3" },
+
+    
+    //EXP1
+    
+    
+    
+    
+    {PA_8, "BEEP"},    {PA_13, "BTN_ENC"},
+    {PA_15, "LCD_EN"}, {PA_14, "LCD_RS"},
+    {PD_0, "LCD_D4"},  {PD_1, "LCD_D5"},
+    {PD_4, "LCD_D6"},  {PD_2, "LCD_D7"},
+	//GND 
+
+    //EXP2
+    
+    
+    
+    {PB_4, "LCD_MISO"},{PB_3, "LCD_SCK"},
+    {PD_7, "BTN_EN2"}, {PB_6, "LCD_SS"},
+    {PD_6, "BTN_EN1"}, {PB_5, "LCD_MOSI"},
+    {PD_5, "LCD_CD"},
+
+};
+
+constexpr BoardDefaults fly_super5_Defaults = {
+    {0x2fe7ccfb},                   // Signatures
+    SD_SDIO,                                    // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {PB_3, PB_4, PB_5},                     //SPI2
+        {NoPin, NoPin, NoPin},                  //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+        {NoPin, NoPin, NoPin},                  //SPI6
+        {NoPin, NoPin, NoPin},                  //SPI7
+        {NoPin, NoPin, NoPin},                  //SPI8
+    },
+    5,                                          // Number of drivers
+    {PB_11, PE_13, PE_9, PC_1, PE_3, NoPin, NoPin, NoPin},    //enablePins
+    {PE_14, PE_11, PE_7, PE_4, PE_1, NoPin, NoPin, NoPin},     //stepPins
+    {PE_15, PE_12, PE_8, PE_5, PE_2, NoPin, NoPin, NoPin},      //dirPins
+#if HAS_SMART_DRIVERS
+    {PB_10, PE_10, PA_4, PC_0, PE_0, NoPin, NoPin, NoPin},    //uartPins      
+     5,                                         // Smart drivers
+#endif
+    0,
+#if HAS_VOLTAGE_MONITOR
+    PC_3,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
+};
 
 constexpr PinEntry PinTable_FLY_SUPER8H7[] =
 {
