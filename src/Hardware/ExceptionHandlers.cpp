@@ -28,10 +28,6 @@
 {
 	IrqDisable();								// disable interrupts before we call any flash functions. We don't enable them again.
 	WatchdogReset();							// kick the watchdog
-#if STM32
-	WatchdogDisable();
-#endif
-
 #if SAME70 || SAM4E
 	WatchdogResetSecondary();					// kick the secondary watchdog
 #endif
