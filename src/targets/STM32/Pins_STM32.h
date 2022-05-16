@@ -59,7 +59,7 @@
 #define SUPPORT_ROLAND		             0	// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		             0	// set nonzero to support FreeLSS scanners
 #define SUPPORT_IOBITS		             0	// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	             0	// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_DHT_SENSOR	             1	// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_WORKPLACE_COORDINATES    1
 #define SUPPORT_LASER                    1
 
