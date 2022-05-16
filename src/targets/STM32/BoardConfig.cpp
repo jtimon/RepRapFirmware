@@ -46,7 +46,6 @@ static constexpr char boardConfigFile[] = "board.txt";
 //Single entry for Board name
 static const boardConfigEntry_t boardEntryConfig[]=
 {
-//    {"lpc.board", &lpcBoardName, nullptr, cvStringType},
     {"board", &lpcBoardName, nullptr, cvStringType},
 };
 
@@ -281,6 +280,7 @@ BoardConfig::BoardConfig() noexcept
 
 static void ConfigureGPIOPins() noexcept
 {
+    initInterruptPins();
     // loop through and set and pins that have special requirements from the board settings
     for (size_t lp = 0; lp < NumNamedLPCPins; ++lp)
     {
@@ -860,7 +860,7 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 
     MessageF(mtype, "\n== Configurable Board.txt Settings ==\n");
     //Print the board name
-    boardConfigEntry_t board = boardEntryConfig[1];
+    boardConfigEntry_t board = boardEntryConfig[0];
     MessageF(mtype, "%s = ", board.key );
     BoardConfig::PrintValue(mtype, board.type, board.variable);
     MessageF(mtype, "  Signature 0x%x\n\n", (unsigned int)signature);
@@ -925,6 +925,16 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
 		PWMPins[i].appendStatus(status.GetRef());
 		MessageF(mtype, "%u: %s\n", i, status.c_str());
 	}
+
+    MessageF(mtype, "\n== Attached interrupt pins ==\n");
+    for(uint32_t i = 0; i < 16; i++)
+    {
+        Pin p = getAttachedPin(i);
+        MessageF(mtype, "%u: ", (unsigned)i);
+        if (p != NoPin)
+            BoardConfig::PrintValue(mtype, cvPinType, (void *)&p);
+        MessageF(mtype, "\n");
+    }
 
     MessageF(mtype, "\n== MCU ==\n");
     MessageF(mtype, "AdcBits = %d\n", (int) LegacyAnalogIn::AdcBits);
