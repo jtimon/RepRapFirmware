@@ -21,7 +21,7 @@
 # ifdef LPC_DEBUG
 int lateTimers = 0;
 # endif
-#elif STM32F4
+#elif STM32
 #include <HardwareTimer.h>
 HardwareTimer STimer(STEP_TC);
 TIM_HandleTypeDef *STHandle;
@@ -108,7 +108,7 @@ void StepTimer::Init() noexcept
 	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);			    // Set the priority for this IRQ
 	NVIC_EnableIRQ(STEP_TC_IRQN);
 	STEP_TC->TCR = (1 <<SBIT_CNTEN);							    // Start Timer
-#elif STM32F4
+#elif STM32
 	uint32_t preScale = STimer.getTimerClkFreq()/StepClockRate;
 	//debugPrintf("ST base freq %d setting presacle %d\n", static_cast<int>(STimer.getTimerClkFreq()), static_cast<int>(preScale));
 	STimer.setPrescaleFactor(preScale);
@@ -248,7 +248,7 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	if ((int)(STEP_TC->MR[0] - GetTimerTicks()) <= 0)
 		lateTimers++;
 # endif
-#elif STM32F4
+#elif STM32
 	__HAL_TIM_SET_COMPARE(STHandle, TIM_CHANNEL_1, tim);
 	__HAL_TIM_ENABLE_IT(STHandle, TIM_IT_CC1);
 #else
@@ -266,7 +266,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	StepTc->INTENCLR.reg = TC_INTFLAG_MC0;
 #elif LPC17xx
 	STEP_TC->MCR &= ~(1u<<SBIT_MR0I);								 // disable Int on MR1
-#elif STM32F4
+#elif STM32
 	__HAL_TIM_DISABLE_IT(STHandle, TIM_IT_CC1);
 #else
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
@@ -427,7 +427,7 @@ void STEP_TC_HANDLER() noexcept
 	{
 		STEP_TC->IR |= (1u<<SBIT_MRI0_IFM);							// clear interrupt
 		STEP_TC->MCR  &= ~(1u<<SBIT_MR0I);							// Disable Int on MR0
-#elif STM32F4
+#elif STM32
 	__HAL_TIM_CLEAR_IT(STHandle, TIM_IT_CC1);
 	__HAL_TIM_DISABLE_IT(STHandle, TIM_IT_CC1);
 	{
@@ -570,7 +570,7 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0)
 # elif SAME70
 					((STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER & TC_IER_CPBS) == 0)
-# elif STM32F4
+# elif STM32
 					__HAL_TIM_GET_IT_SOURCE(STHandle, TIM_IT_CC1)
 # endif
 						? "disabled" : "enabled");
@@ -578,7 +578,7 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 		if (StepTc->CC[0].reg != pst->whenDue)
 # elif SAME70
 		if (STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB != (uint16_t)pst->whenDue)
-# elif STM32F4
+# elif STM32
 		if (__HAL_TIM_GET_COMPARE(STHandle, TIM_CHANNEL_1) != pst->whenDue)
 # endif
 		{

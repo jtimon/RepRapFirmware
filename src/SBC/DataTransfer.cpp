@@ -33,7 +33,7 @@
 # define USE_XDMAC			0		// use XDMA controller
 # define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
 constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
-#elif LPC17xx || STM32F4
+#elif LPC17xx || STM32
 # define USE_DMAC           0
 # define USE_XDMAC          0
 uint32_t HeaderCRCErrors, DataCRCErrors;
@@ -74,7 +74,7 @@ uint32_t HeaderCRCErrors, DataCRCErrors;
 
 static TaskHandle sbcTaskHandle = nullptr;
 
-#if !LPC17xx && !STM32F4
+#if !LPC17xx && !STM32
 
 #if USE_DMAC
 
@@ -396,7 +396,7 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 #else
 #if LPC17xx
 # include "LPC/Sbc/DataTransfer.hpp"
-#elif STM32F4
+#elif STM32
 # include "STM32/Sbc/DataTransfer.hpp"
 #endif
 #endif
@@ -451,7 +451,7 @@ void DataTransfer::Init() noexcept
 	}
 #endif
 
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
     InitSpi();
 #elif SAME5x
 	// Initialize SPI
@@ -526,7 +526,7 @@ void DataTransfer::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().MessageF(mtype, "Transfer state: %d, failed transfers: %u, checksum errors: %u\n", (int)state, failedTransfers, checksumErrors);
 	reprap.GetPlatform().MessageF(mtype, "RX/TX seq numbers: %d/%d\n", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
 	reprap.GetPlatform().MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 	reprap.GetPlatform().MessageF(mtype, "CRC errors header %u, data %u\n", (unsigned)HeaderCRCErrors, (unsigned)DataCRCErrors);
 #endif
 }
@@ -833,7 +833,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			const uint32_t checksum = CalcCRC32(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint32_t));
 			if (rxHeader.crcHeader != checksum)
 			{
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 				HeaderCRCErrors++;
 #endif
 				if (reprap.Debug(moduleSbcInterface))
@@ -909,7 +909,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			const uint32_t checksum = CalcCRC32(rxBuffer, rxHeader.dataLength);
 			if (rxHeader.crcData != checksum)
 			{
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 				DataCRCErrors++;
 #endif
 				if (reprap.Debug(moduleSbcInterface))

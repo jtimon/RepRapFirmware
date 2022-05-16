@@ -18,7 +18,7 @@
 /
 /----------------------------------------------------------------------------*/
 
-#if STM32F4 || LPC17xx
+#if STM32 || LPC17xx
 #include "targets/common/Fatfs/ff.h"
 #else
 

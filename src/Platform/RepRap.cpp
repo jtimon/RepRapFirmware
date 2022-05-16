@@ -48,7 +48,7 @@
 
 #if HAS_SBC_INTERFACE
 # include "SBC/SbcInterface.h"
-# if STM32F4
+# if STM32
 #  include "STM32/BoardConfig.h"
 # endif
 #endif
@@ -87,7 +87,7 @@ static_assert(CONF_HSMCI_XDMAC_CHANNEL == DmacChanHsmci, "mismatched DMA channel
 # include <wdt/wdt.h>
 #endif
 
-#if STM32F4 && HAS_SBC_INTERFACE
+#if STM32 && HAS_SBC_INTERFACE
 # include <iapparams.h>
 # endif
 // We call vTaskNotifyGiveFromISR from various interrupts, so the following must be true
@@ -552,7 +552,7 @@ void RepRap::Init() noexcept
 	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
 #elif LPC17xx
 	WatchdogInit();															// set wdt to 1 second. reset the processor on a watchdog fault
-#elif STM32F4
+#elif STM32
 	NVIC_SetPriority(WWDG_IRQn, NvicPriorityWatchdog);								// set priority for watchdog interrupts
 	WatchdogInit();
 #else
@@ -594,7 +594,7 @@ void RepRap::Init() noexcept
 
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
-#if HAS_SBC_INTERFACE && (!HAS_MASS_STORAGE || STM32F4)
+#if HAS_SBC_INTERFACE && (!HAS_MASS_STORAGE || STM32)
 	usingSbcInterface = true;
 	sbcInterface->Init();
 	FileWriteBuffer::UsingSbcMode();
@@ -660,7 +660,7 @@ void RepRap::Init() noexcept
 				platform->MessageF(UsbMessage, "Waiting for SBC connect\n");
 				start = millis();
 			}
-#if STM32F4 || LPC17xx
+#if STM32 || LPC17xx
 			// At this point we may only have very limit hardware configuration loaded so avoid
 			// using the main Spin loop.
 			sbcInterface->Spin();
@@ -895,7 +895,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype,
 		// Format string
 		"%s"											// firmware name
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 		" (%s)"											// lpcBoardName
 #endif
 		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
@@ -912,10 +912,11 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 		// Parameters to match format string
 		FIRMWARE_NAME,
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 		lpcBoardName,
 #endif
-		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
+		//VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
+		"X.X", "DD", "TT", platform->GetElectronicsString()
 #ifdef DUET_NG
 		, ((expansionName == nullptr) ? "" : " + ")
 		, ((expansionName == nullptr) ? "" : expansionName)
@@ -2890,7 +2891,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 
 #if LPC17xx
     #include "LPC/FirmwareUpdate.hpp"
-#elif STM32F4
+#elif STM32
     #include "STM32/FirmwareUpdate.hpp"
 #else
 
@@ -3001,7 +3002,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
 	StopAnalogTask();
-#if STM32F4 && HAS_SBC_INTERFACE
+#if STM32 && HAS_SBC_INTERFACE
 	BoardConfig::InvalidateBoardConfiguration();
 #endif
 	Cache::Disable();						// disable the cache because it interferes with flash memory access
@@ -3040,7 +3041,7 @@ void RepRap::StartIap(const char *filename) noexcept
 	}
 
 	// Disable all PIO IRQs, because the core assumes they are all disabled when setting them up
-#if !SAME5x && !STM32F4
+#if !SAME5x && !STM32
 	PIOA->PIO_IDR = 0xFFFFFFFF;
 	PIOB->PIO_IDR = 0xFFFFFFFF;
 	PIOC->PIO_IDR = 0xFFFFFFFF;
@@ -3052,7 +3053,7 @@ void RepRap::StartIap(const char *filename) noexcept
 # endif
 #endif
 
-#if STM32F4 && HAS_SBC_INTERFACE
+#if STM32 && HAS_SBC_INTERFACE
 	// We need to pass details of how to talk to the SBC to the IAP
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
 	SBCIAPParams* paramsPtr = reinterpret_cast<SBCIAPParams*>(topOfStack);
@@ -3141,7 +3142,7 @@ void RepRap::StartIap(const char *filename) noexcept
 #elif LPC17xx
 	// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
 	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
-#elif STM32F4
+#elif STM32
 	// FIXME need to test this probably not the correct address
 	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
 #else

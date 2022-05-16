@@ -536,7 +536,7 @@ uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, u
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept
 {
-#if !STM32F4
+#if !STM32
 	// On the STM32F4 our stack is not DMA capable, so we can't use the stack instead we allocate it
 	// when we open the file.
 	uint32_t blkBuf32[blkBufSize/4];
@@ -634,7 +634,7 @@ void WifiFirmwareUploader::Spin() noexcept
 				// First attempt at this baud rate
 				MessageF("Trying to connect at %u baud: ", baud);
 			}
-#if __LPC17XX__ || STM32F4
+#if __LPC17XX__ || STM32
 			// ResetWiFiForUpload calls uploadPort.end() I'm not sure that it makes sense to call uploadPort.begin before this. On 
 			// LPC and STM32 it does not work very well as the port is in effect closed on the first write attempt. So we reverse the order.
 			interface.ResetWiFiForUpload(false);
@@ -751,7 +751,7 @@ void WifiFirmwareUploader::Spin() noexcept
 	case UploadState::done:
 		uploadFile->Close();
 		uploadPort.end();					// disable the port, it has a high interrupt priority
-#if STM32F4
+#if STM32
 		delete blkBuf32;
 #endif
 		if (uploadResult == EspUploadResult::success)
@@ -803,7 +803,7 @@ void WifiFirmwareUploader::SendUpdateFile(const char *file, uint32_t address) no
 		MessageF("Upload file is empty %s\n", file);
 		return;
 	}
-#if STM32F4
+#if STM32
 	// we need a buffer that is DMA capable
 	blkBuf32 = new uint32_t[blkBufSize/4];
 	if (blkBuf32 == nullptr)

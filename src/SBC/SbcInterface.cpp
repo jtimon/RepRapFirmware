@@ -23,7 +23,7 @@
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Platform/TaskPriorities.h>
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 #include "BoardConfig.h"
 #endif
 
@@ -975,7 +975,7 @@ void SbcInterface::ExchangeData() noexcept
 	{
 		const GCodeChannel channel(i);
 		GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 		if (gb == nullptr)
 		{
 			debugPrintf("Unable to get requested channel buffer %d\n", i);

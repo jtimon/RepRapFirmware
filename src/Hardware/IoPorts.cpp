@@ -165,7 +165,7 @@ void IoPort::Release() noexcept
 		{
 			AnalogOut::ReleasePWMPin(GetPinNoCheck());
 		}
-#elif STM32F4
+#elif STM32
 		if (logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
 		{
 			AnalogOut::ReleasePWMPin(GetPinNoCheck());
@@ -435,7 +435,7 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 			str.cat('!');
 		}
 		const size_t insertPoint = str.strlen();
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 		const char *pn = GetPinNames(logicalPin);
 #else
 		const char *pn = PinTable[logicalPin].GetNames();

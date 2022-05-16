@@ -91,7 +91,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 	interfaces[0] = new WiFiInterface(p);
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
-#elif LPC17xx || STM32F4
+#elif LPC17xx || STM32
 # if HAS_WIFI_NETWORKING
 	interfaces[0] = new WiFiInterface(p);
  #else

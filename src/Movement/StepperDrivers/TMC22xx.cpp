@@ -6,7 +6,7 @@
  */
 #include "TMC22xx.h"
 // On the LPC17xx platform we have a replacement for this
-#if !LPC17xx && !STM32F4
+#if !LPC17xx && !STM32
 
 #if SUPPORT_TMC22xx
 

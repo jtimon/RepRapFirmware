@@ -29,7 +29,9 @@
 # elif defined(__LPC17xx__)
 #  define PLATFORM LPC
 # elif defined(__STM32F4__) || defined(__STM32H7__)
-#  define PLATFORM STM32
+// We have a clash with STM32 if we use the normal method, so just define the filename!
+#  define P_INCLUDE_FILE "Pins_STM32.h"
+//#  define PLATFORM STM32
 #else
 #  error Unknown platform
 # endif

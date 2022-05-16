@@ -336,7 +336,7 @@ typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing 
 typedef Bitmap<uint32_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
 
-#if defined(DUET3) || defined(DUET3MINI) || STM32F4
+#if defined(DUET3) || defined(DUET3MINI) || STM32
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;
@@ -625,7 +625,7 @@ const NvicPriority NvicPriorityTimerServo = 5;
 #  else
     const NvicPriority NvicPriorityDMA = NvicPriorityADC;
 #  endif
-#elif STM32F4
+#elif STM32
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 const NvicPriority NvicPriorityTimerPWM = 1;		// Run PWM timing as high as we can to avoid jitter
 const NvicPriority NvicPriorityDriversSerialTMC = 5;// STM uses a software UART, make this a very high priority

@@ -11,14 +11,14 @@
 #include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
 #include "SpiMode.h"
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 #include "SPI.h"
 #endif
 
 class SharedSpiDevice
 {
 public:
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 	SharedSpiDevice(SSPChannel chan) noexcept;
 #else
 	SharedSpiDevice(uint8_t sercomNum) noexcept;
@@ -38,7 +38,7 @@ public:
 	void Release() noexcept { mutex.Release(); }
 
 	static void Init() noexcept;
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 	static SharedSpiDevice& GetSharedSpiDevice(SSPChannel chan) noexcept { return (chan < NumSPIDevices) ? *Devices[chan] : *invalidDevice;  }
 #else
 	static SharedSpiDevice& GetMainSharedSpiDevice() noexcept { return *mainSharedSpiDevice; }
@@ -53,7 +53,7 @@ private:
 	Sercom * const hardware;
 #elif USART_SPI
 	Usart * const hardware;
-#elif LPC17xx || STM32F4
+#elif LPC17xx || STM32
 	SPI * const hardware;
 #else
 	Spi * const hardware;
@@ -61,7 +61,7 @@ private:
 
 	Mutex mutex;
 
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 	static SharedSpiDevice *Devices[];
 	static SharedSpiDevice *invalidDevice;
 #else

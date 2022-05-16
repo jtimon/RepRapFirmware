@@ -107,7 +107,7 @@ private:
 	EspUploadResult uploadResult;
 	int restartModeOnCompletion;
 	ESPType espType;
-#if STM32F4
+#if STM32
 	uint32_t *blkBuf32;
 #endif
 };

@@ -80,7 +80,7 @@ constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. 
 //     Using single-precision maths and up to 9-factor calibration: (9 + 5) * 4 bytes per point
 //     Using double-precision maths and up to 9-factor calibration: (9 + 5) * 8 bytes per point
 //   So 32 points using double precision arithmetic need 3584 bytes of stack space.
-#if SAM4E || SAM4S || SAME70 || SAME5x || STM32F4
+#if SAM4E || SAM4S || SAME70 || SAME5x || STM32
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
 constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
@@ -118,7 +118,7 @@ constexpr float DefaultZDive = 5.0;						// Millimetres
 constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
 
-#if !defined(DUET3) && !defined(DUET3MINI) && !STM32F4				// for Duet 3 these are defined in Duet3Common.h in project CANLib
+#if !defined(DUET3) && !defined(DUET3MINI) && !STM32				// for Duet 3 these are defined in Duet3Common.h in project CANLib
 constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
 #endif
 
@@ -162,7 +162,7 @@ constexpr size_t MediumStringLength = MaxFilenameLength;
 constexpr size_t M117StringLength = MediumStringLength;
 constexpr size_t StringLengthLoggedCommand = StringLength100;	// Length of a string buffer for a command to be logged
 
-#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING) || STM32F4
+#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING) || STM32
 // Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
 // Also if HAS_SBC_INTERFACE is enabled then it needs to be large enough to hold SBC commands sent in binary mode, see GCodeBuffer.h
 constexpr size_t MaxGCodeLength = 256;					// maximum number of non-comment characters in a line of GCode including the null terminator
@@ -179,7 +179,7 @@ constexpr size_t ShortGCodeLength = 64;
 // When using RTOS, it is best if it is possible to fit an HTTP response header in a single buffer. Our headers are currently about 230 bytes long.
 // A note on reserved buffers: the worst case is when a GCode with a long response is processed. After string the response, there must be enough buffer space
 // for the HTTP responder to return a status response. Otherwise DWC never gets to know that it needs to make a rr_reply call and the system deadlocks.
-#if SAME70 || SAME5x || STM32F4
+#if SAME70 || SAME5x || STM32
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
@@ -202,7 +202,7 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved ou
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 // These two definitions are only used if TRACK_OBJECT_NAMES is defined, however that definition isn't available in this file
-#if SAME70 || SAME5x || STM32F4
+#if SAME70 || SAME5x || STM32
 constexpr size_t MaxTrackedObjects = 40;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
 constexpr size_t ObjectNamesStringSpace = 1000;			// How much space we reserve for the names of objects on the build plate
 #else
@@ -211,7 +211,7 @@ constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve fo
 #endif
 
 // How many filaments we can return in the file information. Each one uses 4 bytes of statically-allocated RAM.
-#if SAME70 || SAME5x || STM32F4
+#if SAME70 || SAME5x || STM32
 constexpr unsigned int MaxFilaments = 20;
 #else
 constexpr unsigned int MaxFilaments = 8;

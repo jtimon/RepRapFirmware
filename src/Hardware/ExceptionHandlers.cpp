@@ -28,7 +28,7 @@
 {
 	IrqDisable();								// disable interrupts before we call any flash functions. We don't enable them again.
 	WatchdogReset();							// kick the watchdog
-#if STM32F4
+#if STM32
 	WatchdogDisable();
 #endif
 
@@ -44,7 +44,7 @@
 #if SAME5x
 		// Start from uf2 bootloader next time. This pretends the reset button has been pressed twice in short succession
 		*DBL_TAP_PTR = DBL_TAP_MAGIC;
-#elif STM32F4
+#elif STM32
 		// Nothing to do
 #else
 		EraseAndReset();
@@ -85,7 +85,7 @@
 
 #if LPC17xx
     LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#elif STM32F4
+#elif STM32
 	// FIXME add any STM specific code here
 #elif !SAME5x
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
@@ -161,7 +161,7 @@ extern "C" void WDT_IRQHandler() noexcept __attribute__((naked));
 void WDT_IRQHandler() noexcept
 {
 	LPC_WWDT->MOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
-#elif STM32F4
+#elif STM32
 extern "C" void WWDG_IRQHandler() noexcept __attribute__((naked));
 void WWDG_IRQHandler() noexcept
 {

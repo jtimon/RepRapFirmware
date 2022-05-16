@@ -209,7 +209,7 @@ public:
 #elif LPC17xx
     static constexpr uint32_t MinCalcInterval = (60 * StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#elif STM32F4
+#elif STM32
     static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #else	// SAM3X

@@ -81,7 +81,7 @@ namespace MassStorage
 #endif
 
 #if HAS_MASS_STORAGE
-#if STM32F4
+#if STM32
 	void Init2() noexcept;
 #endif
 	bool EnsurePath(const char *_ecv_array filePath, bool messageIfFailed) noexcept;

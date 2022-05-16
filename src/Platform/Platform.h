@@ -73,7 +73,7 @@ constexpr size_t NumAdcFilters = NumThermistorInputs + 3;
 # else
 constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
 # endif
-#elif HAS_CPU_TEMP_SENSOR && STM32F4
+#elif HAS_CPU_TEMP_SENSOR && STM32
 constexpr size_t VrefFilterIndex = NumThermistorInputs;
 constexpr size_t CpuTempFilterIndex = NumThermistorInputs + 1;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 2;
@@ -189,7 +189,7 @@ enum class DiagnosticTestType : unsigned int
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
 
-#if LPC17xx || STM32F4
+#if LPC17xx || STM32
 	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
 #endif
 
@@ -904,7 +904,7 @@ private:
 	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
 	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
 	bool autoSaveEnabled;
-# if STM32F4
+# if STM32
 	uint16_t dummyVoltageAdcReading;
 # endif
 
@@ -951,7 +951,7 @@ private:
 
 	// Misc
 	static bool deliberateError;						// true if we deliberately caused an exception for testing purposes. Must be static in case of exception during startup.
-#if STM32F4
+#if STM32
 	uint32_t vRefCorrection;
 #endif
 };

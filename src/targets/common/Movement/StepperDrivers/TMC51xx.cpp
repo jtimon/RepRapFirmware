@@ -57,7 +57,7 @@ constexpr uint32_t TmcClockSpeed = 12000000; 				// the rate at which the TMC dr
 #if TMC_TYPE == 5130
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 #elif TMC_TYPE == 5160
-#if STM32F4
+#if STM32
 constexpr float DefaultSenseResistor = 0.075;						// This seems to be common for most modules
 #else
 constexpr float DefaultSenseResistor = 0.050;						// assume same as we use for TMC2660

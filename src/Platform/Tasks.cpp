@@ -140,7 +140,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
 #endif
 
-#if !defined(DEBUG) && !LPC17xx && !STM32F4	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
+#if !defined(DEBUG) && !LPC17xx && !STM32	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
@@ -160,7 +160,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 			}
 		}
 	}
-#endif	// !defined(DEBUG) && !LPC17xx && !STM32F4
+#endif	// !defined(DEBUG) && !LPC17xx && !STM32
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char *_ecv_array heapend = heapTop;
@@ -201,7 +201,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if !LPC17xx && !SAME5x && !STM32F4
+#if !LPC17xx && !SAME5x && !STM32
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD
@@ -320,7 +320,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
 #endif
 		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
-#if STM32F4 && !STM32H7
+#if STM32F4
 		{
 			size_t ccmStatic, ccmUsed, ccmFree;
 			CoreCCMRAMUsage(ccmStatic, ccmUsed, ccmFree);

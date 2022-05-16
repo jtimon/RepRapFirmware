@@ -1516,7 +1516,8 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				return GCodeResult::error;
 			}
 		}
-#if STM32F4
+#if STM32
+// FIXME remove this code!
 		if (gb.Seen('I'))								// set max current and rsense value
 		{
 			seen = true;
@@ -1633,7 +1634,8 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
 						  );
 			}
-# if STM32F4
+# if STM32
+// FIXME remove this code
 			reply.catf(", rsense %.4f, max current %.1f", (double)SmartDrivers::GetSenseResistor(drive), (double)SmartDrivers::GetMaxCurrent(drive));
 # endif
 # if SUPPORT_TMC22xx || SUPPORT_TMC51xx

@@ -309,7 +309,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			return GCodeResult::error;
 		}
 		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
-#if STM32F4 || LPC17xx
+#if STM32 || LPC17xx
 		if (AccelerometerSpiChannel == SSPNONE)
 		{
 			reply.copy("Accelerometer SPI channel has not been configured");

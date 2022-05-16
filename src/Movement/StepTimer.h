@@ -113,7 +113,7 @@ private:
 	static constexpr unsigned int MaxSyncCount = 10;
 #endif
 };
-#if STM32F4
+#if STM32
 extern TIM_HandleTypeDef *STHandle;
 #endif
 // Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
@@ -123,7 +123,7 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 {
 # if LPC17xx
 	return STEP_TC->TC;
-# elif STM32F4
+# elif STM32
 	return __HAL_TIM_GET_COUNTER(STHandle);
 # else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
@@ -138,7 +138,7 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 	return (uint16_t)GetTimerTicks();
 #elif LPC17xx
 	return (uint16_t)STEP_TC->TC;
-#elif STM32F4
+#elif STM32
 	return (uint16_t)__HAL_TIM_GET_COUNTER(STHandle);
 	return 0;
 #else
