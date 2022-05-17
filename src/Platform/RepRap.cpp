@@ -915,8 +915,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #if LPC17xx || STM32
 		lpcBoardName,
 #endif
-		//VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
-		"X.X", "DD", "TT", platform->GetElectronicsString()
+		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
 #ifdef DUET_NG
 		, ((expansionName == nullptr) ? "" : " + ")
 		, ((expansionName == nullptr) ? "" : expansionName)
