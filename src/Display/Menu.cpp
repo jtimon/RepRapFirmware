@@ -67,16 +67,23 @@
 
 #include "Menu.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
+#include "TextMenuItem.h"
+#include "ButtonMenuItem.h"
+#include "ValueMenuItem.h"
+#include "FilesMenuItem.h"
+#include "ImageMenuItem.h"
 #include "Lcd/Lcd.h"
-#include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include "Display.h"
+#include "TextMenuItem.h"
+#include "ButtonMenuItem.h"
+#include "ValueMenuItem.h"
+#include "FilesMenuItem.h"
+#include "ImageMenuItem.h"
+
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
-#include <Heating/Heat.h>
-#include <Storage/MassStorage.h>
-#include <Tools/Tool.h>
 
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
@@ -113,7 +120,7 @@ void Menu::LoadFixedMenu() noexcept
 	commandBufferIndex = 0;
 	rowOffset = 0;
 	currentMargin = 0;
-	lcd.Clear();
+	lcd.ClearAll();
 
 	// Instead of Reload():
 	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
@@ -142,10 +149,10 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	// Draw and a box and clear the interior
 	const PixelNumber nr = lcd.GetNumRows(), nc = lcd.GetNumCols();
 	lcd.SetRightMargin(nc);
-	lcd.Line(topBottomMargin, sideMargin, topBottomMargin, nc - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(topBottomMargin, nc - sideMargin - 1, nr - topBottomMargin - 1, nc - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(nr - topBottomMargin - 1, sideMargin, nr - topBottomMargin - 1, nc - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(topBottomMargin, sideMargin, nr - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
+	lcd.Line(topBottomMargin, sideMargin, topBottomMargin, nc - sideMargin - 1, true);
+	lcd.Line(topBottomMargin, nc - sideMargin - 1, nr - topBottomMargin - 1, nc - sideMargin - 1, true);
+	lcd.Line(nr - topBottomMargin - 1, sideMargin, nr - topBottomMargin - 1, nc - sideMargin - 1, true);
+	lcd.Line(topBottomMargin, sideMargin, nr - topBottomMargin - 1, sideMargin, true);
 	lcd.Clear(topBottomMargin + 1, sideMargin + 1, nr - topBottomMargin - 1, nc - sideMargin - 1);
 
 	// We could draw the static text directly, but it is easier to use the existing classes
@@ -156,33 +163,33 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	const PixelNumber left = sideMargin + 1 + insideMargin;
 	const PixelNumber right = nc - left;
 	const PixelNumber availableWidth = right - left;
-	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.title.c_str()), false);
-	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.message.c_str()), false);	// only 1 row for now
+	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.title.c_str()), false);
+	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.message.c_str()), false);	// only 1 row for now
 
 	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
 	const PixelNumber axisButtonWidth = availableWidth/4;
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
 	if (mbox.controls.IsBitSet(X_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 510, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 510, 1), true);
 	}
 	if (mbox.controls.IsBitSet(Y_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 511, 1), true);
 	}
 	if (mbox.controls.IsBitSet(Z_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 512, 2), true);
 	}
 
 	const PixelNumber okCancelButtonWidth = 30;
 	if (mbox.mode & 2)
 	{
-		AddItem(new ButtonMenuItem(top + 3 * rowHeight, left, okCancelButtonWidth, fontToUse, MenuItem::AlwaysVisible, "OK", "M292 P0", nullptr), true);
+		AddItem(new ButtonMenuItem(top + 3 * rowHeight, left, okCancelButtonWidth, fontToUse, "OK", "M292 P0", nullptr), true);
 	}
 	if (mbox.mode & 1)
 	{
-		AddItem(new ButtonMenuItem(top + 3 * rowHeight, right - okCancelButtonWidth, okCancelButtonWidth, fontToUse, MenuItem::AlwaysVisible, "Cancel", "M292 P1", nullptr), true);
+		AddItem(new ButtonMenuItem(top + 3 * rowHeight, right - okCancelButtonWidth, okCancelButtonWidth, fontToUse, "Cancel", "M292 P1", nullptr), true);
 	}
 }
 
@@ -195,9 +202,6 @@ void Menu::ClearMessageBox() noexcept
 
 void Menu::Pop() noexcept
 {
-	// currentMargin = 0;
-	lcd.Clear();
-	rowOffset = 0;
 	--numNestedMenus;
 	Reload();
 }
@@ -207,7 +211,7 @@ void Menu::LoadError(const char *msg, unsigned int line) noexcept
 	// Remove selectable items that may obscure view of the error message
 	ResetCache();
 
-	lcd.Clear();
+	lcd.ClearAll();
 	lcd.SetFont(0);
 	lcd.printf("Error loading menu\nFile: %s", (numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
 	if (line != 0)
@@ -238,7 +242,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 
 	// Find the first word
-	char *args = commandWord;
+	char *_ecv_array args = commandWord;
 	while (isalpha(*args))
 	{
 		++args;
@@ -256,9 +260,11 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 
 	// Parse the arguments
-	MenuItem::Visibility xVis = 0;
+	const char *_ecv_array _ecv_null strVis = nullptr;
+	MenuItem::Visibility xVis = MenuItem::AlwaysVisible;
 	unsigned int decimals = 0;
 	unsigned int nparam = 0;
+	const char *_ecv_array _ecv_null strNparam = nullptr;
 	unsigned int width = 0;
 	unsigned int alignment = 0;
 	const char *text = "*";
@@ -276,11 +282,11 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'R':
-			row = StrToU32(args, &args);
+			row = StrToU32(args, &args) + rowOffset;
 			break;
 
 		case 'C':
-			column = StrToU32(args, &args);
+			column = StrToU32(args, &args) + currentMargin;
 			break;
 
 		case 'F':
@@ -288,7 +294,24 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'V':
-			xVis = StrToU32(args, &args);
+			if (*args == '{')
+			{
+				++args;
+				strVis = args;
+				while (*args != '}' && *args != 0)
+				{
+					++args;
+				}
+				if (*args == '}')
+				{
+					*args = 0;
+					++args;
+				}
+			}
+			else
+			{
+				xVis = StrToU32(args, &args);
+			}
 			break;
 
 		case 'D':
@@ -296,7 +319,24 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'N':
-			nparam = StrToU32(args, &args);
+			// 'value' command allows the N parameter to be an object mode string
+			if (*args == '{' && StringEqualsIgnoreCase(commandWord, "value"))
+			{
+				strNparam = args;
+				while (*args != '}' && *args != 0)
+				{
+					++args;
+				}
+				if (*args == '}')
+				{
+					*args = 0;
+					++args;
+				}
+			}
+			else
+			{
+				nparam = StrToU32(args, &args);
+			}
 			break;
 
 		case 'W':
@@ -339,52 +379,53 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		}
 	}
 
-	lcd.SetCursor(row + currentMargin, column + currentMargin);
+	MenuItem *_ecv_null newItem = nullptr;
 
 	// Create an object resident in memory corresponding to the menu layout file's description
 	if (StringEqualsIgnoreCase(commandWord, "text"))
 	{
-		const char *const acText = AppendString(text);
-		MenuItem * const pNewItem = new TextMenuItem(row, column, width, alignment, fontNumber, xVis, acText);
-		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		const char *_ecv_array const acText = AppendString(text);
+		newItem = new TextMenuItem(row, column, width, alignment, fontNumber, acText);
+		AddItem(newItem, false);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "image") && fname != nullptr)
 	{
-		ImageMenuItem * const pNewItem = new ImageMenuItem(row, column, xVis, fname);
-		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		newItem = new ImageMenuItem(row, column,fname);
+		AddItem(newItem, false);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "button"))
 	{
-		const char * const textString = AppendString(text);
-		const char * const actionString = AppendString(action);
-		const char * const c_acFileString = AppendString(fname);
-		ButtonMenuItem * const pNewItem = new ButtonMenuItem(row, column, width, fontNumber, xVis, textString, actionString, c_acFileString);
-		AddItem(pNewItem, true);
-		column += pNewItem->GetWidth();
+		const char *_ecv_array const textString = AppendString(text);
+		const char *_ecv_array const actionString = AppendString(action);
+		const char *_ecv_array const c_acFileString = AppendString(fname);
+		newItem = new ButtonMenuItem(row, column, width, fontNumber, textString, actionString, c_acFileString);
+		AddItem(newItem, true);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "value"))
 	{
-		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, false, nparam, decimals);
-		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, false, strNparam, nparam, decimals);
+		AddItem(newItem, false);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "alter"))
 	{
-		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, true, nparam, decimals);
-		AddItem(pNewItem, true);
-		column += pNewItem->GetWidth();
+		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, true, nullptr, nparam, decimals);
+		AddItem(newItem, true);
+		column += newItem->GetWidth();
 	}
 #if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(commandWord, "files"))
 	{
-		const char * const actionString = AppendString(action);
-		const char *const dir = AppendString(dirpath);
-		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, 0, lcd.GetNumCols(), fontNumber, xVis, actionString, dir, acFileString, nparam), true);
+		const char *_ecv_array const actionString = AppendString(action);
+		const char *_ecv_array const dir = AppendString(dirpath);
+		const char *_ecv_array const acFileString = AppendString(fname);
+		newItem = new FilesMenuItem(row, 0, lcd.GetNumCols(), fontNumber, actionString, dir, acFileString, nparam);
+		AddItem(newItem, true);
 		row += nparam * lcd.GetFontHeight(fontNumber);
-		column = 0;
+		column = currentMargin;
 	}
 #endif
 	else
@@ -393,6 +434,15 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		return "Unknown command";
 	}
 
+	// Deal with the visibility of the newly-added menu item
+	if (strVis != nullptr)
+	{
+		newItem->SetVisibility(strVis);
+	}
+	else
+	{
+		newItem->SetVisibility(xVis);
+	}
 	return nullptr;
 }
 
@@ -418,41 +468,47 @@ void Menu::ResetCache() noexcept
 void Menu::Reload() noexcept
 {
 	displayingFixedMenu = false;
+
+#if 0	// if all menus use the whole screen (no visual nesting)
+	currentMargin = rowOffset = 0;
+	lcd.ClearAll();
+#else
 	if (numNestedMenus == 1)
 	{
 		currentMargin = 0;
-		lcd.Clear();
+		lcd.ClearAll();
 	}
 	else
 	{
-		currentMargin = 0;
-		const PixelNumber right = lcd.GetNumCols();
-		const PixelNumber bottom = lcd.GetNumRows();
-		lcd.Clear(currentMargin, currentMargin, bottom, right);
+		constexpr PixelNumber indentPerLevel = 10;		//TODO make this depend on the screen resolution
+		currentMargin = rowOffset = indentPerLevel * (numNestedMenus - 1);
+		const PixelNumber borderMargin = currentMargin - 2;
+		const PixelNumber right = lcd.GetNumCols() - borderMargin - 1;
+		const PixelNumber bottom = lcd.GetNumRows() - borderMargin - 1;
+		lcd.Clear(borderMargin, borderMargin, bottom, right);
 
 		// Draw the outline
-		// lcd.Line(currentMargin, currentMargin, bottom, currentMargin, PixelMode::PixelSet);
-		// lcd.Line(currentMargin, currentMargin, currentMargin, right, PixelMode::PixelSet);
-		// lcd.Line(bottom, currentMargin, bottom, right, PixelMode::PixelSet);
-		// lcd.Line(currentMargin, right, bottom, right, PixelMode::PixelSet);
-
-		// currentMargin += InnerMargin;
+		lcd.Line(borderMargin, borderMargin, bottom, borderMargin, true);
+		lcd.Line(borderMargin, borderMargin, borderMargin, right, true);
+		lcd.Line(bottom, borderMargin, bottom, right, true);
+		lcd.Line(borderMargin, right, bottom, right, true);
 	}
+#endif
 
 	ResetCache();
 	displayingErrorMessage = false;
 
 	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
-	const char * const fname = filenames[numNestedMenus - 1].c_str();
-	FileStore * const file = reprap.GetPlatform().OpenFile(MENU_DIR, fname, OpenMode::read);
+	const char *_ecv_array const fname = filenames[numNestedMenus - 1].c_str();
+	FileStore *_ecv_null const file = reprap.GetPlatform().OpenFile(MENU_DIR, fname, OpenMode::read);
 	if (file == nullptr)
 	{
 		LoadError("File not found", 0);
 	}
 	else
 	{
-		row = 0;
-		column = 0;
+		row = rowOffset;
+		column = currentMargin;
 		fontNumber = 0;
 		commandBufferIndex = 0;						// Free the string buffer, which contains layout elements from an old menu
 		for (unsigned int line = 1; ; ++line)
@@ -574,7 +630,7 @@ void Menu::EncoderActionScrollItemHelper(int action) noexcept
 			if (rowOffset != tLastOffset)
 			{
 				// We have scrolled the whole menu, so redraw it
-				lcd.Clear();
+				lcd.ClearAll();
 				for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 				{
 					item->SetChanged();
@@ -700,12 +756,12 @@ void Menu::DrawAll() noexcept
 	const PixelNumber rightMargin = lcd.GetNumCols() - currentMargin;
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, (item == highlightedItem), rowOffset);
+		item->Draw(lcd, rightMargin, (item == highlightedItem));
 	}
 
 	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, false, rowOffset);
+		item->Draw(lcd, rightMargin, false);
 	}
 }
 
@@ -805,6 +861,80 @@ MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const noexcept
 	} while (current != initial);
 	return best;
 }
+
+#if SUPPORT_RESISTIVE_TOUCH
+
+// Search for a selectable item that is close to the touched XY coordinates
+void Menu::HandleTouch(PixelNumber x, PixelNumber y) noexcept
+{
+	constexpr int MaxXerror = 8, MaxYerror = 8;		// how far (in pixels) the X and Y coordinates of a touch event need to be to the outline of the item for us to disallow it
+
+	if (displayingErrorMessage)
+	{
+		// Allow the message to be cancelled by a touch
+		TouchBeep();
+		timeoutValue = 1;						// cancel the timeout at the next tick
+	}
+	else
+	{
+		int bestError = MaxXerror + MaxYerror;
+		MenuItem *null best = nullptr;
+		for (MenuItem *p = selectableItems; p != nullptr; p = p->GetNext())
+		{
+			if (p->IsVisible())
+			{
+				const int xError = (x < p->GetMinX()) ? p->GetMinX() - x
+										: (x > p->GetMaxX()) ? x - p->GetMaxX()
+											: 0;
+				if (xError < MaxXerror)
+				{
+					const int yError = (y <p->GetMinY()) ? p->GetMinY() - y
+											: (y > p->GetMaxY()) ? y - p->GetMaxY()
+												: 0;
+					if (yError < MaxYerror && xError + yError < bestError)
+					{
+						bestError = xError + yError;
+						best = p;
+					}
+				}
+			}
+		}
+
+		if (best != nullptr)
+		{
+			TouchBeep();
+			if (itemIsSelected)					// send the touch to the item itself
+			{
+				if (highlightedItem != nullptr && highlightedItem->IsVisible())
+				{
+					//TODO
+				}
+				else
+				{
+					itemIsSelected = false;			// should not get here
+				}
+			}
+			else									// click without an item under selection
+			{
+				highlightedItem = best;
+				EncoderActionEnterItemHelper();
+			}
+
+			if (!displayingErrorMessage && !displayingMessageBox)	// if the operation did not result in an error and we are not displaying a message box
+			{
+				lastActionTime = millis();
+				timeoutValue = InactivityTimeout;
+			}
+		}
+	}
+}
+
+/*static*/ void Menu::TouchBeep() noexcept
+{
+	reprap.GetDisplay().Beep(TouchBeepFrequency, TouchBeepLength);
+}
+
+#endif
 
 #endif
 

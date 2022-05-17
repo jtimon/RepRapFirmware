@@ -81,31 +81,6 @@ public:
 	bool CheckPassword(const char* pw) const noexcept;
 	void SetPassword(const char* pw) noexcept;
 
-	// Tool management
-	void AddTool(Tool* t) noexcept;
-	void DeleteTool(int toolNumber) noexcept;
-	void SelectTool(int toolNumber, bool simulating) noexcept;
-	void StandbyTool(int toolNumber, bool simulating) noexcept;
-	int GetCurrentToolNumber() const noexcept;
-	void SetPreviousToolNumber() noexcept;
-	Tool *GetCurrentTool() const noexcept;
-	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
-	ReadLockedPointer<Tool> GetTool(int toolNumber) const noexcept;
-	ReadLockedPointer<Tool> GetCurrentOrDefaultTool() const noexcept;
-	ReadLockedPointer<Tool> GetFirstTool() const noexcept;										// Return the lowest-numbered tool
-	AxesBitmap GetCurrentXAxes() const noexcept;												// Get the current axes used as X axes
-	AxesBitmap GetCurrentYAxes() const noexcept;												// Get the current axes used as Y axes
-	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
-	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
-	unsigned int GetNumberOfContiguousTools() const noexcept;
-	void ReportAllToolTemperatures(const StringRef& reply) const noexcept;
-	GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
-
-	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
-	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
-	void FlagTemperatureFault(int8_t dudHeater) noexcept;
-	GCodeResult ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept;
-
 	Platform& GetPlatform() const noexcept { return *platform; }
 	Move& GetMove() const noexcept { return *move; }
 	Heat& GetHeat() const noexcept { return *heat; }
@@ -121,7 +96,7 @@ public:
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
  	Display& GetDisplay() const noexcept { return *display; }
  	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
  	const MessageBox& GetMessageBox() const noexcept { return mbox; }
@@ -137,9 +112,6 @@ public:
 	void Tick() noexcept;
 	bool SpinTimeoutImminent() const noexcept;
 	bool IsStopped() const noexcept;
-
-	uint16_t GetExtrudersInUse() const noexcept;
-	uint16_t GetToolHeatersInUse() const noexcept;
 
 	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source) const noexcept;
 	OutputBuffer *GetConfigResponse() noexcept;
@@ -161,11 +133,6 @@ public:
 	void SetMessage(const char *msg) noexcept;
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
 	void ClearAlert() noexcept;
-
-#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool WriteToolSettings(FileStore *f) noexcept;						// save some information for the resume file
-	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noexcept;	// save some information in config-override.g
-#endif
 
 	bool IsProcessingConfig() const noexcept { return processingConfig; }
 
@@ -224,13 +191,10 @@ private:
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
 	const char* GetStatusString() const noexcept;
-	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
 	bool RunStartupFile(const char *filename) noexcept;
 
 	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
 	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
-
-	static ReadWriteLock toolListLock;
 
 	Platform* platform;
 	Network* network;
@@ -245,7 +209,7 @@ private:
  	PortControl *portControl;
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
  	Display *display;
 #endif
 
@@ -268,13 +232,7 @@ private:
 
 	GlobalVariables globalVariables;
 
-	Tool* toolList;								// the tool list is sorted in order of increasing tool number
-	Tool* currentTool;
 	uint32_t lastWarningMillis;					// when we last sent a warning message for things that can happen very often
-
-	uint16_t activeExtruders;
-	uint16_t activeToolHeaters;
-	uint16_t numToolsToReport;
 
 	uint16_t ticksInSpinState;
 	uint16_t heatTaskIdleTicks;
@@ -288,13 +246,11 @@ private:
 	unsigned int beepFrequency, beepDuration;
 	uint32_t beepTimer;
 	String<MaxMessageLength> message;
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
 #endif
 
 	MessageBox mbox;							// message box data
-
-	int16_t previousToolNumber;					// the tool number we were using before the last tool change, or -1 if we weren't using a tool
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;
@@ -314,10 +270,6 @@ private:
 extern RepRap reprap;
 
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
-
-inline Tool* RepRap::GetCurrentTool() const noexcept { return currentTool; }
-inline uint16_t RepRap::GetExtrudersInUse() const noexcept { return activeExtruders; }
-inline uint16_t RepRap::GetToolHeatersInUse() const noexcept { return activeToolHeaters; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
 
 #define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)

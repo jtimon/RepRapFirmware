@@ -98,7 +98,7 @@
 // Exception handlers
 // By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
 // so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
-extern "C" [[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void hardFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
 	SoftwareReset(SoftwareResetReason::hardFault, pulFaultStackAddress);
 }
@@ -146,7 +146,7 @@ void MemManage_Handler() noexcept
 
 #endif
 
-extern "C" [[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
 	SoftwareReset(SoftwareResetReason::wdtFault, pulFaultStackAddress);
 }
@@ -184,7 +184,7 @@ void WDT_Handler() noexcept
 	);
 }
 
-extern "C" [[noreturn]] void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void otherFaultDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
 	SoftwareReset(SoftwareResetReason::otherFault, pulFaultStackAddress);
 }
@@ -218,7 +218,7 @@ extern "C" void UsageFault_Handler () noexcept { SoftwareReset(SoftwareResetReas
 extern "C" void DebugMon_Handler   () noexcept __attribute__ ((alias("OtherFault_Handler")));
 
 // FreeRTOS hooks that we need to provide
-extern "C" [[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
 {
 	SoftwareReset(SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 }
@@ -238,7 +238,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexce
 	);
 }
 
-extern "C" [[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
 	SoftwareReset(SoftwareResetReason::assertCalled, pulFaultStackAddress);
 }

@@ -19,9 +19,9 @@
 #include <stdlib.h>
 
 #include "SDCardSPI.h"
-#include "SpiMode.h"
-#include "SharedSpiDevice.h"
-#include "SharedSpiClient.h"
+#include "Hardware/Spi/SpiMode.h"
+#include "Hardware/Spi/SharedSpiDevice.h"
+#include "Hardware/Spi/SharedSpiClient.h"
 
 //#define SD_DEBUG 1
 

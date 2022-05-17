@@ -52,7 +52,7 @@ const uint32_t ESP_IRAM_ADDR = 0x40100000;			// instruction RAM
 const uint32_t ESP_FLASH_ADDR = 0x40200000;			// address of start of Flash
 
 // Status body lengths
-const size_t ESP_BODY_LENGTHS[] = {0, 2, 4};		// Unknow, ESP8266, ESP32
+const size_t ESP_BODY_LENGTHS[] = {0, 2, 4};		// Unknown, ESP8266, ESP32
 const char * const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32"};
 // Messages corresponding to result codes, should make sense when followed by " error"
 const char * const resultMessages[] =

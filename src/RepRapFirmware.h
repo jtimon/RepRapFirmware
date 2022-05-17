@@ -303,7 +303,7 @@ class FansManager;
 class PortControl;
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 class Display;
 #endif
 
@@ -335,6 +335,7 @@ typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set
 typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
 typedef Bitmap<uint32_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
+typedef Bitmap<uint64_t> ToolNumbersBitmap;		// Type of a bitmap representing a set of tool numbers
 
 #if defined(DUET3) || defined(DUET3MINI) || STM32
 typedef Bitmap<uint64_t> SensorsBitmap;
@@ -350,6 +351,7 @@ static_assert(NumDirectDrivers <= DriversBitmap::MaxBits());
 static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
+static_assert(MaxTools <= ToolNumbersBitmap::MaxBits());
 
 typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 

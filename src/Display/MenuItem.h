@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include "General/FreelistManager.h"
 #include "Lcd/Lcd.h"
@@ -28,7 +28,7 @@ public:
 	static constexpr Visibility AlwaysVisible = 0;
 
 	// Draw this element on the LCD respecting 'maxWidth' and 'highlight'
-	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept = 0;
+	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept = 0;
 
 	// Select this element with a push of the encoder.
 	// If it returns nullptr false go into adjustment mode, if we can adjust the item.
@@ -57,9 +57,14 @@ public:
 
 	virtual ~MenuItem() noexcept { }
 
-	MenuItem *GetNext() const noexcept { return next; }
+	MenuItem *null GetNext() const noexcept { return next; }
 	FontNumber GetFontNumber() const noexcept { return fontNumber; }
 	void SetChanged() noexcept { itemChanged = true; }
+
+	// The following functions to set the visibility do not update the display. They should only be called immediately after creating the item and before displaying it for the first time.
+	void SetVisibility(Visibility vis) noexcept { visCase = vis; }
+	void SetVisibility(const char *_ecv_array vis) noexcept { visStr = vis; }
+
 	bool IsVisible() const noexcept;
 
 	// Erase this item if it is drawn but should not be visible
@@ -69,180 +74,36 @@ public:
 	PixelNumber GetWidth() const noexcept { return width; }
 	PixelNumber GetHeight() const noexcept { return height; }
 
+	PixelNumber GetMinX() const noexcept { return column; }
+	PixelNumber GetMinY() const noexcept { return row; }
+	PixelNumber GetMaxX() const noexcept { return column + width - 1; }
+	PixelNumber GetMaxY() const noexcept { return row + height - 1; }
+
 	static void AppendToList(MenuItem **root, MenuItem *item) noexcept;
 
 protected:
-	MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility v) noexcept;
+	MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn) noexcept;
 
 	// Print the item starting at the current cursor position, which may be off screen. Used to find the width and also to really print the item.
 	// Overridden for items that support variable alignment
 	virtual void CorePrint(Lcd& lcd) noexcept { }
 
 	// Print the item at the correct place with the correct alignment
-	void PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
+	void PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept;
 
+	const char *_ecv_array _ecv_null visStr;
 	const PixelNumber row, column;
 	PixelNumber width, height;
 	const Alignment align;
 	const FontNumber fontNumber;
-	const Visibility visCase;
+	Visibility visCase;
 
-	bool itemChanged;
-	bool highlighted;
-	bool drawn;
+	uint8_t itemChanged : 1,
+			highlighted : 1,
+			drawn : 1;
 
 private:
 	MenuItem *next;
-};
-
-class TextMenuItem final : public MenuItem
-{
-public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<TextMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<TextMenuItem>(p); }
-
-	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char *t) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
-
-protected:
-	void CorePrint(Lcd& lcd) noexcept override;
-
-private:
-	const char *text;
-};
-
-class ButtonMenuItem final : public MenuItem
-{
-public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ButtonMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<ButtonMenuItem>(p); }
-
-	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
-	bool Select(const StringRef& cmd) noexcept override;
-
-	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
-
-protected:
-	void CorePrint(Lcd& lcd) noexcept override;
-
-private:
-	const char *text;
-	const char *command;
-	const char *m_acFile; // used when action ("command") is "menu"
-};
-
-class ValueMenuItem final : public MenuItem
-{
-public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ValueMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
-
-	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
-	bool Select(const StringRef& cmd) noexcept override;
-	bool CanAdjust() const noexcept override { return true; }
-	bool Adjust(int clicks) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
-
-	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
-
-	unsigned int GetReferencedToolNumber() const noexcept;
-
-protected:
-	void CorePrint(Lcd& lcd) noexcept override;
-
-private:
-	enum class AdjustMode : uint8_t { displaying, adjusting, liveAdjusting };
-	enum class PrintFormat : uint8_t { undefined, asFloat, asUnsigned, asSigned, asPercent, asText, asIpAddress, asTime };
-
-	bool Adjust_SelectHelper() noexcept;
-	bool Adjust_AlterHelper(int clicks) noexcept;
-
-	static constexpr PixelNumber DefaultWidth =  25;			// default numeric field width
-
-	const unsigned int valIndex;
-	const char *textValue;				// for temporary use when printing
-
-	// Variables currentValue, currentFormat and decimals together define the display format of the item
-	union Value
-	{	float f;
-		uint32_t u;
-		int32_t i;
-	};
-
-	Value currentValue;
-	PrintFormat currentFormat;
-	uint8_t decimals;
-	AdjustMode adjusting;
-	bool adjustable;
-	bool error;							// for temporary use when printing
-};
-
-#if HAS_MASS_STORAGE
-class FilesMenuItem final : public MenuItem
-{
-public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<FilesMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
-
-	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept;
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
-	void Enter(bool bForwardDirection) noexcept override;
-	int Advance(int nCounts) noexcept override;
-	bool Select(const StringRef& cmd) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
-
-	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
-
-	void EnterDirectory() noexcept;
-
-protected:
-	void vResetViewState() noexcept;
-
-private:
-	void ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept;
-	uint8_t GetDirectoryNesting() const noexcept;
-
-	const unsigned int numDisplayLines;
-
-	const char *command;
-	const char *initialDirectory;
-	const char *m_acFile; // used when action ("command") includes "menu"
-
-	// Working
-	String<MaxFilenameLength> currentDirectory;
-
-	bool bInSubdirectory() const noexcept;
-	unsigned int uListingEntries() const noexcept;
-
-	// Files on the file system, real count i.e. no ".." included
-	unsigned int m_uHardItemsInDirectory;
-
-	// Logical items (c. files) for display, referenced to uListingEntries() count
-	unsigned int m_uListingFirstVisibleIndex;
-	unsigned int m_uListingSelectedIndex;
-
-	enum CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
-	uint8_t initialDirectoryNesting;
-};
-#endif
-
-class ImageMenuItem final : public MenuItem
-{
-public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ImageMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<ImageMenuItem>(p); }
-
-	ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName) noexcept;
-
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
-
-private:
-	String<MaxFilenameLength> fileName;
 };
 
 #endif
