@@ -1,3 +1,25 @@
+Version 3.4.1RC102
+==================
+* Duet3d 3.4.1RC1
+* Updated build system to support multiple STM32 builds
+* STM32H7 support
+* STM32H7 Bootloader
+* SBC RAM based IAP
+* FD-CAN support
+* Hardware (DMA) Neopixel support
+* Support multiple Neopixel strings (via enhanced M950 commnd)
+* DHT22 Support
+* New USB CDC driver (Removes ST code)
+* Allow configuration of sense resistor and max driver current (M569.8)
+* Experimental diskless SBC mode (board.txt on SBC)
+* Added Fly Super5
+* Added Fly Gemini V2 board
+* Added BTT SKR 3
+* Removed old board.txt keys
+* Increased various system limits
+* Fixed BTT Octopus naming
+
+
 Version 3.4.1RC1_2
 ==================
 * Switched rsense and max current configuration to M569.8
