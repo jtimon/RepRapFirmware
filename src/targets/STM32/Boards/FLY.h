@@ -2,6 +2,11 @@
 #define FLY_H
 
 #include "../Pins_STM32.h"
+// List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
+// The names must match user input that has been converted to lowercase and had _ and - characters stripped out.
+// Aliases are separate by the , character.
+// If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
+// for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
 
 #if STM32H7
 constexpr PinEntry PinTable_FLY_SUPER5[] =
@@ -42,20 +47,20 @@ constexpr PinEntry PinTable_FLY_SUPER5[] =
     
     
     
-    {PA_8, "BEEP"},    {PA_13, "BTN_ENC"},
-    {PA_15, "LCD_EN"}, {PA_14, "LCD_RS"},
-    {PD_0, "LCD_D4"},  {PD_1, "LCD_D5"},
-    {PD_4, "LCD_D6"},  {PD_2, "LCD_D7"},
+    {PA_8, "BEEP"},    {PA_13, "BTNENC"},
+    {PA_15, "LCDEN"}, {PA_14, "LCDRS"},
+    {PD_0, "LCDD4"},  {PD_1, "LCDD5"},
+    {PD_4, "LCDD6"},  {PD_2, "LCDD7"},
 	//GND 
 
     //EXP2
     
     
     
-    {PB_4, "LCD_MISO"},{PB_3, "LCD_SCK"},
-    {PD_7, "BTN_EN2"}, {PB_6, "LCD_SS"},
-    {PD_6, "BTN_EN1"}, {PB_5, "LCD_MOSI"},
-    {PD_5, "LCD_CD"},
+    {PB_4, "LCDMISO"},{PB_3, "LCDSCK"},
+    {PD_7, "BTNEN2"}, {PB_6, "LCDSS"},
+    {PD_6, "BTNEN1"}, {PB_5, "LCDMOSI"},
+    {PD_5, "LCDCD"},
 
 };
 
@@ -140,16 +145,25 @@ constexpr PinEntry PinTable_FLY_SUPER8H7[] =
 	{PA_9, "TX1"},
 	{PA_10, "RX1"},
 
-    // WIFI UART	
-//	{PD_8, "PD8"},
-//	{PD_9, "PD9"},	
-	
-    //WIFI
-//    {PD_10, "PD10"},
-//    {PD_11, "PDE11"},
-//    {PD_13, "PD13"},
+    //EXP1
+    {PG_13, "LCDD7"},
+    {PC_13, "LCDD5"},
+    {PG_8, "LCDRS"},
+    {PE_13, "BTNENC"},
+    {PE_12, "BEEP"},
+    {PB_2, "LCDEN"},
+    {PC_14, "LCDD4"},
+    {PG_14, "LCDD6"},
 
- 
+    //EXP2
+    {PG_15, "LCDCD"},
+    {PB_6, "BTNEN2"},
+    {PB_7, "BTNEN1"},
+    {PA_6, "LCDMISO"},
+    {PA_5, "LCDSCK"},
+    {PA_4, "LCDSS"},
+    {PA_7, "LCDMOSI"},
+
 
 };
 
@@ -230,22 +244,22 @@ constexpr PinEntry PinTable_FLY_F407ZG[] =
 
     //EXP1
     {PB_10, "BEEP"},
-    {PE_14, "LCD_EN"},
-    {PE_10, "LCD_D4"},
-    {PE_8, "LCD_D6"},
-    {PE_15, "BTN_ENC"},
-    {PE_12, "LCD_RS"},
-    {PE_9, "LCD_D5"},
-    {PE_7, "LCD_D7"},
+    {PE_14, "LCDEN"},
+    {PE_10, "LCDD4"},
+    {PE_8, "LCDD6"},
+    {PE_15, "BTNENC"},
+    {PE_12, "LCDRS"},
+    {PE_9, "LCDD5"},
+    {PE_7, "LCDD7"},
 
     //EXP2
-    {PB_14, "LCD_MISO"},
-    {PB_13, "LCD_SCK"},
-    {PC_5, "BTN_EN1"},
-    {PC_4, "BTN_EN2"},
-    {PF_11, "LCD_SS"},
-    {PB_15, "LCD_MOSI"},
-    {PB_2, "LCD_CD"},
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PC_5, "BTNEN1"},
+    {PC_4, "BTNEN2"},
+    {PF_11, "LCDSS"},
+    {PB_15, "LCDMOSI"},
+    {PB_2, "LCDCD"},
 
     //SD
     {PC_13, "SDCD"},
@@ -323,12 +337,12 @@ constexpr PinEntry PinTable_FLY_E3[] =
 
     //EXP1
     {PE_12, "BEEP"},
-    {PE_11, "BTN_ENC"},
-    {PE_10, "LCD_EN"},
-    {PE_9, "LCD_D4"},
-    {PE_8, "LCD_D5"},
-    {PE_7, "LCD_D6"},
-    {PB_1, "LCD_D7"},
+    {PE_11, "BTNENC"},
+    {PE_10, "LCDEN"},
+    {PE_9, "LCDD4"},
+    {PE_8, "LCDD5"},
+    {PE_7, "LCDD6"},
+    {PB_1, "LCDD7"},
 
     //SD
     {PA_15, "SDCD"},
@@ -416,26 +430,26 @@ constexpr PinEntry PinTable_FLY_CDYV2[] =
     {PA_2,  "fan2" },
 
     //EXP1
-    {PA_14, "LCD_D7"},
-    {PA_13, "LCD_D6"},
-    {PE_15, "LCD_D4"},
-    {PE_14, "LCD_D5"},
-    {PB_2, "LCD_EN"},
-    {PE_13, "LCD_CD"},
+    {PA_14, "LCDD7"},
+    {PA_13, "LCDD6"},
+    {PE_15, "LCDD4"},
+    {PE_14, "LCDD5"},
+    {PB_2, "LCDEN"},
+    {PE_13, "LCDCD"},
 
     // UART
-    {PA_9, "TX1,BTN_ENC"},
-    {PA_10, "RX1,LCD_RS"},
+    {PA_9, "TX1,BTNENC"},
+    {PA_10, "RX1,LCDRS"},
 
     // WIFI UART
-    {PD_8, "BTN_EN1"},
-    {PD_9, "BTN_EN2"},
+    {PD_8, "BTNEN1"},
+    {PD_9, "BTNEN2"},
 
     //spi 1  (SD,MAX311865,MAX6675)
-    {PA_4, "SPI1SDCS,LCD_SS"},
-    {PA_5, "SPI1SCK,LCD_SCK"},
-    {PA_6, "SPI1MISO,LCD_MISO"},
-    {PA_7, "SPI1MOSI,LCD_MOSI"},
+    {PA_4, "SPI1SDCS,LCDSS"},
+    {PA_5, "SPI1SCK,LCDSCK"},
+    {PA_6, "SPI1MISO,LCDMISO"},
+    {PA_7, "SPI1MOSI,LCDMOSI"},
     {PE_7, "SPI1CS1"},
     {PE_8, "SPI1CS2"},
 
@@ -514,12 +528,12 @@ constexpr PinEntry PinTable_FLY_E3_PRO[] =
 
     //EXP1
     {PE_12, "BEEP"},
-    {PE_11, "BTN_ENC"},
-    {PE_10, "LCD_EN"},
-    {PE_9, "LCD_D4"},
-    {PE_8, "LCD_D5"},
-    {PE_7, "LCD_D6"},
-    {PB_1, "LCD_D7"},
+    {PE_11, "BTNENC"},
+    {PE_10, "LCDEN"},
+    {PE_9, "LCDD4"},
+    {PE_8, "LCDD5"},
+    {PE_7, "LCDD6"},
+    {PB_1, "LCDD7"},
 
     //SD
     {PC_9, "SDD1"},
@@ -540,7 +554,7 @@ constexpr PinEntry PinTable_FLY_E3_PRO[] =
     {PB_11, "neopixel"},
     {PD_11, "PSON"},
     {PE_6, "laser"},
-    {PC_3, "Power_ADC"},
+    {PC_3, "PowerADC"},
     {PD_10, "pwr, PWRDET"},
 
 };
@@ -619,23 +633,23 @@ constexpr PinEntry PinTable_FLY_SUPER8[] =
     {PD_15,  "fan9" },
     
     //EXP1
-    {PG_13, "LCD_D7"},
-    {PC_13, "LCD_D5"},
-    {PG_8, "LCD_RS"},
-    {PE_13, "BTN_ENC"},
+    {PG_13, "LCDD7"},
+    {PC_13, "LCDD5"},
+    {PG_8, "LCDRS"},
+    {PE_13, "BTNENC"},
     {PE_12, "BEEP"},
-    {PB_2, "LCD_EN"},
-    {PC_14, "LCD_D4"},
-    {PG_14, "LCD_D6"},
+    {PB_2, "LCDEN"},
+    {PC_14, "LCDD4"},
+    {PG_14, "LCDD6"},
 
     //EXP2
-    {PG_15, "LCD_CD"},
-    {PB_6, "BTN_EN2"},
-    {PB_7, "BTN_EN1"},
-    {PA_6, "LCD_MISO"},
-    {PA_5, "LCD_SCK"},
-    {PA_4, "LCD_SS"},
-    {PA_7, "LCD_MOSI"},
+    {PG_15, "LCDCD"},
+    {PB_6, "BTNEN2"},
+    {PB_7, "BTNEN1"},
+    {PA_6, "LCDMISO"},
+    {PA_5, "LCDSCK"},
+    {PA_4, "LCDSS"},
+    {PA_7, "LCDMOSI"},
 
 };
 
@@ -701,20 +715,20 @@ constexpr PinEntry PinTable_FLY_E3_PROV3[] =
 
     //EXP1
     {PE_11, "BEEP"},
-    {PE_12, "BTN_ENC"},
-    {PE_10, "LCD_D5"},
-    {PE_6, "LCD_RS"},
-    {PE_8, "LCD_D7"},
-    {PA_14, "LCD_EN"},
-    {PE_9, "LCD_D4"},
-    {PE_7, "LCD_D6"},
+    {PE_12, "BTNENC"},
+    {PE_10, "LCDD5"},
+    {PE_6, "LCDRS"},
+    {PE_8, "LCDD7"},
+    {PA_14, "LCDEN"},
+    {PE_9, "LCDD4"},
+    {PE_7, "LCDD6"},
     
     //EXP2
-    {PA_13, "LCD_CD"},
-    {PB_4, "LCD_MISO"},
-    {PB_3, "LCD_SCK"},
-    {PB_2, "LCD_SS"},
-    {PB_5, "LCD_MOSI"},
+    {PA_13, "LCDCD"},
+    {PB_4, "LCDMISO"},
+    {PB_3, "LCDSCK"},
+    {PB_2, "LCDSS"},
+    {PB_5, "LCDMOSI"},
 
     //SD
     {PC_9, "SDD1"},
@@ -725,8 +739,8 @@ constexpr PinEntry PinTable_FLY_E3_PROV3[] =
     {PC_10, "SDD2"},
 
     // UART
-    {PA_9, "TX1,BTN_EN2"},
-    {PA_10, "RX1,BTN_EN1"},
+    {PA_9, "TX1,BTNEN2"},
+    {PA_10, "RX1,BTNEN1"},
 
     //FPC
     {PB_11, "neopixel"},
@@ -797,22 +811,22 @@ constexpr PinEntry PinTable_FLY_GEMINI[] =
     {PC_10, "SDD2"},
 
     // UART
-    {PA_9, "TX1,LCD_D4"},
-    {PA_10, "RX1,LCD_RS"},
+    {PA_9, "TX1,LCDD4"},
+    {PA_10, "RX1,LCDRS"},
     
     //EXP1
-    {PA_8, "LCD_D5"},
-    {PA_4, "BTN_ENC"},
-    {PA_13, "LCD_EN"},
+    {PA_8, "LCDD5"},
+    {PA_4, "BTNENC"},
+    {PA_13, "LCDEN"},
     
     //EXP2
-    {PB_3, "LCD_CD"},
-    {PA_14, "BTN_EN2"},
-    {PA_15, "BTN_EN1"},
-    {PB_14, "LCD_MISO"},
-    {PB_13, "LCD_SCK"},
-    {PB_12, "LCD_SS"},
-    {PB_15, "LCD_MOSI"},
+    {PB_3, "LCDCD"},
+    {PA_14, "BTNEN2"},
+    {PA_15, "BTNEN1"},
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PB_12, "LCDSS"},
+    {PB_15, "LCDMOSI"},
 
 };
 
@@ -869,22 +883,22 @@ constexpr PinEntry PinTable_FLY_GEMINI_V1_1[] =
     {PC_7,  "fan1" },
 
     // UART
-    {PA_9, "TX1,LCD_D4"},
-    {PA_10, "RX1,LCD_RS"},
+    {PA_9, "TX1,LCDD4"},
+    {PA_10, "RX1,LCDRS"},
 
     //EXP1
-    {PA_8, "LCD_D5"},
-    {PA_4, "BTN_ENC"},
-    {PA_13, "LCD_EN"},
+    {PA_8, "LCDD5"},
+    {PA_4, "BTNENC"},
+    {PA_13, "LCDEN"},
     
     //EXP2
-    {PB_3, "LCD_CD"},
-    {PA_14, "BTN_EN2"},
-    {PA_15, "BTN_EN1"},
-    {PB_14, "LCD_MISO"},
-    {PB_13, "LCD_SCK"},
-    {PB_12, "LCD_SS"},
-    {PB_15, "LCD_MOSI"},
+    {PB_3, "LCDCD"},
+    {PA_14, "BTNEN2"},
+    {PA_15, "BTNEN1"},
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PB_12, "LCDSS"},
+    {PB_15, "LCDMOSI"},
 
 };
 
@@ -942,22 +956,22 @@ constexpr PinEntry PinTable_FLY_GEMINI_V2_0[] =
     {PC_7,  "fan1" },
 
     // UART
-    {PA_9, "TX1,LCD_D4"},
-    {PA_10, "RX1,LCD_RS"},
+    {PA_9, "TX1,LCDD4"},
+    {PA_10, "RX1,LCDRS"},
 
     //EXP1
-    {PA_8, "LCD_D5"},
-    {PB_6, "BTN_ENC"},
-    {PA_13, "LCD_EN"},
+    {PA_8, "LCDD5"},
+    {PB_6, "BTNENC"},
+    {PA_13, "LCDEN"},
     
     //EXP2
-    {PC_10, "LCD_CD"},
-    {PA_14, "BTN_EN2"},
-    {PA_15, "BTN_EN1"},
-    {PB_14, "LCD_MISO"},
-    {PB_13, "LCD_SCK"},
-    {PB_12, "LCD_SS"},
-    {PB_15, "LCD_MOSI"},
+    {PC_10, "LCDCD"},
+    {PA_14, "BTNEN2"},
+    {PA_15, "BTNEN1"},
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PB_12, "LCDSS"},
+    {PB_15, "LCDMOSI"},
 
 };
 

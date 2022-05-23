@@ -17,12 +17,12 @@ constexpr PinEntry PinTable_BIQU_SKR_SE_BX_v2_0[] =
     {PH_5, "e2temp,thb"},
 
     //Endstops
-    {PB_11, "xstop,x-"},
-    {PD_13, "xstopmax,x+"},
-    {PB_12, "ystop,y-"},
-    {PB_13, "ystopmax,y+"},
-    {PD_12, "zstop,z-"},
-    {PD_11, "zstopmax,z+"},
+    {PB_11, "xstop"},
+    {PD_13, "xstopmax"},
+    {PB_12, "ystop"},
+    {PB_13, "ystopmax"},
+    {PD_12, "zstop"},
+    {PD_11, "zstopmax"},
 	{PH_2, "probe"},
 	
     //Heaters and Fans (Big and Small Mosfets}
@@ -60,11 +60,11 @@ constexpr PinEntry PinTable_BIQU_SKR_SE_BX_v2_0[] =
 	{PE_4, "PE4"},
 
 	//Wifi
-	{PA_0, "wifi-tx,TX4"},
-	{PA_1, "wifi-rx,RX4"},
+	{PA_0, "wifitx,TX4"},
+	{PA_1, "wifirx,RX4"},
     //TFT
-	{PA_9, "tft-tx,TX1"},
-	{PA_10, "tft-rx,RX1"},
+	{PA_9, "tfttx,TX1"},
+	{PA_10, "tftrx,RX1"},
 };
 
 constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
@@ -107,9 +107,9 @@ constexpr PinEntry PinTable_BTT_SKR_3[] =
     {PA_3, "e1temp,th1"},
 
     //Endstops
-    {PC_1, "xstop,x-stop"},
-    {PC_3, "ystop,y-stop"},
-    {PC_0, "zstop,z-stop"},
+    {PC_1, "xstop"},
+    {PC_3, "ystop"},
+    {PC_0, "zstop"},
     {PC_2, "e0stop,e0det"},
     {PA_0, "e1stop,e1det"},
 
@@ -141,22 +141,22 @@ constexpr PinEntry PinTable_BTT_SKR_3[] =
 	
     //EXP1
     {PC_5, "BEEP"},
-    {PB_0, "BTN_ENC"},
-    {PB_1, "LCD_EN"},
-    {PE_8, "LCD_RS"},
-    {PE_9, "LCD_D4"},
-    {PE_10, "LCD_D5"},
-    {PE_11, "LCD_D6"},
-    {PE_12, "LCD_D7"},
+    {PB_0, "BTNENC"},
+    {PB_1, "LCDEN"},
+    {PE_8, "LCDRS"},
+    {PE_9, "LCDD4"},
+    {PE_10, "LCDD5"},
+    {PE_11, "LCDD6"},
+    {PE_12, "LCDD7"},
 
     //EXP2
-    {PA_6, "LCD_MISO"},
-    {PA_5, "LCD_SCK"},
-    {PE_7, "BTN_EN1"},
-    {PA_4, "LCD_SS"},
-    {PB_2, "BTN_EN2"},
-    {PA_7, "LCD_MOSI"},
-    {PC_4, "LCD_CD"},
+    {PA_6, "LCDMISO"},
+    {PA_5, "LCDSCK"},
+    {PE_7, "BTNEN1"},
+    {PA_4, "LCDSS"},
+    {PB_2, "BTNEN2"},
+    {PA_7, "LCDMOSI"},
+    {PC_4, "LCDCD"},
 };
 
 constexpr BoardDefaults btt_skr_3_Defaults = {
@@ -201,9 +201,9 @@ constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
     {PF_6, "bedtemp,t3"},
 
     //Endstops
-    {PB_10, "xstop,x-stop"},
-    {PE_12, "ystop,y-stop"},
-    {PG_8, "zstop,z-stop"},
+    {PB_10, "xstop"},
+    {PE_12, "ystop"},
+    {PG_8, "zstop"},
     {PE_15, "e0stop,e0det"},
     {PE_10, "e1stop,e1det"},
     {PG_5, "e2stop,e2det"},
@@ -224,21 +224,21 @@ constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
     //EXP1
     {PG_4, "BEEP"},
     {PA_8, "BTNENC"},
-    {PD_11, "LCD_EN"},
-    {PD_10, "LCD_RS"},
-    {PG_2, "LCD_D4"},
-    {PG_3, "LCD_D5"},
-    {PG_6, "LCD_D6"},
-    {PG_7, "LCD_D7"},
+    {PD_11, "LCDEN"},
+    {PD_10, "LCDRS"},
+    {PG_2, "LCDD4"},
+    {PG_3, "LCDD5"},
+    {PG_6, "LCDD6"},
+    {PG_7, "LCDD7"},
 
     //EXP2
-    {PB_14, "LCD_MISO"},
-    {PB_13, "LCD_SCK"},
-    {PG_10, "BTN_EN1"},
-    {PB_12, "LCD_SS"},
-    {PF_11, "BTN_EN2"},
-    {PB_15, "LCD_MOSI"},
-    {PF_12, "LCD_CD"},
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PG_10, "BTNEN1"},
+    {PB_12, "LCDSS"},
+    {PF_11, "BTNEN2"},
+    {PB_15, "LCDMOSI"},
+    {PF_12, "LCDCD"},
     {PF_13, "KILL"},
 
     //Wifi
@@ -250,12 +250,12 @@ constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
     {PF_15, "wifi6"},
 
     //SPI
-    {PA_15, "X-CS"},
-    {PB_9, "Z-CS"},
-    {PB_8, "Y-CS"},
-    {PB_3, "E0-CS"},
-    {PG_15, "E1-CS"},
-    {PG_12, "E2-CS"},
+    {PA_15, "XCS"},
+    {PB_9, "ZCS"},
+    {PB_8, "YCS"},
+    {PB_3, "E0CS"},
+    {PG_15, "E1CS"},
+    {PG_12, "E2CS"},
 
 };
 
@@ -303,9 +303,9 @@ constexpr PinEntry PinTable_BIQU_GTR_v1_0[] =
     {PF_5, "e7temp,TempM5"},
 
     //Endstops
-    {PF_2, "xstop,x-stop"},
-    {PC_13, "ystop,y-stop"},
-    {PE_0, "zstop,z-stop"},
+    {PF_2, "xstop"},
+    {PC_13, "ystop"},
+    {PE_0, "zstop"},
     {PG_14, "e0stop,e0det"},
     {PG_9, "e1stop,e1det"},
     {PD_3, "e2stop,e2det"},
@@ -343,21 +343,21 @@ constexpr PinEntry PinTable_BIQU_GTR_v1_0[] =
     //EXP1
     {PC_11, "BEEP"},
     {PA_15, "BTNENC"},
-    {PC_10, "LCD_EN"},
-    {PA_8, "LCD_RS"},
-    {PG_8, "LCD_D4"},
-    {PG_7, "LCD_D5"},
-    {PG_6, "LCD_D6"},
-    {PG_5, "LCD_D7"},
+    {PC_10, "LCDEN"},
+    {PA_8, "LCDRS"},
+    {PG_8, "LCDD4"},
+    {PG_7, "LCDD5"},
+    {PG_6, "LCDD6"},
+    {PG_5, "LCDD7"},
 
     //EXP2
-    {PB_14, "LCD_MISO"},
-    {PB_13, "LCD_SCK"},
-    {PD_10, "BTN_EN1"},
-    {PB_12, "LCD_SS"},
-    {PH_10, "BTN_EN2"},
-    {PB_15, "LCD_MOSI"},
-    {PB_10, "LCD_CD"},
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PD_10, "BTNEN1"},
+    {PB_12, "LCDSS"},
+    {PH_10, "BTNEN2"},
+    {PB_15, "LCDMOSI"},
+    {PB_10, "LCDCD"},
 
     //Neopixel
     {PF_13, "Neopixel"},
@@ -369,12 +369,12 @@ constexpr PinEntry PinTable_BIQU_GTR_v1_0[] =
     {PC_5, "wifi5"},
 
     //SPI
-    {PC_14, "X-CS"},
-    {PE_1, "Y-CS"},
-    {PB_5, "Z-CS"},
-    {PG_10, "E0-CS"},
-    {PD_4, "E1-CS"},
-    {PC_12, "E2-CS"},
+    {PC_14, "XCS"},
+    {PE_1, "YCS"},
+    {PB_5, "ZCS"},
+    {PG_10, "E0CS"},
+    {PD_4, "E1CS"},
+    {PC_12, "E2CS"},
     {PB_6, "MISO"},
     {PG_15, "MOSI"},
     {PB_3, "SCK"},
@@ -383,7 +383,7 @@ constexpr PinEntry PinTable_BIQU_GTR_v1_0[] =
     {PI_2, "KMOSI"},
     {PI_1, "KSCK"},
     {PH_2, "KCS"},
-    {PF_13, "RGB_LED"},
+    {PF_13, "RGBLED"},
 };
 
 constexpr BoardDefaults biqu_gtr_1_0_Defaults = {
@@ -424,9 +424,9 @@ constexpr PinEntry PinTable_BTT_RRF_E3_v1_1[] =
     {PA_3, "PT100,th2"},
 
     //Endstops
-    {PC_0, "xstop,x-stop"},
-    {PC_1, "ystop,y-stop"},
-    {PC_2, "zstop,z-stop"},
+    {PC_0, "xstop"},
+    {PC_1, "ystop"},
+    {PC_2, "zstop"},
     {PC_3, "e0stop,e0det"},
     {PB_10, "e1stop"},
     {PB_11, "x2stop"},
@@ -448,20 +448,20 @@ constexpr PinEntry PinTable_BTT_RRF_E3_v1_1[] =
     {PE_6,  "fan3" },
 
     //EXP1
-    {PB_1, "LCD_D6"},
-    {PB_2, "LCD_D4"},
-    {PE_7, "LCD_EN"},
+    {PB_1, "LCDD6"},
+    {PB_2, "LCDD4"},
+    {PE_7, "LCDEN"},
     {PE_8, "BEEP"},
-    {PE_9,"BTN_ENC"},
-    {PE_10, "LCD_D5"},
-    {PE_11,"LCD_D7"},
+    {PE_9,"BTNENC"},
+    {PE_10, "LCDD5"},
+    {PE_11,"LCDD7"},
 
     //Neopixel
     {PB_7, "Neopixel"},
 
     //TFT
-    {PA_9, "TX1,tft-tx"},
-    {PA_10, "RX1,tft-rx"},
+    {PA_9, "TX1,tfttx"},
+    {PA_10, "RX1,tftrx"},
 
     //UART
     {PB_8, "SDA1"},
@@ -515,9 +515,9 @@ constexpr PinEntry PinTable_BTT_SKR_2[] =
     {PA_3, "e1temp,th1"},
 
     //Endstops
-    {PC_1, "xstop,x-stop"},
-    {PC_3, "ystop,y-stop"},
-    {PC_0, "zstop,z-stop"},
+    {PC_1, "xstop"},
+    {PC_3, "ystop"},
+    {PC_0, "zstop"},
     {PC_2, "e0stop,e0det"},
     {PA_0, "e1stop,e1det"},
 
@@ -536,37 +536,37 @@ constexpr PinEntry PinTable_BTT_SKR_2[] =
     {PB_5,  "fan2" },
 
     //EXP1
-    {PE_13, "LCD_D7"},
-    {PE_11, "LCD_D5"},
-    {PE_9, "LCD_RS"},
+    {PE_13, "LCDD7"},
+    {PE_11, "LCDD5"},
+    {PE_9, "LCDRS"},
     {PC_5, "BEEP"},
-    {PB_0, "BTN_ENC"},
-    {PE_10, "LCD_D4"},
-    {PE_12, "LCD_D6"},
-    {PB_1, "LCD_EN"},
+    {PB_0, "BTNENC"},
+    {PE_10, "LCDD4"},
+    {PE_12, "LCDD6"},
+    {PB_1, "LCDEN"},
 
     //EXP2
-    {PC_4, "LCD_CD"},
-    {PB_2, "BTN_EN2"},
-    {PE_7, "BTN_EN1"},
-    {PA_6, "LCD_MISO"},
-    {PA_5, "LCD_SCK"},
-    {PA_4, "LCD_SS"},
-    {PA_7, "LCD_MOSI"},
+    {PC_4, "LCDCD"},
+    {PB_2, "BTNEN2"},
+    {PE_7, "BTNEN1"},
+    {PA_6, "LCDMISO"},
+    {PA_5, "LCDSCK"},
+    {PA_4, "LCDSS"},
+    {PA_7, "LCDMOSI"},
 
     //Neopixel
     {PE_6, "Neopixel"},
 
     //TFT
-    {PA_9, "TX1,tft-tx"},
-    {PA_10, "RX1,tft-rx"},
+    {PA_9, "TX1,tfttx"},
+    {PA_10, "RX1,tftrx"},
 
     //SPI
-    {PE_0, "X-CS"},
-    {PD_3, "Y-CS"},
-    {PD_0, "Z-CS"},
-    {PC_6, "E0-CS"},
-    {PD_12, "E1-CS"},
+    {PE_0, "XCS"},
+    {PD_3, "YCS"},
+    {PD_0, "ZCS"},
+    {PC_6, "E0CS"},
+    {PD_12, "E1CS"},
     {PA_14, "MISO"},
     {PE_14, "MOSI"},
     {PE_15, "SCK"},
@@ -627,9 +627,9 @@ constexpr PinEntry PinTable_BTT_OCTOPUS[] =
     {PF_7, "e3temp,th3"},
 
     //Endstops
-    {PG_6, "xstop,x-stop"},
-    {PG_9, "ystop,y-stop"},
-    {PG_10, "zstop,z-stop"},
+    {PG_6, "xstop"},
+    {PG_9, "ystop"},
+    {PG_10, "zstop"},
     {PG_11, "e0stop,e0det"},
     {PG_12, "e1stop,e1det"},
     {PG_13, "e2stop,e2det"},
@@ -656,40 +656,40 @@ constexpr PinEntry PinTable_BTT_OCTOPUS[] =
     {PD_15, "fan5" },
 
     //EXP1
-    {PE_15, "LCD_D7"},
-    {PE_13, "LCD_D5"},
-    {PE_10, "LCD_RS"},
-    {PE_7, "BTN_ENC"},
+    {PE_15, "LCDD7"},
+    {PE_13, "LCDD5"},
+    {PE_10, "LCDRS"},
+    {PE_7, "BTNENC"},
     {PE_8, "BEEP"},
-    {PE_9, "LCD_EN"},
-    {PE_12, "LCD_D4"},
-    {PE_14, "LCD_D6"},
+    {PE_9, "LCDEN"},
+    {PE_12, "LCDD4"},
+    {PE_14, "LCDD6"},
 
     //EXP2
-    {PC_15, "LCD_CD"},
-    {PB_2, "BTN_EN2"},
-    {PB_1, "BTN_EN1"},
-    {PA_6, "LCD_MISO"},
-    {PA_5, "LCD_SCK"},
-    {PA_4, "LCD_SS"},
-    {PA_7, "LCD_MOSI"},
+    {PC_15, "LCDCD"},
+    {PB_2, "BTNEN2"},
+    {PB_1, "BTNEN1"},
+    {PA_6, "LCDMISO"},
+    {PA_5, "LCDSCK"},
+    {PA_4, "LCDSS"},
+    {PA_7, "LCDMOSI"},
 
     //Neopixel
     {PB_0, "Neopixel"},
 
     //TFT
-    {PA_9, "TX1,tft-tx"},
-    {PA_10, "RX1,tft-rx"},
+    {PA_9, "TX1,tfttx"},
+    {PA_10, "RX1,tftrx"},
 
     //SPI
-    {PC_4, "X-CS"},
-    {PD_11, "Y-CS"},
-    {PC_6, "Z-CS"},
-    {PC_7, "E0-CS"},
-    {PF_2, "E1-CS"},
-    {PE_4, "E2-CS"},
-    {PE_1, "E3-CS"},
-    {PD_3, "E4-CS"},
+    {PC_4, "XCS"},
+    {PD_11, "YCS"},
+    {PC_6, "ZCS"},
+    {PC_7, "E0CS"},
+    {PF_2, "E1CS"},
+    {PE_4, "E2CS"},
+    {PE_1, "E3CS"},
+    {PD_3, "E4CS"},
     {PA_6, "MISO"},
     {PA_7, "MOSI"},
     {PA_5, "SCK"},
@@ -752,9 +752,9 @@ constexpr PinEntry PinTable_BTT_OCTOPUSPRO[] =
     {PF_7, "e3temp,th3"},
 
     //Endstops
-    {PG_6, "xstop,x-stop"},
-    {PG_9, "ystop,y-stop"},
-    {PG_10, "zstop,z-stop"},
+    {PG_6, "xstop"},
+    {PG_9, "ystop"},
+    {PG_10, "zstop"},
     {PG_11, "e0stop,e0det"},
     {PG_12, "e1stop,e1det"},
     {PG_13, "e2stop,e2det"},
@@ -782,40 +782,40 @@ constexpr PinEntry PinTable_BTT_OCTOPUSPRO[] =
     {PD_15, "fan5" },
 
     //EXP1
-    {PE_15, "LCD_D7"},
-    {PE_13, "LCD_D5"},
-    {PE_10, "LCD_RS"},
-    {PE_7, "BTN_ENC"},
+    {PE_15, "LCDD7"},
+    {PE_13, "LCDD5"},
+    {PE_10, "LCDRS"},
+    {PE_7, "BTNENC"},
     {PE_8, "BEEP"},
-    {PE_9, "LCD_EN"},
-    {PE_12, "LCD_D4"},
-    {PE_14, "LCD_D6"},
+    {PE_9, "LCDEN"},
+    {PE_12, "LCDD4"},
+    {PE_14, "LCDD6"},
 
     //EXP2
-    {PC_15, "LCD_CD"},
-    {PB_2, "BTN_EN2"},
-    {PB_1, "BTN_EN1"},
-    {PA_6, "LCD_MISO"},
-    {PA_5, "LCD_SCK"},
-    {PA_4, "LCD_SS"},
-    {PA_7, "LCD_MOSI"},
+    {PC_15, "LCDCD"},
+    {PB_2, "BTNEN2"},
+    {PB_1, "BTNEN1"},
+    {PA_6, "LCDMISO"},
+    {PA_5, "LCDSCK"},
+    {PA_4, "LCDSS"},
+    {PA_7, "LCDMOSI"},
 
     //Neopixel
     {PB_0, "Neopixel"},
 
     //TFT
-    {PA_9, "TX1,tft-tx"},
-    {PA_10, "RX1,tft-rx"},
+    {PA_9, "TX1,tfttx"},
+    {PA_10, "RX1,tftrx"},
 
     //SPI
-    {PC_4, "X-CS"},
-    {PD_11, "Y-CS"},
-    {PC_6, "Z-CS"},
-    {PC_7, "E0-CS"},
-    {PF_2, "E1-CS"},
-    {PE_4, "E2-CS"},
-    {PE_1, "E3-CS"},
-    {PD_3, "E4-CS"},
+    {PC_4, "XCS"},
+    {PD_11, "YCS"},
+    {PC_6, "ZCS"},
+    {PC_7, "E0CS"},
+    {PF_2, "E1CS"},
+    {PE_4, "E2CS"},
+    {PE_1, "E3CS"},
+    {PD_3, "E4CS"},
     {PA_6, "MISO"},
     {PA_7, "MOSI"},
     {PA_5, "SCK"},

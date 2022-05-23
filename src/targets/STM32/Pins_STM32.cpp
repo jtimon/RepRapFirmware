@@ -289,7 +289,7 @@ bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted) noex
             {
                 ++p;
                 ++q;
-                while (*p == '_') p++;
+                while (*p == '_' || *p =='-') p++;
             }
             if ((*p == 0 || *p == ',') && (*q == 0 || *q == ','))
             {
