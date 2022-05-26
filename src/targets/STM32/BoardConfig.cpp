@@ -121,7 +121,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"8266wifi.csPin", &SamCsPin, nullptr, cvPinType},
     {"8266wifi.serialRxTxPins", &WifiSerialRxTxPins, &NumberSerialPins, cvPinType},
     {"8266wifi.spiChannel", &WiFiSpiChannel, nullptr, cvUint8Type},    
-    {"8266wifi.clockReg", &WiFiClockReg, nullptr, cvUint32Type},    
+    {"8266wifi.clockReg", &WiFiClockReg, nullptr, cvUint32Type},
 #endif
 
 #if HAS_SBC_INTERFACE
