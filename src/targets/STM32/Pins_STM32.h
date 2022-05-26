@@ -268,7 +268,7 @@ constexpr float EXT_BETA = 4388.0;
 constexpr float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-constexpr float DefaultThermistorSeriesR = 4700.0;
+extern float DefaultThermistorSeriesR;
 
 constexpr size_t MaxSpiTempSensors = 8;
 extern Pin SpiTempSensorCsPins[MaxSpiTempSensors];  // Digital pins the 31855s have their select lines tied to

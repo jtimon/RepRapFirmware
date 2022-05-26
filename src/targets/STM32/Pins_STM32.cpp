@@ -45,6 +45,7 @@ constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
 Pin TEMP_SENSE_PINS[NumThermistorInputs];
 Pin SpiTempSensorCsPins[MaxSpiTempSensors]; // Used to deselect all devices at boot
 SSPChannel TempSensorSSPChannel = SSPNONE;  // Off by default
+float DefaultThermistorSeriesR = 4700.0;
 
 Pin ATX_POWER_PIN = NoPin;                  // Pin to use to control external power
 bool ATX_POWER_INVERTED = false;            // Should the state of this pin be inverted
