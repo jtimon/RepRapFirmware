@@ -1,3 +1,12 @@
+Version 3.4.1RC2_101
+====================
+* Duet3D 3.4.1RC2
+* Allow default thermistor series resistor value to be configured (heat.thermistorSeriesResistor)
+* Allow default esp WiFi clock registor to be configured (8266wifi.clockReg)
+* Don't reset accumulated pixel state unless pixel string changes
+* Cleanup pin names to allow usage of "_" and "-" as in Duet3D version
+* STM32F4: Allow pin D.13 to use hardware PWM
+
 Version 3.4.1RC102
 ==================
 * Duet3d 3.4.1RC1
