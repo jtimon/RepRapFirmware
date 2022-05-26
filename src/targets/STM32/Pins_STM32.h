@@ -341,6 +341,7 @@ extern Pin AuxSerialRxTxPins[NumberSerialPins];
     extern Pin APIN_Serial1_RXD;
     extern Pin WifiSerialRxTxPins[NumberSerialPins];
     extern SSPChannel WiFiSpiChannel;
+    extern uint32_t WiFiClockReg;
 
     extern Pin APIN_ESP_SPI_MOSI;
     extern Pin APIN_ESP_SPI_MISO;

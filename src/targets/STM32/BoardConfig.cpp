@@ -120,6 +120,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"8266wifi.csPin", &SamCsPin, nullptr, cvPinType},
     {"8266wifi.serialRxTxPins", &WifiSerialRxTxPins, &NumberSerialPins, cvPinType},
     {"8266wifi.spiChannel", &WiFiSpiChannel, nullptr, cvUint8Type},    
+    {"8266wifi.clockReg", &WiFiClockReg, nullptr, cvUint32Type},    
 #endif
 
 #if HAS_SBC_INTERFACE
@@ -695,6 +696,7 @@ void BoardConfig::Init() noexcept
 #if HAS_WIFI_NETWORKING
     if(SamCsPin != NoPin) pinMode(SamCsPin, OUTPUT_LOW);
     if(EspResetPin != NoPin) pinMode(EspResetPin, OUTPUT_LOW);
+    // Setup WiFi pins for compatibility
     APIN_ESP_SPI_MOSI = SPIPins[WiFiSpiChannel][2];
     APIN_ESP_SPI_MISO = SPIPins[WiFiSpiChannel][1];
     APIN_ESP_SPI_SCK = SPIPins[WiFiSpiChannel][0];

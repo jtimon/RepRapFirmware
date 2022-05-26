@@ -104,6 +104,7 @@ Pin SPIPins[NumSPIDevices][NumSPIPins];                 //GPIO pins for hardware
     Pin APIN_ESP_SPI_MOSI = NoPin;
     Pin APIN_ESP_SPI_MISO = NoPin;
     Pin APIN_ESP_SPI_SCK = NoPin;
+    uint32_t WiFiClockReg = 0;
 
     Pin WifiSerialRxTxPins[NumberSerialPins] = {NoPin, NoPin};
 #endif

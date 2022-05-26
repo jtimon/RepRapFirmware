@@ -666,6 +666,16 @@ void WiFiInterface::Spin() noexcept
 								reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi SPI speed: %s\n", TranslateWiFiResponse(rc));
 							}
 						}
+#elif STM32
+						// Set clock speed based on board.txt setting
+						if (WiFiClockReg != 0)
+						{
+							rc = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, WiFiClockReg, nullptr, 0, nullptr, 0);
+							if (rc != ResponseEmpty)
+							{
+								reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi SPI speed: %s\n", TranslateWiFiResponse(rc));
+							}
+						}
 #endif
 						SetState(NetworkState::active);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
