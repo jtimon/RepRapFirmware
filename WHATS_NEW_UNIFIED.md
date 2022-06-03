@@ -1,3 +1,8 @@
+Version 3.4.1_101
+====================
+* Duet3D 3.4.1
+* Fix pins for Fly e3_prov3
+
 Version 3.4.1RC2_101
 ====================
 * Duet3D 3.4.1RC2
