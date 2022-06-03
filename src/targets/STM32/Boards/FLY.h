@@ -756,10 +756,10 @@ constexpr BoardDefaults fly_e3_prov3_Defaults = {
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
         {PB_13, PB_14, PB_15},                  //SPI1
-        {PB_3, PB_4, PB_5},                  //SPI2
+        {PB_3, PB_4, PB_5},                     //SPI2
         {PC_2, PC_0, PC_1},                     //SPI3
-        {PE_8, NoPin, PB_1},                    //SPI4
-        {PD_6, PD_4, PD_6},                     //SPI5
+        {PE_10, NoPin, PE_8},                   //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
     },
     5,                                            // Number of drivers
     {PE_5, PE_1, PC_2, PD_6 ,PC_15},           //enablePins
