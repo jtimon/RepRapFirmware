@@ -675,6 +675,8 @@ void WiFiInterface::Spin() noexcept
 							{
 								reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi SPI speed: %s\n", TranslateWiFiResponse(rc));
 							}
+							// allow time for esp to apply the new spi settings
+							delay(100);
 						}
 #endif
 						SetState(NetworkState::active);
