@@ -2,6 +2,9 @@ Version 3.4.1_101
 ====================
 * Duet3D 3.4.1
 * Fix pins for Fly e3_prov3
+* Firmware filenames are now mcu specific (firmware.bin -> firmware-stm32h7.bin/firmware-stm32f4.bin)
+* A firmware update (via M997) now performs an emergency stop (shutdown heaters/additional boards)
+* Reset WiFi SPI device after setting new clock speed (avoids spurious error report)
 
 Version 3.4.1RC2_101
 ====================
