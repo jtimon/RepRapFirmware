@@ -12,7 +12,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
         FileStore * const firmwareFile = platform->OpenFile(FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str(), OpenMode::read);
         if (firmwareFile == nullptr)
         {
-            reply.printf("Firmware binary \"%s\" not found", FIRMWARE_FILE);
+            reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
             return false;
         }
 
@@ -44,13 +44,15 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
     String<MaxFilenameLength> location;
     MassStorage::CombineName(location.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? IAP_FIRMWARE_FILE : filenameRef.c_str());
     
-    if(!MassStorage::Rename(location.c_str(), "0:/firmware.bin", true, false))
+    if(!MassStorage::Rename(location.c_str(), FIRMWARE_FILE, true, false))
     {
         //failed to rename
         platform->MessageF(FirmwareUpdateMessage, "Failed to move firmware file.\n");
         return;
     }
-    
+    EmergencyStop();			// turn off heaters etc.
+    debugPrintf("Restarting....\n");
+    delay(1000);    
     SoftwareReset(SoftwareResetReason::user); // Reboot
 #endif
     
