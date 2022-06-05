@@ -18,21 +18,26 @@
 #define ELECTRONICS "STM32H7"
 #define STM_ELECTRONICS_STRING "STM32H7"
 #define STM_BOARD_STRING "STM32H7"
+#define IAP_FIRMWARE_FILE       "firmware-stm32h7.bin"
+#define IAP_UPDATE_FILE         "N/A"
+#define IAP_UPDATE_FILE_SBC     "stm32h7_iap_SBC.bin"
+#define IAP_IMAGE_START         0x0                 // FIXME: Needs updating for H7
 #else
 #define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
 #define DEFAULT_BOARD_TYPE BoardType::Stm32F4
 #define ELECTRONICS "STM32F4"
 #define STM_ELECTRONICS_STRING "STM32F4"
 #define STM_BOARD_STRING "STM32F4"
-#endif
-#define FIRMWARE_FILE       "firmware.bin"
-#define WIFI_FIRMWARE_FILE  "DuetWiFiServer.bin" // Firmware to be loaded onto the ESP board
-
-//needed to compile
-#define IAP_FIRMWARE_FILE       "firmware.bin"
+#define IAP_FIRMWARE_FILE       "firmware-stm32f4.bin"
 #define IAP_UPDATE_FILE         "N/A"
 #define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
 #define IAP_IMAGE_START         0x20018000
+#endif
+// The name of the file used by the board bootloader, boot file is renamed to this
+#define FIRMWARE_FILE       "0:/firmware.bin"
+
+// Firmware to be loaded onto the ESP board
+#define WIFI_FIRMWARE_FILE  "DuetWiFiServer.bin"
 
 #if STM32H7
 #define FLASH_DATA_LENGTH (128*1024) //size of the Software Reset Data in Flash
