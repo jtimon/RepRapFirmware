@@ -1428,7 +1428,7 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 	case 7:			// configure brake
 		return platform.ConfigureDriverBrakePort(gb, reply, drive);
 #if STM32F4 && HAS_SMART_DRIVERS
-	case 8:
+	case 9:
 		{
 			bool seen = false;
 			float fval;
