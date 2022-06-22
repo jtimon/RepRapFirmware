@@ -1,3 +1,8 @@
+Version 3.4.1_103
+=================
+* Changed M569.8 to M569.9 to avoid clash
+* Added Fly super8_pro
+
 Version 3.4.1_102
 =================
 * Fixed bug when freeing attached I/O pin
