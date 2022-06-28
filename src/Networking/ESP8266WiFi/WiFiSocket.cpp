@@ -16,7 +16,7 @@
 
 const unsigned int MaxBuffersPerSocket = 4;
 
-WiFiSocket::WiFiSocket(NetworkInterface *iface) noexcept : Socket(iface), receivedData(nullptr), state(SocketState::inactive), needsPolling(false)
+WiFiSocket::WiFiSocket(NetworkInterface *iface) noexcept : Socket(iface), receivedData(nullptr), hasMoreDataPending(false), state(SocketState::inactive), needsPolling(false)
 {
 }
 
@@ -37,6 +37,7 @@ void WiFiSocket::Close() noexcept
 		if (reply == ResponseEmpty)
 		{
 			state = (state == SocketState::connected) ? SocketState::closing : SocketState::inactive;
+			DiscardReceivedData();
 			return;
 		}
 	}
@@ -65,7 +66,7 @@ void WiFiSocket::Terminate() noexcept
 bool WiFiSocket::CanRead() const noexcept
 {
 	return (state == SocketState::connected)
-		|| (state == SocketState::clientDisconnecting && receivedData != nullptr && receivedData->TotalRemaining() != 0);
+		|| (state == SocketState::clientDisconnecting && (hasMoreDataPending || (receivedData != nullptr && receivedData->TotalRemaining() != 0)));
 }
 
 // Return true if we can send data to this socket
@@ -146,8 +147,11 @@ void WiFiSocket::Poll() noexcept
 
 		if (state == SocketState::clientDisconnecting)
 		{
-			// We already got here before, so close the connection once and for all
-			Close();
+			if (!CanRead())
+			{
+				// We already got here before, so close the connection once and for all
+				Close();
+			}
 			break;
 		}
 		else if (state != SocketState::inactive)
@@ -175,7 +179,6 @@ void WiFiSocket::Poll() noexcept
 			localPort = resp.Value().localPort;
 			remotePort = resp.Value().remotePort;
 			remoteIPAddress.SetV4LittleEndian(resp.Value().remoteIp);
-			DiscardReceivedData();
 			if (state != SocketState::waitingForResponder)
 			{
 				WiFiInterface *iface = static_cast<WiFiInterface *>(interface);
@@ -205,18 +208,12 @@ void WiFiSocket::Poll() noexcept
 		if (state == SocketState::connected)
 		{
 			txBufferSpace = resp.Value().writeBufferSpace;
-			int32_t len = resp.Value().bytesAvailable;
-			while (len > 0)
-			{
-				uint16_t ret = ReceiveData(len);
-				if (ret == 0) break;
-				len -= ret;
-			}
+			ReceiveData(resp.Value().bytesAvailable);
 		}
 		break;
 
 	case ConnState::aborted:
-		if (reprap.Debug( moduleNetwork))
+		if (reprap.Debug(moduleNetwork))
 		{
 			debugPrintf("Socket %u aborted\n", socketNum);
 		}
@@ -228,7 +225,7 @@ void WiFiSocket::Poll() noexcept
 		if (state == SocketState::connected || state == SocketState::waitingForResponder)
 		{
 			// Unexpected change of state
-			if (state != SocketState::clientDisconnecting && reprap.Debug(moduleNetwork))
+			if (reprap.Debug(moduleNetwork))
 			{
 				debugPrintf("Unexpected state change on socket %u\n", socketNum);
 			}
@@ -251,9 +248,9 @@ WiFiInterface *WiFiSocket::GetInterface() const noexcept
 }
 
 // Try to receive more incoming data from the socket.
-uint16_t WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
+void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 {
-	if (bytesAvailable != 0)
+	while (bytesAvailable != 0)
 	{
 //		debugPrintf("%u available\n", bytesAvailable);
 		// First see if we already have a buffer with enough room
@@ -265,14 +262,16 @@ uint16_t WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 			const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, 0, nullptr, 0, lastBuffer->UnwrittenData(), maxToRead);
 			if (ret > 0 && (size_t)ret <= maxToRead)
 			{
+				bytesAvailable -= ret;
 				lastBuffer->dataLength += (size_t)ret;
 				if (reprap.Debug(moduleNetwork))
 				{
 					debugPrintf("Received %u bytes\n", (unsigned int)ret);
 				}
 				if (responder) responder->Spin();
-				return ret;
 			}
+			else
+				break;
 		}
 		else if (NetworkBuffer::Count(receivedData) < MaxBuffersPerSocket)
 		{
@@ -283,6 +282,7 @@ uint16_t WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 				const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, 0, nullptr, 0, buf->Data(), maxToRead);
 				if (ret > 0 && (size_t)ret <= maxToRead)
 				{
+					bytesAvailable -= ret;
 					buf->dataLength = (size_t)ret;
 					NetworkBuffer::AppendToList(&receivedData, buf);
 					if (reprap.Debug(moduleNetwork))
@@ -290,20 +290,22 @@ uint16_t WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 						debugPrintf("Received %u bytes\n", (unsigned int)ret);
 					}
 					if (responder) responder->Spin();
-					return ret;
 				}
 				else
 				{
 					buf->Release();
-					return 0;
+					break;
 				}
 			}
-//			else debugPrintf("no buffer\n");
+			else
+				break;
 		}
+		else
+			break;
 	}
-	return 0;
+	hasMoreDataPending = (bytesAvailable > 0);
 }
-
+	
 // Discard any received data for this transaction
 void WiFiSocket::DiscardReceivedData() noexcept
 {
@@ -311,7 +313,9 @@ void WiFiSocket::DiscardReceivedData() noexcept
 	{
 		receivedData = receivedData->Release();
 	}
+	hasMoreDataPending = false;
 }
+
 
 // Send the data, returning the length buffered
 size_t WiFiSocket::Send(const uint8_t *data, size_t length) noexcept
