@@ -63,15 +63,19 @@ constexpr uint32_t TransferTimeout = 10;				// any transfer should complete with
 
 // Motor current calculations
 // Note that we now allow both the sense resistor value and max current to be configued,
-// so the following are default values only.
-// Full scale current has two ranges (VSENSE 1 or 0) and is given by
-// iMax = 0.32/(RSense + 0.02) (for VSENSE 0) iMax = 0.18/(RSense + 0.02) (for VSENSE = 1)
+// so the following is a default value.
+// The TMC datasheet shows an extra 0.02Ohms being added to RSense to account for additional resistance
 // On typical TMC2209 driver boards RSense is 0.11Ohms on the Duet it is 0.082 Ohms
-constexpr float RSense = 0.11;
+// The device can use two current control ranges (controlled by CHOPCONF_VSENSE_HIGH bit), with corresponding
+// VRef values.
+constexpr float RSense = 0.11; //Ohms
+constexpr float RSenseExtra = 0.02; //Ohms
+constexpr float VRefVS1 = 180.0; //mV
+constexpr float VRefVS0 = 320.0; //mV
 
 // Which gives iMax values in mA of...
-constexpr int32_t DefaultiMax_VS1 = (int32_t)((0.18/(RSense + 0.02))*1000 + 0.5);
-constexpr int32_t DefaultiMax_VS0 = (int32_t)((0.32/(RSense + 0.02))*1000 + 0.5);
+constexpr int32_t DefaultiMax_VS1 = (int32_t)((VRefVS1/(RSense + RSenseExtra)) + 0.5);
+constexpr int32_t DefaultiMax_VS0 = (int32_t)((VRefVS0/(RSense + RSenseExtra)) + 0.5);
 
 constexpr float MaximumMotorCurrent = DefaultiMax_VS0;
 constexpr float MaximumStandstillCurrent = 1400.0;
@@ -913,31 +917,24 @@ void Tmc22xxDriverState::SetCurrent(float current) noexcept
 
 void Tmc22xxDriverState::UpdateCurrent() noexcept
 {
-	// Set run and hold currents, adjust vsense as needed to keep bits in range.
-	const uint32_t iMax_VS1 = (uint32_t)((0.18/(senseResistor + 0.02))*1000 + 0.5);
-	const uint32_t iMax_VS0 = (uint32_t)((0.32/(senseResistor + 0.02))*1000 + 0.5);
 
-	uint32_t vsense;
-	uint32_t iRunCsBits;
-	uint32_t iHoldCsBits;
-	const uint32_t iHoldCurrent = min<uint32_t>((motorCurrent * standstillCurrentFraction)/256, (uint32_t)MaximumStandstillCurrent);	// calculate standstill current
-
-	if (motorCurrent <= iMax_VS1)
+	// New calc based on current Duet3D code, not sure about the 0.2 rounding!
+	uint32_t vsense = CHOPCONF_VSENSE_HIGH;
+	const float DriverFullScaleCurrent = VRefVS1/(senseResistor + RSenseExtra);	// in mA
+	const float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+	float idealIRunCs = DriverCsMultiplier * motorCurrent;
+	if ((unsigned int)(idealIRunCs + 0.2) > 32)
 	{
-		// we can use the high sensitivity setting
-	 	iRunCsBits = (32 * motorCurrent - iMax_VS1/2)/iMax_VS1;
-		iHoldCsBits = (32 * iHoldCurrent - iMax_VS1/2)/iMax_VS1;
-		vsense = CHOPCONF_VSENSE_HIGH;
-	}
-	else
-	{
-		// use the standard vsense setting
-	 	iRunCsBits = (32 * motorCurrent - iMax_VS0/2)/iMax_VS0;
-		iHoldCsBits = (32 * iHoldCurrent - iMax_VS0/2)/iMax_VS0;
+		//Can't use high sensitivity scale
 		vsense = 0;
+		idealIRunCs *= VRefVS1/VRefVS0;
 	}
+	const uint32_t iRunCsBits = constrain<uint32_t>((unsigned int)(idealIRunCs + 0.2), 1, 32) - 1;
+	const float idealIHoldCs = idealIRunCs * standstillCurrentFraction * (1.0/256.0);
+	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
 	if (reprap.Debug(moduleDriver))
-		debugPrintf("TMC current iMax %d %d, set I %d IH %d csBits 0x%x 0x%x vsense 0x%x\n", (int)iMax_VS0, (int)iMax_VS1, (int)motorCurrent, (int)iHoldCurrent, (unsigned)iRunCsBits, (unsigned)iHoldCsBits, (unsigned)vsense);
+		debugPrintf("TMC current set I %d IH %d csBits 0x%x 0x%x vsense 0x%x\n", (int)motorCurrent, (int)idealIHoldCs, (unsigned)iRunCsBits, (unsigned)iHoldCsBits, (unsigned)vsense);
+
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK))
 					| (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) 
@@ -980,7 +977,7 @@ float Tmc22xxDriverState::GetMaxCurrent() const noexcept
 void Tmc22xxDriverState::SetMaxCurrent(float value) noexcept
 {
 	if (value > 0.0f) maxCurrent = value;
-	const int32_t iMax_VS0 = (int32_t)((0.32/(senseResistor + 0.02))*1000 + 0.5);
+	const int32_t iMax_VS0 = (int32_t)((VRefVS0/(RSense + RSenseExtra)) + 0.5);
 	if (maxCurrent > iMax_VS0) maxCurrent = iMax_VS0;
 	SetCurrent(motorCurrent);
 }
