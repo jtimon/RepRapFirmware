@@ -500,7 +500,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 		if (gb.LatestMachineState().messageAcknowledged)
 		{
 			const bool wasCancelled = gb.LatestMachineState().messageCancelled;
-			gb.PopState();												// this could fail if the current macro has already been aborted
+			gb.PopState(true);											// this could fail if the current macro has already been aborted
 
 			if (wasCancelled)
 			{
@@ -653,7 +653,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				CheckFinishedRunningConfigFile(gb);
 
 				// Pop the stack and notify the SBC that we have closed the file
-				Pop(gb);
+				Pop(gb, false);
 				gb.Init();
 				gb.LatestMachineState().firstCommandAfterRestart = false;
 
@@ -782,7 +782,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.GetFileInput()->Reset(fd);
 				fd.Close();
 				CheckFinishedRunningConfigFile(gb);
-				Pop(gb);
+				Pop(gb, false);
 				gb.Init();
 				if (gb.GetState() == GCodeState::normal)
 				{
@@ -912,7 +912,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 			while (fileGCode->IsDoingFileMacro())						// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				pausedInMacro = true;
-				fileGCode->PopState();
+				fileGCode->PopState(false);
 			}
 #if SUPPORT_LASER || SUPPORT_IOBITS
 			pauseRestorePoint.laserPwmOrIoBits = moveState.laserPwmOrIoBits;
@@ -1465,11 +1465,9 @@ bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile) noexcept
 }
 
 // Recover a saved state
-void GCodes::Pop(GCodeBuffer& gb) noexcept
+void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile) noexcept
 {
-	// FIXME If withinSameFile is false, we should pop all stack levels that have the same file (ID)
-	// and output a warning message is the stack is popped more than once
-	if (!gb.PopState())
+	if (!gb.PopState(withinSameFile))
 	{
 		platform.Message(ErrorMessage, "Pop(): stack underflow\n");
 	}
@@ -2777,7 +2775,7 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 			gb.GetFileInput()->Reset(file);
 			file.Close();
 
-			gb.PopState();
+			gb.PopState(false);
 #endif
 		}
 
