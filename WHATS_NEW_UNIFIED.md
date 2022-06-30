@@ -1,7 +1,11 @@
-Version 3.4.1_103
+Version 3.4.2beta1_101
 =================
+* Duet3d 3.4.2beta1 as of 20/6/2022
 * Changed M569.8 to M569.9 to avoid clash
 * Added Fly super8_pro
+* PWM hardware now only allocated first time it is needed (output != 0 && output != 1)
+* STM32H7: Software PWM not working on H7 builds (either full on or off)
+* STM32H7: M569.8/M569.9 not recognised
 
 Version 3.4.1_102
 =================
