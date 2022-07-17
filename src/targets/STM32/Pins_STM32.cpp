@@ -70,6 +70,9 @@ Pin PanelButtonPin = NoPin;         //Extra button on Viki and RRD Panels (reset
 SSPChannel LcdSpiChannel = SSPNONE; //Off by default
 
 Pin DiagPin = NoPin;
+bool DiagOnPolarity = true;
+Pin ActLedPin = NoPin;
+bool ActOnPolarity = true;
 
 //Stepper settings
 Pin ENABLE_PINS[NumDirectDrivers];

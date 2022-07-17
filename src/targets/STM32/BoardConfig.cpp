@@ -53,6 +53,9 @@ static const boardConfigEntry_t boardEntryConfig[]=
 static const boardConfigEntry_t boardConfigs[]=
 {
     {"leds.diagnostic", &DiagPin, nullptr, cvPinType},
+    {"leds.diagnosticOn", &DiagOnPolarity, nullptr, cvBoolType},
+    {"leds.activity", &ActLedPin, nullptr, cvPinType},
+    {"leds.activityOn", &ActOnPolarity, nullptr, cvBoolType},
 
     //Steppers
     {"stepper.powerEnablePin", &StepperPowerEnablePin, nullptr, cvPinType},

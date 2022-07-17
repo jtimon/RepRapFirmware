@@ -314,7 +314,9 @@ extern Pin EncoderPinSw;
 extern Pin PanelButtonPin;
 
 extern Pin DiagPin;
-constexpr bool DiagOnPolarity = true;
+extern bool DiagOnPolarity;
+extern Pin ActLedPin;
+extern bool ActOnPolarity;
 
 extern bool ADCEnablePreFilter;
 
