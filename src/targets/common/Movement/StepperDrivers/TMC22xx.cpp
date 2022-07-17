@@ -608,7 +608,8 @@ inline bool Tmc22xxDriverState::DMASend(uint8_t regNum, uint32_t regVal, uint8_t
 	sendData[5] = (uint8_t)(regVal >> 8);
 	sendData[6] = (uint8_t)regVal;
 	sendData[7] = crc;
-
+	receiveData[12] = 0xAA;
+	receiveData[13] = 0x55;
 	return TMCSoftUARTTransfer(TMC_PINS[driverNumber], sendData, 12, receiveData + 12, 8, TransferTimeout);
 }
 
@@ -617,7 +618,8 @@ inline bool Tmc22xxDriverState::DMAReceive(uint8_t regNum, uint8_t crc) noexcept
 {
 	sendData[2] = regNum;
 	sendData[3] = crc;
-
+	receiveData[4] = 0xAA;
+	receiveData[5] = 0x55;
 	return TMCSoftUARTTransfer(TMC_PINS[driverNumber], sendData, 4, receiveData + 4, 8, TransferTimeout);
 }
 
@@ -1077,6 +1079,8 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 		if (regnumBeingUpdated < NumWriteRegisters 
 		    && currentIfCount == (uint8_t)(lastIfCount + 1)
 			&& (sendData[2] & 0x7F) == WriteRegNumbers[regnumBeingUpdated]
+			&& receiveData[12] == 0x05
+			&& receiveData[13] == 0xFF
 			&& Reflect(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(InitialReceiveCrc, receiveData[14]), receiveData[15]), receiveData[16]), receiveData[17]), receiveData[18])) == receiveData[19]
 		   )
 		{
@@ -1291,10 +1295,12 @@ extern "C" [[noreturn]] void Tmc22Loop(void *) noexcept
 					}
 				}
 			}
+			uint32_t activeCnt = 0;
 			for (size_t i = 0; i < numTmc22xxDrivers; ++i)
 			{
 				if (driverStates[i].IsReady())
 				{
+					activeCnt++;
 					if (driverStates[i].StartTransfer())
 						driverStates[i].TransferDone();
 					else
@@ -1302,7 +1308,7 @@ extern "C" [[noreturn]] void Tmc22Loop(void *) noexcept
 				}
 			}
 			// Give other tasks a chance to run.
-			delay(1);
+			delay((activeCnt <= 1 ? 3 : 1));
 		}
 	}
 }
