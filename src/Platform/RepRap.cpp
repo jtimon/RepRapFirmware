@@ -1017,7 +1017,10 @@ void RepRap::EmergencyStop() noexcept
 	move->Exit();								// this stops the motors stepping
 
 #if SUPPORT_CAN_EXPANSION
-	expansion->EmergencyStop();
+#if SUPPORT_REMOTE_COMMANDS
+	if (!CanInterface::InExpansionMode())
+#endif
+		expansion->EmergencyStop();
 #endif
 
 	gCodes->EmergencyStop();
