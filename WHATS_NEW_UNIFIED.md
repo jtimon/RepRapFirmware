@@ -1,3 +1,15 @@
+Version 3.4.2rc1+_101
+=====================
+* Duet3d 3.4.2rc1+ as of 17/07/2022
+* Fix timeouts with single TMC22xx driver
+* Improved UART error detection for TMC22xx drivers
+* Add new configuration options:
+  leds.diagnosticOn : boolean, sets polarity of diag LED
+  leds.activity : Pin, sets pin for CAN activity LED
+  leds.activityOn : boolean, sets polarity of CAN activity LED
+* Added support for Reset and EmergencyReset when in CAN expansion board mode
+
+
 Version 3.4.2beta1_101
 =================
 * Duet3d 3.4.2beta1 as of 29/6/2022
