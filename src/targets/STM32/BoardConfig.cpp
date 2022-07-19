@@ -39,8 +39,6 @@
 # include "DMABitIO.h"
 #endif
 
-extern char _sccmram;					// defined in linker script
-extern char _eccmram;					// defined in linker script
 static constexpr char boardConfigFile[] = "board.txt";
 
 //Single entry for Board name
@@ -847,6 +845,18 @@ void BoardConfig::PrintValue(MessageType mtype, configValueType configType, void
 
 
 extern "C" uint32_t USBReadOverrun;
+extern uint32_t _sdata;
+extern uint32_t _estack;
+#if STM32F4
+extern uint32_t _sccmram;
+extern uint32_t _ccmramend;
+#elif STM32H7
+extern uint32_t _nocache_ram_start;
+extern uint32_t _nocache_ram_end;
+extern uint32_t _nocache2_ram_start;
+extern uint32_t _nocache2_ram_end;
+#endif
+
 //Information printed by M122 P200
 void BoardConfig::Diagnostics(MessageType mtype) noexcept
 {
@@ -961,6 +971,15 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     MessageF(mtype, "T_MCU calc (corrected) %f\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
     MessageF(mtype, "Device Id %x Revison Id %x CPUId r%dp%d \n", (unsigned)LL_DBGMCU_GetDeviceID(), (unsigned)LL_DBGMCU_GetRevisionID(),  
                                             (unsigned)((SCB->CPUID >> 20) & 0x0F), (unsigned)(SCB->CPUID & 0x0F));
+    MessageF(mtype, "\n== RAM ==\n");
+    MessageF(mtype, "RAM start 0x%x end 0x%x\n", (unsigned)&_sdata, (unsigned)&_estack);
+#if STM32F4
+    MessageF(mtype, "CCMRAM start 0x%x end 0x%x\n", (unsigned)&_sccmram, (unsigned)&_ccmramend);
+#elif STM32H7
+    MessageF(mtype, "No cache RAM 1 start 0x%x end 0x%x\n", (unsigned)&_nocache_ram_start, (unsigned)&_nocache_ram_end);
+    MessageF(mtype, "No cache RAM1 2 start 0x%x end 0x%x\n", (unsigned)&_nocache2_ram_start, (unsigned)&_nocache2_ram_end);
+#endif
+
     MessageF(mtype, "\n== USB ==\n");
     MessageF(mtype, "Read overrun %d\n", (int)USBReadOverrun);
     USBReadOverrun = 0;
