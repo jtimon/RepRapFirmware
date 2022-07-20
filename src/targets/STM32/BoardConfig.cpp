@@ -977,7 +977,7 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     MessageF(mtype, "CCMRAM start 0x%x end 0x%x\n", (unsigned)&_sccmram, (unsigned)&_ccmramend);
 #elif STM32H7
     MessageF(mtype, "No cache RAM 1 start 0x%x end 0x%x\n", (unsigned)&_nocache_ram_start, (unsigned)&_nocache_ram_end);
-    MessageF(mtype, "No cache RAM1 2 start 0x%x end 0x%x\n", (unsigned)&_nocache2_ram_start, (unsigned)&_nocache2_ram_end);
+    MessageF(mtype, "No cache RAM 2 start 0x%x end 0x%x\n", (unsigned)&_nocache2_ram_start, (unsigned)&_nocache2_ram_end);
 #endif
 
     MessageF(mtype, "\n== USB ==\n");
