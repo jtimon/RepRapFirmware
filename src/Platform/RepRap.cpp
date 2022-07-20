@@ -814,8 +814,30 @@ void RepRap::Spin() noexcept
 		diagnosticsDestination = MessageType::NoDestinationMessage;
 	}
 
-	// Check if we need to display a cold extrusion warning
 	const uint32_t now = millis();
+
+#if SUPPORT_REMOTE_COMMANDS
+	const DeferredCommand defCom = deferredCommand;			// capture volatile variable
+	if (defCom != DeferredCommand::none && now - whenDeferredCommandScheduled >= 250)
+	{
+		switch (defCom)
+		{
+		case DeferredCommand::reboot:
+			SoftwareReset(SoftwareResetReason::user);
+			break;
+
+		case DeferredCommand::updateFirmware:
+			UpdateFirmware(IAP_CAN_LOADER_FILE, "");
+			break;
+
+		default:
+			deferredCommand = DeferredCommand::none;
+			break;
+		}
+	}
+#endif
+
+	// Check if we need to display a cold extrusion warning
 	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
 		ReadLocker lock(toolListLock);
@@ -980,47 +1002,58 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	justSentDiagnostics = true;
 }
 
-// Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
+// Turn off the heaters, disable the motors, and deactivate the Heat, Move and GCodes classes. Leave everything else working.
 void RepRap::EmergencyStop() noexcept
 {
 #ifdef DUET3_ATE
 	Duet3Ate::PowerOffEUT();
 #endif
 
-	stopped = true;								// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
+	stopped = true;									// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
 
-	platform->DisableAllDrivers();				// need to do this to ensure that any motor brakes are re-engaged
-
-	switch (gCodes->GetMachineType())
+#if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
 	{
-	case MachineType::cnc:
-		for (size_t i = 0; i < MaxSpindles; i++)
+		platform->EmergencyDisableDrivers();		// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
+	}
+	else
+#endif
+	{
+		platform->DisableAllDrivers();				// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
+
+		switch (gCodes->GetMachineType())
 		{
-			platform->AccessSpindle(i).SetState(SpindleState::stopped);
-		}
-		break;
+		case MachineType::cnc:
+			for (size_t i = 0; i < MaxSpindles; i++)
+			{
+				platform->AccessSpindle(i).SetState(SpindleState::stopped);
+			}
+			break;
 
 #if SUPPORT_LASER
-	case MachineType::laser:
-		platform->SetLaserPwm(0);
-		break;
+		case MachineType::laser:
+			platform->SetLaserPwm(0);
+			break;
 #endif
 
-	default:
-		break;
+		default:
+			break;
+		}
 	}
 
-	heat->Exit();								// this also turns off all heaters
-	move->Exit();								// this stops the motors stepping
+	heat->Exit();									// this also turns off all heaters
+	move->Exit();									// this stops the motors stepping
 
 #if SUPPORT_CAN_EXPANSION
-#if SUPPORT_REMOTE_COMMANDS
+# if SUPPORT_REMOTE_COMMANDS
 	if (!CanInterface::InExpansionMode())
-#endif
+# endif
+	{
 		expansion->EmergencyStop();
+	}
 #endif
 
 	gCodes->EmergencyStop();
@@ -2943,13 +2976,13 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 }
 
 // Update the firmware. Prerequisites should be checked before calling this.
-void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
+void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
+	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, iapFilename, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, iapFilename, OpenMode::read);
 		if (iapFile == nullptr)
 		{
 			// This should not happen because we already checked that the file exists, so use a simplified error message
@@ -2963,7 +2996,7 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
-	StartIap(filenameRef.c_str());
+	StartIap(iapParam);
 #endif
 }
 #endif
