@@ -2924,11 +2924,10 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 
 // Firmware update operations
 
-#if LPC17xx
-    #include "LPC/FirmwareUpdate.hpp"
-#elif STM32
+#if STM32
+	// include code for built in loaders
     #include "STM32/FirmwareUpdate.hpp"
-#else
+#endif
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept
@@ -2954,7 +2953,9 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 	firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
-#if SAME5x
+#if STM32
+						(uint32_t)&_estack
+#elif SAME5x
 						HSRAM_ADDR + HSRAM_SIZE
 #else
 						IRAM_ADDR + IRAM_SIZE
@@ -2964,12 +2965,13 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		reply.printf("Firmware binary \"%s\" is not valid for this electronics", FIRMWARE_DIRECTORY IAP_FIRMWARE_FILE);
 		return false;
 	}
-
+#if !STM32
 	if (!platform->FileExists(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE) && !platform->FileExists(DEFAULT_SYS_DIR, IAP_UPDATE_FILE))
 	{
 		reply.printf("In-application programming binary \"%s\" not found", FIRMWARE_DIRECTORY IAP_UPDATE_FILE);
 		return false;
 	}
+#endif
 #endif
 
 	return true;
@@ -2978,6 +2980,21 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 // Update the firmware. Prerequisites should be checked before calling this.
 void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept
 {
+#if STM32
+	// Check to see if we should use a built in IAP
+	if (!strcmp(iapFilename, IAP_UPDATE_FILE))
+	{
+		RunSdIap(iapParam);
+		return;
+	}
+#if SUPPORT_REMOTE_COMMANDS
+	if (!strcmp(iapFilename, IAP_CAN_LOADER_FILE))
+	{
+		RunCanIap(iapParam);
+		return;
+	}
+#endif
+#endif
 #if HAS_MASS_STORAGE
 	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, iapFilename, OpenMode::read);
 	if (iapFile == nullptr)
@@ -2999,7 +3016,7 @@ void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexc
 	StartIap(iapParam);
 #endif
 }
-#endif
+
 
 #if !LPC17xx
 void RepRap::PrepareToLoadIap() noexcept

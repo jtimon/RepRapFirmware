@@ -60,9 +60,25 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 	   )																	// we only understand bootloader version 0 and files requests for main firmware and bootloader
 	{
 		String<MaxFilenameLength> fname;
-		fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
-		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
-		fname.cat(".bin");
+#if STM32
+		// allow use of non Duet firmware
+		if (!strncmp("STM", msg.boardType, 3))
+		{
+			fname.copy("firmware-");
+			if (!strcmp("STMH7W", msg.boardType))
+				fname.cat("stm32h7-wifi.bin");
+			else if (!strcmp("STMH7S", msg.boardType))
+				fname.cat("stm32h7-sbc.bin");
+			else
+				fname.cat("stm32-unknown.bin");
+		}
+		else
+#endif
+		{
+			fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
+			fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
+			fname.cat(".bin");
+		}
 
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
@@ -396,11 +412,14 @@ static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& ms
 
 	if (msg.module == 0)
 	{
+// We use a built in IAP on STM32
+#if !STM32
 		if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, IAP_CAN_LOADER_FILE))
 		{
 			reply.printf("In-application programming binary \"%s\" not found on board %u", FIRMWARE_DIRECTORY IAP_CAN_LOADER_FILE, CanInterface::GetCanAddress());
 			return GCodeResult::error;
 		}
+#endif
 		reply.printf("Board %u starting firmware update", CanInterface::GetCanAddress());
 		reprap.ScheduleFirmwareUpdateOverCan();
 		return GCodeResult::ok;

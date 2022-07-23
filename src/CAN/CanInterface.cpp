@@ -771,6 +771,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 {
 	if (can0dev == nullptr)
 	{
+		debugPrintf("can0dev not valid\n");
 		// Transactions sometimes get requested after we have shut down CAN, e.g. when we destroy filament monitors
 		CanMessageBuffer::Free(buf);
 		return GCodeResult::error;
@@ -798,7 +799,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 
 			if (reprap.Debug(moduleCan))
 			{
-				buf->DebugPrint("Rx1:");
+				buf->DebugPrint("Rx1R:");
 			}
 
 			const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
@@ -845,18 +846,20 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
 				if (buf->id.MsgType() == CanMessageType::standardReply)
 				{
+					debugPrintf("Discard 1\n");
 					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
 													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
 				}
 				else
 				{
+					debugPrintf("Discard 2\n");
 					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
 													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}
 		}
 	}
-
+debugPrintf("receive timeout\n");
 	CanMessageBuffer::Free(buf);
 	reply.lcatf("Response timeout: CAN addr %u, req type %u, RID=%u", dest, (unsigned int)msgType, (unsigned int)rid);
 	return GCodeResult::error;

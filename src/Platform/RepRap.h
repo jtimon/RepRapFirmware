@@ -179,7 +179,10 @@ public:
 	void UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept;
 	void PrepareToLoadIap() noexcept;
 	[[noreturn]] void StartIap(const char *filename) noexcept;
-
+#if STM32
+	void RunSdIap(const char *filename) noexcept;
+	void RunCanIap(const char *filename) noexcept;
+#endif
 	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests

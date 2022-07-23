@@ -18,9 +18,17 @@
 #define ELECTRONICS "STM32H7"
 #define STM_ELECTRONICS_STRING "STM32H7"
 #define STM_BOARD_STRING "STM32H7"
-#define IAP_FIRMWARE_FILE       "firmware-stm32h7.bin"
-#define IAP_UPDATE_FILE         "N/A"
+#define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32h7-wifi.bin"
+#define SBC_IAP_FIRMWARE_FILE   "firmware-stm32h7-sbc.bin"
+#define IAP_UPDATE_FILE         "stm32h7_iap_SD.bin"
 #define IAP_UPDATE_FILE_SBC     "stm32h7_iap_SBC.bin"
+#define IAP_CAN_LOADER_FILE		"stm32h7_iap_CAN.bin"
+
+#define WIFI_BOARD_NAME         "STM32H7 WiFi"
+#define SBC_BOARD_NAME          "STM32H7 SBC"
+#define WIFI_BOARD_SHORT_NAME   "STMH7W"
+#define SBC_BOARD_SHORT_NAME    "STMH7S"
+
 #define IAP_IMAGE_START         0x0                 // FIXME: Needs updating for H7
 #else
 #define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
@@ -28,10 +36,18 @@
 #define ELECTRONICS "STM32F4"
 #define STM_ELECTRONICS_STRING "STM32F4"
 #define STM_BOARD_STRING "STM32F4"
-#define IAP_FIRMWARE_FILE       "firmware-stm32f4.bin"
-#define IAP_UPDATE_FILE         "N/A"
+#define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32f4-wifi.bin"
+#define SBC_IAP_FIRMWARE_FILE   "firmware-stm32f4-sbc.bin"
+#define IAP_UPDATE_FILE         "stm32f4_iap_SD.bin"
 #define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
+#define IAP_CAN_LOADER_FILE		"stm32f4_iap_CAN.bin"
 #define IAP_IMAGE_START         0x20018000
+
+#define WIFI_BOARD_NAME         "STM32F4 WiFi"
+#define SBC_BOARD_NAME          "STM32F4 SBC"
+#define WIFI_BOARD_SHORT_NAME   "STMF4W"
+#define SBC_BOARD_SHORT_NAME    "STMF4S"
+
 #endif
 // The name of the file used by the board bootloader, boot file is renamed to this
 #define FIRMWARE_FILE       "0:/firmware.bin"
@@ -103,13 +119,10 @@
 #if STM32H7
     #define SUPPORT_CAN_EXPANSION	     1
     #define DUAL_CAN				     0					// support the second CAN interface as simple CAN (not FD)
-
-    #define BOARD_NAME          "STM32H7 WiFi"
-    #define BOARD_SHORT_NAME    "STM7WiFi"
-#else
-    #define BOARD_NAME          "STM32H7 WiFi"
-    #define BOARD_SHORT_NAME    "STM4WiFi"
 #endif
+    #define BOARD_NAME                   WIFI_BOARD_NAME
+    #define BOARD_SHORT_NAME             WIFI_BOARD_SHORT_NAME
+    #define IAP_FIRMWARE_FILE            WIFI_IAP_FIRMWARE_FILE
 
 #elif defined(LPC_SBC)
     #define HAS_RTOSPLUSTCP_NETWORKING   0
@@ -120,13 +133,10 @@
     #define SUPPORT_TELNET               1
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              0
-#if STM32H7
-    #define BOARD_NAME          "STM32H7 SBC"
-    #define BOARD_SHORT_NAME    "STM7SBC"
-#else
-    #define BOARD_NAME          "STM32F4 SBC"
-    #define BOARD_SHORT_NAME    "STM4SBC"
-#endif
+
+    #define BOARD_NAME                   SBC_BOARD_NAME
+    #define BOARD_SHORT_NAME             SBC_BOARD_SHORT_NAME
+    #define IAP_FIRMWARE_FILE            SBC_IAP_FIRMWARE_FILE
 
 #else
     #define HAS_RTOSPLUSTCP_NETWORKING   0
