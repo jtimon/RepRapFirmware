@@ -30,12 +30,12 @@ void RepRap::RunSdIap(const char * filename) noexcept
     }
     uint8_t buffer[1024];
     uint32_t ret;
-    do {
+    for(;;)
+    {
         ret = fin->Read(buffer, sizeof(buffer));
-        debugPrintf("copy ret %d\n", ret);
-        if (ret > 0)
-            fout->Write(buffer, ret);
-    } while (ret > 0);
+        if (ret <= 0) break;
+        fout->Write(buffer, ret);
+    }
     fin->Close();
     fout->Close();
     if (!stopped)        
@@ -66,20 +66,25 @@ int32_t RequestFirmwareBlock(uint32_t fileOffset, uint32_t numBytes, uint8_t *bu
     msg->fileWanted = (uint32_t)FirmwareModule::main;
 	buf->dataLength = msg->GetActualDataLength();
     String<1> dummy;
-    uint32_t ret = -2;
-    //debugPrintf("RFB offset %d prid %d\n", fileOffset, fileOffset & 0xfff);
+    uint32_t ret = -5;
 	CanInterface::SendRequestAndGetCustomReply(buf, fileOffset & 0xfff, dummy.GetRef(), nullptr, CanMessageType::firmwareBlockResponse,
 															[buffer, &ret, fileSize](const CanMessageBuffer *buf)
 																{
 																	auto response = buf->msg.firmwareUpdateResponse;
-                                                                    ret = response.dataLength;
-																	for (unsigned int i = 0; i < ret; ++i)
-																	{
-																		buffer[i] = response.data[i];
-																	}
+                                                                    if (response.err != CanMessageFirmwareUpdateResponse::ErrNone )
+                                                                        ret = - response.err;
+                                                                    else
+                                                                    {
+                                                                        ret = response.dataLength;
+                                                                        for (unsigned int i = 0; i < ret; ++i)
+                                                                        {
+                                                                            buffer[i] = response.data[i];
+                                                                        }
+                                                                    }
                                                                     *fileSize = response.fileLength;
 																});
-    //debugPrintf("get firmware block returns %d\n", rslt);
+    if (ret < 0)
+        debugPrintf("FirmwareUpdateRequest error %d\n", (int)-ret);
     return ret;
 }
 
@@ -107,14 +112,13 @@ void RepRap::RunCanIap(const char * filenameRef) noexcept
         if (ret > 0)
             if (!f->Write(buf, ret))
             {
-                debugPrintf("Failed to write to firmware file offset %d len %d", offset, ret);
+                debugPrintf("Failed to write to firmware file offset %u len %u", (unsigned)offset, (unsigned)ret);
                 return;
             }
-        //debugPrintf("Read firmware offset %d size %d ret %d\n", offset, fileSize, ret);
         offset += ret;
     } while (ret > 0 && offset < fileSize);
     f->Close();
-    debugPrintf("Update time %dms\n", millis() - start);
+    debugPrintf("Update time %ums\n", (unsigned)(millis() - start));
     RunSdIap(IAP_FIRMWARE_FILE);
     debugPrintf("Restarting....\n");
     delay(1000);    
