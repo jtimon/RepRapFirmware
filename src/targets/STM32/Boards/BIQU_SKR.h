@@ -191,7 +191,8 @@ constexpr BoardDefaults btt_skr_3_Defaults = {
 #endif
 };
 
-#else
+#endif
+#if STM32F4
 constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
 {
     //Thermistors

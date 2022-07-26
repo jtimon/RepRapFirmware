@@ -417,7 +417,7 @@ bool SetBoard(const char* bn)  noexcept;
 void PrintBoards(MessageType mtype) noexcept;
 void ClearPinArrays() noexcept;
 
-constexpr size_t MaxBoardNameLength = 20;
+constexpr size_t MaxBoardNameLength = 32;
 extern char lpcBoardName[MaxBoardNameLength];
 extern size_t totalSmartDrivers;
 extern size_t num5160SmartDrivers;

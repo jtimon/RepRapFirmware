@@ -200,7 +200,8 @@ constexpr BoardDefaults fly_super8h7_Defaults = {
 #endif
 };
 
-#else
+#endif
+#if STM32F4
 
 constexpr PinEntry PinTable_FLY_F407ZG[] =
 {
