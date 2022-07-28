@@ -118,12 +118,12 @@ constexpr BoardDefaults fysetc_spider_Defaults = {
 constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
 {
     //Thermistors
-    {PC_0, "e0temp,t0"},
+    {PC_1, "e0temp,t0"},
     {PF_9, "e1temp,t1"},
     {PC_3, "e2temp,t2"},
     {PC_2, "e3temp,t3"},
     {PC_0, "e4temp,t4"},
-    {PC_3, "bedtemp,t5"},
+    {PF_10, "bedtemp,t5"},
 
     //Endstops
     {PC_5,   "xstop,x-"},
@@ -148,7 +148,15 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
 
     //Servos
     {PA_1,    "servo0" },
-	
+
+    {PB_3,  "PB3"}, //RST
+    {PG_2,  "PG2"}, //IO0
+    {PG_1,  "PG1"}, //IO4
+    {PB_12, "PB12"}, //CS
+    {PB_13, "PB13"}, //CLK
+    {PB_14, "PB14"}, //MISO
+    {PB_15, "PB15"}, //MOSI
+    
     //EXP1
 //    {PE_7,   "PE7"},
 //    {PG_4,   "PG4"},
@@ -188,8 +196,8 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
 //    {PF_1,   "PF0"},  // SCL
   	
   	//UART
-//    {PA_9,   "PA9"},  // TX1
-//    {PA_10,  "PA8"}, // RX1
+    {PA_9,   "PA9"},  // TX1
+    {PA_10,  "PA10"}, // RX1
 
   	// NEOPIXEL
 //    {PD_3,   "PD3"},
@@ -218,7 +226,10 @@ constexpr BoardDefaults fysetc_spider_king407_Defaults = {
 #if HAS_VOLTAGE_MONITOR
     NoPin,
 #endif
-    NoPin
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
 };
 #endif
 #endif
