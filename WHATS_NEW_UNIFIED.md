@@ -1,3 +1,13 @@
+Version 3.4.2rc1+_104
+=====================
+* Duet3d 3.4.2rc1+ as of 28/07/2022
+* Allow firmware update over CAN-FD for boards in expansion mode
+* Adjust firmware filenames to allow CAN-FD updates
+* Enable FTP
+* Add Fysetc Spider King
+* Report RAM addresses in M122 P200
+
+
 Version 3.4.2rc1+_101
 =====================
 * Duet3d 3.4.2rc1+ as of 17/07/2022
