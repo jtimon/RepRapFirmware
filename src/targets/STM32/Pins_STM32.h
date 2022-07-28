@@ -84,7 +84,7 @@
 #define SUPPORT_WORKPLACE_COORDINATES    1
 #define SUPPORT_LASER                    1
 
-#define SUPPORT_FTP                      0
+#define SUPPORT_FTP                      1
 
 #define HAS_ATX_POWER_MONITOR            1
 
