@@ -2708,7 +2708,7 @@ void RepRap::ClearAlert() noexcept
 size_t RepRap::GetStatusIndex() const noexcept
 {
 	return    (processingConfig)										? 0		// Reading the configuration file
-#if HAS_SBC_INTERFACE && SUPPORT_CAN_EXPANSION
+#if (HAS_SBC_INTERFACE || STM32) && SUPPORT_CAN_EXPANSION
 			: (gCodes->IsFlashing() || expansion->IsFlashing())			? 1		// Flashing a new firmware binary
 #else
 			: (gCodes->IsFlashing())									? 1		// Flashing a new firmware binary

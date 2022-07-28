@@ -38,8 +38,11 @@ void RepRap::RunSdIap(const char * filename) noexcept
     }
     fin->Close();
     fout->Close();
-    if (!stopped)        
+    if (!stopped)
+    {
+        debugPrintf("Sending estop\n");
         EmergencyStop();			// turn off heaters etc.
+    }
     debugPrintf("Restarting....\n");
     delay(1000);    
     SoftwareReset(SoftwareResetReason::user); // Reboot

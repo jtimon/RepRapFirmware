@@ -62,23 +62,17 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		String<MaxFilenameLength> fname;
 #if STM32
 		// allow use of non Duet firmware
-		if (!strncmp("STM", msg.boardType, 3))
+		if (!strncmp("stm", msg.boardType, 3))
 		{
 			fname.copy("firmware-");
-			if (!strcmp("STMH7W", msg.boardType))
-				fname.cat("stm32h7-wifi.bin");
-			else if (!strcmp("STMH7S", msg.boardType))
-				fname.cat("stm32h7-sbc.bin");
-			else
-				fname.cat("stm32-unknown.bin");
 		}
 		else
 #endif
 		{
 			fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
-			fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
-			fname.cat(".bin");
 		}
+		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
+		fname.cat(".bin");
 
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;

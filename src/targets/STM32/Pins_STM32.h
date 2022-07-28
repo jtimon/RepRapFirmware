@@ -26,8 +26,8 @@
 
 #define WIFI_BOARD_NAME         "STM32H7 WiFi"
 #define SBC_BOARD_NAME          "STM32H7 SBC"
-#define WIFI_BOARD_SHORT_NAME   "STMH7W"
-#define SBC_BOARD_SHORT_NAME    "STMH7S"
+#define WIFI_BOARD_SHORT_NAME   "stm32h7-wifi"
+#define SBC_BOARD_SHORT_NAME    "stm32h7-sbc"
 
 #define IAP_IMAGE_START         0x0                 // FIXME: Needs updating for H7
 #else
@@ -45,8 +45,8 @@
 
 #define WIFI_BOARD_NAME         "STM32F4 WiFi"
 #define SBC_BOARD_NAME          "STM32F4 SBC"
-#define WIFI_BOARD_SHORT_NAME   "STMF4W"
-#define SBC_BOARD_SHORT_NAME    "STMF4S"
+#define WIFI_BOARD_SHORT_NAME   "stm32f4-wifi"
+#define SBC_BOARD_SHORT_NAME    "stm32f4-sbc"
 
 #endif
 // The name of the file used by the board bootloader, boot file is renamed to this
