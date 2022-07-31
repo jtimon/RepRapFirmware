@@ -1,3 +1,10 @@
+Version 3.4.2rc1+_105
+=====================
+* Fix bootloader to allow it to work with klipper
+* Stop stack being trashed during some software reset calls
+* Fix reporting of board reset reason
+
+
 Version 3.4.2rc1+_104
 =====================
 * Duet3d 3.4.2rc1+ as of 28/07/2022
