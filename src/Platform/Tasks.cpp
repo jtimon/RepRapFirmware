@@ -117,8 +117,8 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 	constexpr size_t stackAllowance = 128;
 	static_assert((sizeof(NonVolatileMemory) & 3) == 0);
 	static_assert(MainTaskStackWords * 4 >= 2 * sizeof(NonVolatileMemory) + stackAllowance + 4);
-	const char * const cStack = reinterpret_cast<const char*>(stk);
-
+	// If stk is null, then we may be running on the main task stack, make sure we avoid our own stack frames
+	const char * const cStack = (stk == nullptr ? reinterpret_cast<const char*>(__get_MSP()) : reinterpret_cast<const char*>(stk));
 	// See if we can use the bottom of the main task stack
 	char *ret = (char *)&mainTask + sizeof(TaskBase);
 	if (cStack > ret + (sizeof(NonVolatileMemory) + stackAllowance + 4))	// allow space for the buffer + 128b in case we are on that stack
