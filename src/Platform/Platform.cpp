@@ -1698,6 +1698,46 @@ void Platform::InitialiseInterrupts() noexcept
 //extern "C" uint32_t longestWriteWaitTime, shortestWriteWaitTime, longestReadWaitTime, shortestReadWaitTime;
 //extern uint32_t maxRead, maxWrite;
 extern void SPWMDiagnostics();
+
+/*static*/ const char *Platform::GetResetReasonText() noexcept
+{
+#if SAME5x
+	const uint8_t resetReason = RSTC->RCAUSE.reg;
+	// The datasheet says only one of these bits will be set
+	if (resetReason & RSTC_RCAUSE_POR)		{ return "power up"; }
+	if (resetReason & RSTC_RCAUSE_BODCORE)	{ return "core brownout"; }
+	if (resetReason & RSTC_RCAUSE_BODVDD)	{ return "Vdd brownout"; }
+	if (resetReason & RSTC_RCAUSE_WDT)		{ return "watchdog"; }
+	if (resetReason & RSTC_RCAUSE_NVM)		{ return "NVM"; }
+	if (resetReason & RSTC_RCAUSE_EXT)		{ return "reset button"; }
+	if (resetReason & RSTC_RCAUSE_SYST)		{ return "software"; }
+	if (resetReason & RSTC_RCAUSE_BACKUP)	{ return "backup/hibernate"; }
+	return "unknown";
+#elif LPC17xx
+	if (LPC_SYSCTL->RSID & RSID_POR) { return "power up"; }
+	if (LPC_SYSCTL->RSID & RSID_EXTR) { return "reset button"; }
+	if (LPC_SYSCTL->RSID & RSID_WDTR) { return "watchdog"; }
+	if (LPC_SYSCTL->RSID & RSID_BODR) { return "brownout"; }
+	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { return "software"; }
+	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { return "lockup"; }
+	return "unknown";
+#elif STM32
+	const char *_ecv_array resetReasons[] = {"unknown", "low power", "window watchdog", "ind. watchdog", "software", "power on/off", "pin", "brownout"};
+	return resetReasons[GetResetCause()];
+#else
+	constexpr const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
+# ifdef DUET_NG
+	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
+	// The SAM4S is the same but the Duet Maestro has a diode in the reset circuit to avoid this problem.
+									"reset button or watchdog",
+# else
+									"reset button",
+# endif
+									"unknown", "unknown", "unknown" };
+	return resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos];
+#endif
+}
+
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype) noexcept
 {
@@ -1716,56 +1756,8 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
+	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), GetResetReasonText());
 
-#if SAME5x
-	{
-		String<StringLength100> resetString;
-		resetString.printf("Last reset %02d:%02d:%02d ago, cause", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
-		const uint8_t resetReason = RSTC->RCAUSE.reg;
-		// The datasheet says only one of these bits will be set, but we don't assume that
-		if (resetReason & RSTC_RCAUSE_POR)		{ resetString.cat(": power up"); }
-		if (resetReason & RSTC_RCAUSE_BODCORE)	{ resetString.cat(": core brownout"); }
-		if (resetReason & RSTC_RCAUSE_BODVDD)	{ resetString.cat(": Vdd brownout"); }
-		if (resetReason & RSTC_RCAUSE_WDT)		{ resetString.cat(": watchdog"); }
-		if (resetReason & RSTC_RCAUSE_NVM)		{ resetString.cat(": NVM"); }
-		if (resetReason & RSTC_RCAUSE_EXT)		{ resetString.cat(": reset button"); }
-		if (resetReason & RSTC_RCAUSE_SYST)		{ resetString.cat(": software"); }
-		if (resetReason & RSTC_RCAUSE_BACKUP)	{ resetString.cat(": backup/hibernate"); }
-		resetString.cat('\n');
-		Message(mtype, resetString.c_str());
-	}
-#elif !LPC17xx && !STM32
-	const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
-# ifdef DUET_NG
-	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
-	// The SAM4S is the same but the Duet M has a diode in the reset circuit to avoid this problem.
-									"reset button or watchdog",
-# else
-									"reset button",
-# endif
-									"?", "?", "?" };
-	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
-			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
-			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
-#endif
-#if LPC17xx || STM32
-		// Reset Reason
-	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
-				 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
-
-# if LPC17xx
-	if (LPC_SYSCTL->RSID & RSID_POR) { MessageF(mtype, "[power up]"); }
-	if (LPC_SYSCTL->RSID & RSID_EXTR) { MessageF(mtype, "[reset button]"); }
-	if (LPC_SYSCTL->RSID & RSID_WDTR) { MessageF(mtype, "[watchdog]"); }
-	if (LPC_SYSCTL->RSID & RSID_BODR) { MessageF(mtype, "[brownout]"); }
-	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { MessageF(mtype, "[software]"); }
-	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { MessageF(mtype, "[lockup]"); }
-# else
-	const char *_ecv_array resetReasons[] = {"unknown", "low power", "window watchdog", "ind. watchdog", "software", "power on/off", "pin", "brownout"};
-	MessageF(mtype, "[%s]", resetReasons[GetResetCause()]);
-# endif
-	MessageF(mtype, "\n");
-#endif
 	// Show the reset code stored at the last software reset
 	{
 
