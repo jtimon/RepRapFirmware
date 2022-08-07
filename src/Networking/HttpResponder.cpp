@@ -1296,33 +1296,33 @@ void HttpResponder::DoUpload() noexcept
 {
 	const uint8_t *buffer;
 	size_t len;
-	bool dataRead = false;
-	while (skt->ReadBuffer(buffer, len))
+	if (skt->ReadBuffer(buffer, len))
 	{
-		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
-		timer = millis();									// reset the timer
-		if (!dummyUpload)
+		do
 		{
-			// Check to see how much we can write, this avaoid blocking when using a 
-			// writer task and provides better throughput
-			size_t canWrite = (size_t)fileBeingUploaded.CanWrite();
-			if (canWrite == 0) break;
-			if (len > canWrite) len = canWrite;
-			if (!fileBeingUploaded.Write(buffer, len))
+			(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
+			timer = millis();									// reset the timer
+			if (!dummyUpload)
 			{
-				uploadError = true;
-				GetPlatform().Message(ErrorMessage, "HTTP: could not write upload data\n");
-				CancelUpload();
-				SendJsonResponse("upload");
-				return;
+				// Check to see how much we can write, this avaoid blocking when using a 
+				// writer task and provides better throughput
+				size_t canWrite = (size_t)fileBeingUploaded.CanWrite();
+				if (canWrite == 0) break;
+				if (len > canWrite) len = canWrite;
+				if (!fileBeingUploaded.Write(buffer, len))
+				{
+					uploadError = true;
+					GetPlatform().Message(ErrorMessage, "HTTP: could not write upload data\n");
+					CancelUpload();
+					SendJsonResponse("upload");
+					return;
+				}
 			}
-		}
-		skt->Taken(len);
-		uploadedBytes += len;
-
-		dataRead = true;
+			skt->Taken(len);
+			uploadedBytes += len;
+		} while (skt->ReadBuffer(buffer, len));
 	}
-	if (!dataRead && (!skt->CanRead() || millis() - timer >= HttpSessionTimeout))
+	else if (!skt->CanRead() || millis() - timer >= HttpSessionTimeout)
 	{
 		debugPrintf("upload failed expected len %u actual %u\n", (unsigned)postFileLength, (unsigned)uploadedBytes);
 		// Sometimes uploads can get stuck; make sure they are cancelled when that happens
