@@ -1496,7 +1496,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 	else
 	{
 		moveState.applyM220M221 = false;
-		moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
+		moveState.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
 		moveState.usingStandardFeedrate = false;
 	}
 
@@ -4304,10 +4304,8 @@ bool GCodes::StartHash(const char* filename) noexcept
 GCodeResult GCodes::AdvanceHash(const StringRef &reply) noexcept
 {
 	// Read and process some more data from the file
-	uint32_t buf32[(FILE_BUFFER_SIZE + 3) / 4];
-	char *buffer = reinterpret_cast<char *>(buf32);
-
-	int bytesRead = fileBeingHashed->Read(buffer, FILE_BUFFER_SIZE);
+	alignas(4) char buffer[FILE_BUFFER_SIZE];
+	const int bytesRead = fileBeingHashed->Read(buffer, FILE_BUFFER_SIZE);
 	if (bytesRead != -1)
 	{
 		SHA1Input(&hash, reinterpret_cast<const uint8_t *>(buffer), bytesRead);
