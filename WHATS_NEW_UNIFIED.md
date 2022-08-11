@@ -1,3 +1,7 @@
+Version 3.4.2rc2_101
+====================
+* Duet3d 3.4.2rc2
+
 Version 3.4.2rc1+_105
 =====================
 * Fix bootloader to allow it to work with klipper
