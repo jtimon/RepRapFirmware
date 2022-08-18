@@ -4,7 +4,7 @@ Version 3.4.2rc2_101
 
 Version 3.4.2rc1+_105
 =====================
-* Fix bootloader to allow it to work with klipper
+* Fix H7 bootloader to allow it to work with klipper
 * Stop stack being trashed during some software reset calls
 * Fix reporting of board reset reason
 
