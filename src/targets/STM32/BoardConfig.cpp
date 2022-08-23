@@ -55,6 +55,10 @@ static const boardConfigEntry_t boardConfigs[]=
     {"leds.activity", &ActLedPin, nullptr, cvPinType},
     {"leds.activityOn", &ActOnPolarity, nullptr, cvBoolType},
 
+    // initial pin states
+    {"pins.SetHigh", PinsSetHigh, &MaxInitialPins, cvPinType},
+    {"pins.SetLow", PinsSetLow, &MaxInitialPins, cvPinType},
+
     //Steppers
     {"stepper.powerEnablePin", &StepperPowerEnablePin, nullptr, cvPinType},
     {"stepper.enablePins", ENABLE_PINS, &NumDirectDrivers, cvPinType},
@@ -302,14 +306,20 @@ static void ConfigureGPIOPins() noexcept
                 break;
         }
     }
+    for(size_t i = 0; i < MaxInitialPins; i++)
+    {
+        pinMode(PinsSetLow[i], OUTPUT_LOW);
+        pinMode(PinsSetHigh[i], OUTPUT_HIGH);
+        pinMode(SpiTempSensorCsPins[i], INPUT_PULLUP);
+    }
     // Handle special cases
     //Init pins for LCD
     //make sure to init ButtonPin as input incase user presses button
-    if(PanelButtonPin != NoPin) pinMode(PanelButtonPin, INPUT); //unused
-    if(LcdA0Pin != NoPin) pinMode(LcdA0Pin, OUTPUT_HIGH); //unused
-    if(LcdBeepPin != NoPin) pinMode(LcdBeepPin, OUTPUT_LOW);
+    pinMode(PanelButtonPin, INPUT);
+    pinMode(LcdA0Pin, OUTPUT_HIGH);
+    pinMode(LcdBeepPin, OUTPUT_LOW);
     // Set the 12864 display CS pin low to prevent it from receiving garbage due to other SPI traffic
-    if(LcdCSPin != NoPin) pinMode(LcdCSPin, OUTPUT_LOW);
+    pinMode(LcdCSPin, OUTPUT_LOW);
 
     //Init Diagnostcs Pin
 #if STARTUP_DELAY
@@ -325,8 +335,7 @@ static void ConfigureGPIOPins() noexcept
 
     // Configure ATX power control
     ATX_POWER_STATE = ATX_INITIAL_POWER_ON;
-    if (StepperPowerEnablePin != NoPin)
-        pinMode(StepperPowerEnablePin, (ATX_POWER_STATE ? OUTPUT_HIGH : OUTPUT_LOW));
+    pinMode(StepperPowerEnablePin, (ATX_POWER_STATE ? OUTPUT_HIGH : OUTPUT_LOW));
 }
 
 static void ConfigureSPIPins(SSPChannel dev, Pin clk, Pin miso, Pin mosi)
@@ -693,11 +702,11 @@ void BoardConfig::Init() noexcept
     MassStorage::Init2();
 #endif
 #if HAS_SBC_INTERFACE
-    if(SbcCsPin != NoPin) pinMode(SbcCsPin, INPUT_PULLUP);
+    pinMode(SbcCsPin, INPUT_PULLUP);
 #endif
 #if HAS_WIFI_NETWORKING
-    if(SamCsPin != NoPin) pinMode(SamCsPin, OUTPUT_LOW);
-    if(EspResetPin != NoPin) pinMode(EspResetPin, OUTPUT_LOW);
+    pinMode(SamCsPin, OUTPUT_LOW);
+    pinMode(EspResetPin, OUTPUT_LOW);
     // Setup WiFi pins for compatibility
     APIN_ESP_SPI_MOSI = SPIPins[WiFiSpiChannel][2];
     APIN_ESP_SPI_MISO = SPIPins[WiFiSpiChannel][1];
