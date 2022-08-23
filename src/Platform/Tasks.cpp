@@ -58,9 +58,9 @@ extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
 #if LPC17xx
-constexpr unsigned int IdleTaskStackWords = 30;				// currently we don't use the idle talk for anything, so this can be quite small
+constexpr unsigned int IdleTaskStackWords = 30;				// currently we don't use the idle task for anything, so this can be quite small
 #else
-constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle talk for anything, so this can be quite small
+constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 #endif
 static TASKMEM Task<IdleTaskStackWords> idleTask;
 
