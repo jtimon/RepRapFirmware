@@ -14,7 +14,7 @@ constexpr BoardEntry LPC_Boards[] =
     {{"fly_super5"},      PinTable_FLY_SUPER5,    ARRAY_SIZE(PinTable_FLY_SUPER5),    fly_super5_Defaults},
     {{"fly_super8h7", "fly_super8_pro"},      PinTable_FLY_SUPER8H7,    ARRAY_SIZE(PinTable_FLY_SUPER8H7),    fly_super8h7_Defaults},
     {{"biquskr_se_bx_2.0"},      PinTable_BIQU_SKR_SE_BX_v2_0,    ARRAY_SIZE(PinTable_BIQU_SKR_SE_BX_v2_0),    biqu_skr_se_bx_v2_0_Defaults},
-    {{"biquskr_3"},      PinTable_BTT_SKR_3,    ARRAY_SIZE(PinTable_BTT_SKR_3),    btt_skr_3_Defaults},
+    {{"biquskr_3", "biquskr_3_ez"},      PinTable_BTT_SKR_3,    ARRAY_SIZE(PinTable_BTT_SKR_3),    btt_skr_3_Defaults},
 #else
     {{"biquskrpro_1.1"},      PinTable_BIQU_SKR_PRO_v1_1,    ARRAY_SIZE(PinTable_BIQU_SKR_PRO_v1_1),    biquskr_pro_1_1_Defaults},
     {{"biqugtr_1.0"},      PinTable_BIQU_GTR_v1_0,    ARRAY_SIZE(PinTable_BIQU_GTR_v1_0),    biqu_gtr_1_0_Defaults},
@@ -41,7 +41,9 @@ constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
 //Default values for configurable variables.
 
 
-//All I/Os default to input with pullup after reset (9.2.1 from manual)
+//All I/Os default to input and are floating
+Pin PinsSetHigh[MaxInitialPins];
+Pin PinsSetLow[MaxInitialPins];
 
 Pin TEMP_SENSE_PINS[NumThermistorInputs];
 Pin SpiTempSensorCsPins[MaxSpiTempSensors]; // Used to deselect all devices at boot
@@ -187,6 +189,8 @@ static void InitPinArray(Pin *dst, size_t len) noexcept
 void ClearPinArrays() noexcept
 {
     InitPinArray(SpiTempSensorCsPins, MaxSpiTempSensors);
+    InitPinArray(PinsSetHigh, MaxInitialPins);
+    InitPinArray(PinsSetLow, MaxInitialPins);
     InitPinArray(ENABLE_PINS, NumDirectDrivers);
     InitPinArray(STEP_PINS, NumDirectDrivers);
     InitPinArray(DIRECTION_PINS, NumDirectDrivers);
