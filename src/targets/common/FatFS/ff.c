@@ -617,6 +617,9 @@ extern uint8_t _nocache_ram_end;
 #elif STM32H7
 extern uint8_t _nocache2_ram_start;
 extern uint8_t _nocache2_ram_end;
+#elif STM32F4
+extern uint8_t _sccmram;
+extern uint8_t _ccmramend;
 # endif
 
 //extern int debugPrintf(const char *, ...);
@@ -635,6 +638,13 @@ static _Bool isAligned(const BYTE *p)
 	{
 		return false;
 	}
+# elif STM32F4
+	// On the STM32F4 we can not transfer data from CCMRAM.
+	if (p >= &_sccmram && p <= &_ccmramend)
+	{
+		return false;
+	}
+
 # endif
 
 # if FF_DISKIO_ALIGN <= 1
