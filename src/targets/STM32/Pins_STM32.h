@@ -270,6 +270,10 @@ extern float digipotFactor;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 100;
 
+// Initial pin states
+constexpr size_t MaxInitialPins = 8;
+extern Pin PinsSetHigh[MaxInitialPins];
+extern Pin PinsSetLow[MaxInitialPins];
 
 // HEATERS - The bed is assumed to be the at index 0
 extern Pin TEMP_SENSE_PINS[NumThermistorInputs];
@@ -285,7 +289,7 @@ constexpr float EXT_SHC = 0.0;
 // Thermistor series resistor value in Ohms
 extern float DefaultThermistorSeriesR;
 
-constexpr size_t MaxSpiTempSensors = 8;
+constexpr size_t MaxSpiTempSensors = MaxInitialPins;
 extern Pin SpiTempSensorCsPins[MaxSpiTempSensors];  // Digital pins the 31855s have their select lines tied to
 extern SSPChannel TempSensorSSPChannel;
 

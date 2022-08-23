@@ -4,7 +4,7 @@
 // Program initialisation
 void AppInit() noexcept
 {
-	// Some bootloaders leave UASRT3 enabled, mnake sure it does not cause problems
+	// Some bootloaders leave UASRT3 enabled, make sure it does not cause problems
 	HAL_NVIC_DisableIRQ(USART3_IRQn);
 	InitResetCause();
 }
