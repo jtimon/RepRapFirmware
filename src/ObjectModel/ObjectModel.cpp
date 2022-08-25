@@ -123,23 +123,52 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 #endif
 		break;
 
-	// We don't fully handle the remaining types
-	case TypeCode::ObjectModel_tc:
-		str.cat("{object}");
+	case TypeCode::ObjectModelArray:
+		str.cat('{');
+		{
+			const ObjectModelArrayTableEntry *entry = omVal->FindObjectModelArrayEntry(param & 0xFF);
+			if (entry == nullptr)
+			{
+				str.cat("error");
+			}
+			else
+			{
+				ObjectExplorationContext context;
+				context.AddIndex(param >> 8);							// in case it is a 2D array
+				ReadLocker lock(entry->lockPointer);
+				const size_t count = entry->GetNumElements(omVal, context);
+				for (size_t i = 0; i < count; ++i)
+				{
+					if (i != 0)
+					{
+						str.cat(',');
+					}
+					context.AddIndex(i);
+					entry->GetElement(omVal, context).AppendAsString(str);
+					context.RemoveIndex();
+				}
+			}
+		}
+		str.cat('}');
 		break;
 
-	case TypeCode::Array:
-		str.cat("[array]");
-		break;
-
-	case TypeCode::Bitmap16:
-	case TypeCode::Bitmap32:
-	case TypeCode::Bitmap64:
-		str.cat("(Bitmap)");
-		break;
-
-	case TypeCode::Enum32:
-		str.cat("(enumeration)");
+	case TypeCode::HeapArray:
+		str.cat('{');
+		{
+			ReadLocker lock(Heap::heapLock);
+			const size_t count = ahVal.GetNumElements();
+			for (size_t i = 0; i < count; ++i)
+			{
+				if (i != 0)
+				{
+					str.cat(',');
+				}
+				ExpressionValue val;
+				ahVal.GetElement(i, val);
+				val.AppendAsString(str);
+			}
+		}
+		str.cat('}');
 		break;
 
 	case TypeCode::Port:
@@ -148,6 +177,21 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 	case TypeCode::UniqueId_tc:
 		uniqueIdVal->AppendCharsToString(str);
+		break;
+
+	// We don't fully handle the remaining types
+	case TypeCode::ObjectModel_tc:
+		str.cat("{object}");
+		break;
+
+	case TypeCode::Bitmap16:
+	case TypeCode::Bitmap32:
+	case TypeCode::Bitmap64:
+		str.cat("{Bitmap}");
+		break;
+
+	case TypeCode::Enum32:
+		str.cat("{enumeration}");
 		break;
 	}
 }
@@ -199,7 +243,8 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 		// We don't handle the remaining types
 		case TypeCode::Special:
 		case TypeCode::ObjectModel_tc:
-		case TypeCode::Array:
+		case TypeCode::ObjectModelArray:
+		case TypeCode::HeapArray:
 		case TypeCode::UniqueId_tc:
 #if SUPPORT_CAN_EXPANSION
 		case TypeCode::CanExpansionBoardDetails:
@@ -260,6 +305,34 @@ void ExpressionValue::Release() noexcept
 	}
 }
 
+void ExpressionValue::SetBool(bool b) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::Bool;
+	bVal = b;
+}
+
+void ExpressionValue::SetInt(int32_t i) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::Int32;
+	iVal = i;
+}
+
+void ExpressionValue::SetFloat(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
+
+void ExpressionValue::SetDriverId(DriverId did) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::DriverId_tc;
+#if SUPPORT_CAN_EXPANSION
+	param = did.boardAddress;
+#else
+	param = 0;
+#endif
+	uVal = did.localDriver;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string
@@ -297,7 +370,7 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 		case ExpansionDetail::firmwareFileName:
 			rslt.cat("Duet3Firmware_");
 			rslt.catn(sVal, indexOfDivider1);
-			rslt.cat(".bin");
+			rslt.cat((strncmp(sVal, "Mini5plus", indexOfDivider1) == 0) ? ".uf2" : ".bin");
 			break;
 
 		case ExpansionDetail::firmwareDate:
@@ -430,22 +503,30 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 {
 }
 
-int32_t ObjectExplorationContext::GetIndex(size_t n) const THROWS(GCodeException)
+// Constructor used for generating a context to pass array indices
+ObjectExplorationContext::ObjectExplorationContext() noexcept
+	: ObjectExplorationContext(nullptr, false, false, -1, -1) { }
+
+int32_t ObjectExplorationContext::GetIndex(size_t n) const noexcept
 {
 	if (n < numIndicesCounted)
 	{
 		return indices[numIndicesCounted - n - 1];
 	}
-	THROW_INTERNAL_ERROR;
+	// We can't throw from this function because it is called by lambdas in the object model tables and we don't want exception tables for all of those
+	REPORT_INTERNAL_ERROR;
+	return 0;
 }
 
-int32_t ObjectExplorationContext::GetLastIndex() const THROWS(GCodeException)
+int32_t ObjectExplorationContext::GetLastIndex() const noexcept
 {
 	if (numIndicesCounted != 0)
 	{
 		return indices[numIndicesCounted - 1];
 	}
-	THROW_INTERNAL_ERROR;
+	// We can't throw from this function because it is called by lambdas in the object model tables and we don't want exception tables for all of those
+	REPORT_INTERNAL_ERROR;
+	return 0;
 }
 
 bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const noexcept
@@ -563,46 +644,19 @@ void ObjectModel::ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *bu
 	}
 }
 
-// Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low.
-// Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
-// This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
-inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
-{
-	if (context.WantArrayLength() && *filter == 0)
-	{
-		ReportArrayLengthAsJson(buf, context, val);
-	}
-	else if (val.GetType() == TypeCode::ObjectModel_tc)
-	{
-		if (  (*filter != '.' && *filter != 0)		// we should have reached the end of the filter or a '.', error if not
-			|| val.omVal == nullptr					// OM arrays may contain null entries, so we need to handle them here
-		   )
-		{
-			buf->cat("null");
-		}
-		else
-		{
-			if (*filter == '.')
-			{
-				++filter;
-			}
-			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
-		}
-	}
-	else
-	{
-		ReportItemAsJsonFull(buf, context, classDescriptor, val, filter);
-	}
-}
-
 void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept
 {
 	switch (val.GetType())
 	{
-	case TypeCode::Array:
-		buf->catf("%u", val.omadVal->GetNumElements(this, context));
+	case TypeCode::ObjectModelArray:
+		{
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
+			buf->catf("%u", entry->GetNumElements(this, context));
+		}
+		break;
+
+	case TypeCode::HeapArray:
+		buf->catf("%u", val.ahVal.GetNumElements());
 		break;
 
 	case TypeCode::Bitmap16:
@@ -629,25 +683,74 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 }
 
 // Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low
+// This function is recursive, so keep its stack usage low.
+// The type of 'val' may not be ObjectModel_tc. That type is handled in function ReportItemAsJson, which is declared 'inline' to reduce stack usage.
 void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
 										const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
 {
 	switch (val.GetType())
 	{
-	case TypeCode::Array:
+	case TypeCode::ObjectModelArray:
+		{
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
+			if (*filter == '[')
+			{
+				++filter;
+				if (*filter == ']')						// if reporting on [parts of] all elements in the array
+				{
+					ReportObjectModelArrayAsJson(buf, context, classDescriptor, entry, filter + 1);
+				}
+				else
+				{
+					const char *endptr;
+					const int32_t index = StrToI32(filter, &endptr);
+					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= entry->GetNumElements(this, context))
+					{
+						buf->cat("null");					// avoid returning badly-formed JSON
+						break;								// invalid syntax, or index out of range
+					}
+					if (*filter == 0)
+					{
+						buf->cat('[');
+					}
+					context.AddIndex(index);
+					{
+						// As at release 3.1.1 this next block uses the most stack of this entire function
+						ReadLocker lock(entry->lockPointer);
+						const ExpressionValue element = entry->GetElement(this, context);
+						ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
+					}
+					context.RemoveIndex();
+					if (*filter == 0)
+					{
+						buf->cat(']');
+					}
+				}
+			}
+			else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
+			{
+				ReportObjectModelArrayAsJson(buf, context, classDescriptor, entry, filter);
+			}
+			else
+			{
+				buf->cat("null");
+			}
+		}
+		break;
+
+	case TypeCode::HeapArray:
 		if (*filter == '[')
 		{
 			++filter;
 			if (*filter == ']')						// if reporting on [parts of] all elements in the array
 			{
-				ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter + 1);
+				ReportHeapArrayAsJson(buf, context, classDescriptor, val.ahVal, filter + 1);
 			}
 			else
 			{
 				const char *endptr;
 				const int32_t index = StrToI32(filter, &endptr);
-				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.ahVal.GetNumElements())
 				{
 					buf->cat("null");					// avoid returning badly-formed JSON
 					break;								// invalid syntax, or index out of range
@@ -656,14 +759,11 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				{
 					buf->cat('[');
 				}
-				context.AddIndex(index);
-				{
-					// As at release 3.1.1 this next block uses the most stack of this entire function
-					ReadLocker lock(val.omadVal->lockPointer);
-					const ExpressionValue element = val.omadVal->GetElement(this, context);
-					ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
-				}
-				context.RemoveIndex();
+
+				ExpressionValue element;
+				val.ahVal.GetElement((size_t)index, element);
+				ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
+
 				if (*filter == 0)
 				{
 					buf->cat(']');
@@ -672,43 +772,13 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		}
 		else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
 		{
-			ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter);
+			ReportHeapArrayAsJson(buf, context, classDescriptor, val.ahVal, filter);
 		}
 		else
 		{
 			buf->cat("null");
 		}
 		break;
-
-	case TypeCode::Float:
-		ReportFloat(buf, val);
-		break;
-
-	case TypeCode::Uint32:
-		buf->catf("%" PRIu32, val.uVal);
-		break;
-
-	case TypeCode::Uint64:
-		buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
-		break;
-
-	case TypeCode::Int32:
-		buf->catf("%" PRIi32, val.iVal);
-		break;
-
-	case TypeCode::CString:
-		buf->catf("\"%.s\"", val.sVal);
-		break;
-
-	case TypeCode::HeapString:
-		buf->catf("\"%.s\"", val.shVal.Get().Ptr());
-		break;
-
-#if SUPPORT_CAN_EXPANSION
-	case TypeCode::CanExpansionBoardDetails:
-		ReportExpansionBoardDetail(buf, val);
-		break;
-#endif
 
 	case TypeCode::Bitmap16:
 	case TypeCode::Bitmap32:
@@ -777,95 +847,138 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		ReportBitmap64Long(buf, val);
 		break;
 
-	case TypeCode::Enum32:
-		if (context.ShortFormReport())
+	default:
+		// Only primitive types remain so we should have reached the end of the filter string
+		if (*filter != 0)
 		{
-			buf->catf("%" PRIu32, val.uVal);
+			buf->cat("null");
 		}
 		else
 		{
-			buf->cat("\"unimplemented\"");
-			// TODO append the real name
-		}
-		break;
-
-	case TypeCode::Bool:
-		buf->cat((val.bVal) ? "true" : "false");
-		break;
-
-	case TypeCode::Char:
-		buf->cat('"');
-		buf->EncodeChar(val.cVal);
-		buf->cat('"');
-		break;
-
-	case TypeCode::IPAddress_tc:
-		{
-			const IPAddress ipVal(val.uVal);
-			char sep = '"';
-			for (unsigned int q = 0; q < 4; ++q)
+			switch (val.GetType())
 			{
-				buf->catf("%c%u", sep, ipVal.GetQuad(q));
-				sep = '.';
-			}
-			buf->cat('"');
-		}
-		break;
+			case TypeCode::Float:
+				ReportFloat(buf, val);
+				break;
 
-	case TypeCode::DateTime_tc:
-		ReportDateTime(buf, val);
-		break;
+			case TypeCode::Uint32:
+				buf->catf("%" PRIu32, val.uVal);
+				break;
 
-	case TypeCode::Duration:
-		{
-			unsigned int hours = val.uVal/3600,
-				minutes = (val.uVal / 60) % 60,
-				seconds = val.uVal % 60;
-			buf->catf("%u:%02u:%02u", hours, minutes, seconds);
-		}
-		break;
+			case TypeCode::Uint64:
+				buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
+				break;
 
-	case TypeCode::DriverId_tc:
+			case TypeCode::Int32:
+				buf->catf("%" PRIi32, val.iVal);
+				break;
+
+			case TypeCode::CString:
+				buf->catf("\"%.s\"", val.sVal);
+				break;
+
+			case TypeCode::HeapString:
+				buf->catf("\"%.s\"", val.shVal.Get().Ptr());
+				break;
+
 #if SUPPORT_CAN_EXPANSION
-		buf->catf("\"%u.%u\"", (unsigned int)val.param, (unsigned int)val.uVal);
+			case TypeCode::CanExpansionBoardDetails:
+				ReportExpansionBoardDetail(buf, val);
+				break;
+#endif
+
+			case TypeCode::Enum32:
+				if (context.ShortFormReport())
+				{
+					buf->catf("%" PRIu32, val.uVal);
+				}
+				else
+				{
+					buf->cat("\"unimplemented\"");
+					// TODO append the real name
+				}
+				break;
+
+			case TypeCode::Bool:
+				buf->cat((val.bVal) ? "true" : "false");
+				break;
+
+			case TypeCode::Char:
+				buf->cat('"');
+				buf->EncodeChar(val.cVal);
+				buf->cat('"');
+				break;
+
+			case TypeCode::IPAddress_tc:
+				{
+					const IPAddress ipVal(val.uVal);
+					char sep = '"';
+					for (unsigned int q = 0; q < 4; ++q)
+					{
+						buf->catf("%c%u", sep, ipVal.GetQuad(q));
+						sep = '.';
+					}
+					buf->cat('"');
+				}
+				break;
+
+			case TypeCode::DateTime_tc:
+				ReportDateTime(buf, val);
+				break;
+
+			case TypeCode::Duration:
+				{
+					unsigned int hours = val.uVal/3600,
+						minutes = (val.uVal / 60) % 60,
+						seconds = val.uVal % 60;
+					buf->catf("%u:%02u:%02u", hours, minutes, seconds);
+				}
+				break;
+
+			case TypeCode::DriverId_tc:
+#if SUPPORT_CAN_EXPANSION
+				buf->catf("\"%u.%u\"", (unsigned int)val.param, (unsigned int)val.uVal);
 #else
-		buf->catf("\"%u\"", (unsigned int)val.uVal);
+				buf->catf("\"%u\"", (unsigned int)val.uVal);
 #endif
-		break;
+				break;
 
-	case TypeCode::MacAddress_tc:
-		buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
-					(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
-					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
-		break;
+			case TypeCode::MacAddress_tc:
+				buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
+							(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
+							(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
+				break;
 
-	case TypeCode::Special:
+			case TypeCode::Special:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-		switch ((ExpressionValue::SpecialType)val.param)
-		{
-		case ExpressionValue::SpecialType::sysDir:
-			buf->catf("\"%.s\"", reprap.GetPlatform().GetSysDir().Ptr());
-			break;
-		}
+				switch ((ExpressionValue::SpecialType)val.param)
+				{
+				case ExpressionValue::SpecialType::sysDir:
+					buf->catf("\"%.s\"", reprap.GetPlatform().GetSysDir().Ptr());
+					break;
+				}
 #endif
-		break;
+				break;
 
-	case TypeCode::None:
-		buf->cat("null");
-		break;
+			case TypeCode::None:
+				buf->cat("null");
+				break;
 
-	case TypeCode::Port:
-		ReportPinNameAsJson(buf, val);
-		break;
+			case TypeCode::Port:
+				ReportPinNameAsJson(buf, val);
+				break;
 
-	case TypeCode::UniqueId_tc:
-		buf->cat('"');
-		val.uniqueIdVal->AppendCharsToBuffer(buf);
-		buf->cat('"');
-		break;
+			case TypeCode::UniqueId_tc:
+				buf->cat('"');
+				val.uniqueIdVal->AppendCharsToBuffer(buf);
+				buf->cat('"');
+				break;
 
-	case TypeCode::ObjectModel_tc:
-		break;											// we already handled this case in the inline part
+			case TypeCode::ObjectModel_tc:					// we already handled this case in the inline part
+			default:										// to keep gcc happy
+				break;
+			}
+		}
 	}
 }
 
@@ -880,14 +993,14 @@ void ObjectModel::ReportPinNameAsJson(OutputBuffer *buf, const ExpressionValue& 
 }
 
 // Report an entire array as JSON
-void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
-										const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException)
+void ObjectModel::ReportObjectModelArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+												const ObjectModelArrayTableEntry *entry, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	const bool isRootArray = (buf->Length() == context.GetInitialBufferOffset());		// it's a root array if we haven't started writing to the buffer yet
-	ReadLocker lock(omad->lockPointer);
+	ReadLocker lock(entry->lockPointer);
 
 	buf->cat('[');
-	const size_t count = omad->GetNumElements(this, context);
+	const size_t count = entry->GetNumElements(this, context);
 	const size_t startElement = (isRootArray) ? context.GetStartElement() : 0;
 	for (size_t i = startElement; i < count; ++i)
 	{
@@ -903,9 +1016,43 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 			buf->cat(',');
 		}
 		context.AddIndex(i);
-		const ExpressionValue element = omad->GetElement(this, context);
+		const ExpressionValue element = entry->GetElement(this, context);
 		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 		context.RemoveIndex();
+	}
+	if (isRootArray && context.GetNextElement() < 0)
+	{
+		context.SetNextElement(0);
+	}
+	buf->cat(']');
+}
+
+// Report an entire array as JSON
+void ObjectModel::ReportHeapArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+											ArrayHandle ah, const char *_ecv_array filter) const THROWS(GCodeException)
+{
+	const bool isRootArray = (buf->Length() == context.GetInitialBufferOffset());		// it's a root array if we haven't started writing to the buffer yet
+	buf->cat('[');
+
+	ReadLocker lock(Heap::heapLock);
+	const size_t count = ah.GetNumElements();
+	const size_t startElement = (isRootArray) ? context.GetStartElement() : 0;
+	for (size_t i = startElement; i < count; ++i)
+	{
+		// Support retrieving just part of the array in case it is too large to write all of it to the buffer
+		if (i != startElement)
+		{
+			if (isRootArray && buf->Length() >= (OUTPUT_BUFFER_SIZE * (OUTPUT_BUFFER_COUNT - RESERVED_OUTPUT_BUFFERS))/2)
+			{
+				// We've used half the buffer space already, so stop reporting
+				context.SetNextElement(i);
+				break;
+			}
+			buf->cat(',');
+		}
+		ExpressionValue element;
+		ah.GetElement(i, element);
+		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 	}
 	if (isRootArray && context.GetNextElement() < 0)
 	{
@@ -970,7 +1117,7 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const noexcept
+bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const THROWS(GCodeException)
 {
 	const char * nextElement = ObjectModel::GetNextElement(filter);
 	const ExpressionValue val = func(self, context);
@@ -1057,16 +1204,17 @@ decrease(strlen(idString))	// recursion variant
 
 	switch (val.GetType())
 	{
-	case TypeCode::Array:
+	case TypeCode::ObjectModelArray:
 		{
 			if (*idString == 0)
 			{
 				if (context.WantArrayLength())
 				{
-					ReadLocker lock(val.omadVal->lockPointer);
-					return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
+					const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
+					ReadLocker lock(entry->lockPointer);
+					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
 				}
-				return ExpressionValue(static_cast<const ObjectModelArrayDescriptor*>(nullptr));	// return a dummy array so that caller can report "[array]" or compare it with null
+				return val;
 			}
 			if (*idString != '^')
 			{
@@ -1074,9 +1222,10 @@ decrease(strlen(idString))	// recursion variant
 			}
 
 			context.AddIndex();
-			ReadLocker lock(val.omadVal->lockPointer);
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
+			ReadLocker lock(entry->lockPointer);
 
-			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= entry->GetNumElements(this, context))
 			{
 				if (context.WantExists())
 				{
@@ -1085,7 +1234,40 @@ decrease(strlen(idString))	// recursion variant
 				throw context.ConstructParseException("array index out of bounds");
 			}
 
-			const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
+			const ExpressionValue arrayElement = entry->GetElement(this, context);
+			context.CheckStack(StackUsage::GetObjectValue_noTable);
+			return GetObjectValue(context, classDescriptor, arrayElement, idString + 1);
+		}
+
+	case TypeCode::HeapArray:
+		{
+			if (*idString == 0)
+			{
+				if (context.WantArrayLength())
+				{
+					return ExpressionValue((int32_t)val.ahVal.GetNumElements());
+				}
+				return val;
+			}
+			if (*idString != '^')
+			{
+				throw context.ConstructParseException("missing array index");
+			}
+
+			context.AddIndex();
+			ReadLocker lock(Heap::heapLock);
+
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.ahVal.GetNumElements())
+			{
+				if (context.WantExists())
+				{
+					return ExpressionValue(false);
+				}
+				throw context.ConstructParseException("array index out of bounds");
+			}
+
+			ExpressionValue arrayElement;
+			val.ahVal.GetElement((size_t)context.GetLastIndex(), arrayElement);
 			context.CheckStack(StackUsage::GetObjectValue_noTable);
 			return GetObjectValue(context, classDescriptor, arrayElement, idString + 1);
 		}
@@ -1148,10 +1330,6 @@ decrease(strlen(idString))	// recursion variant
 					throw context.ConstructParseException("array index out of bounds");
 				}
 
-				if (context.WantExists())
-				{
-					return ExpressionValue(true);
-				}
 				return ExpressionValue((int32_t)(Bitmap<uint32_t>::MakeFromRaw(val.uVal).GetSetBitNumber(context.GetLastIndex())));
 			}
 		}
@@ -1195,11 +1373,6 @@ decrease(strlen(idString))	// recursion variant
 				if (!inBounds)
 				{
 					throw context.ConstructParseException("array index out of bounds");
-				}
-
-				if (context.WantExists())
-				{
-					return ExpressionValue(true);
 				}
 
 				return ExpressionValue((int32_t)(Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).GetSetBitNumber(context.GetLastIndex())));

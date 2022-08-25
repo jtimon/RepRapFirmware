@@ -24,43 +24,45 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GridDefinition, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(GridDefinition, __VA_ARGS__)
 
-static constexpr ObjectModelArrayDescriptor axisArrayDescriptor =
+constexpr ObjectModelArrayTableEntry GridDefinition::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetAxisLetter(context.GetLastIndex())); }
+	// 0. Axes
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetAxisLetter(context.GetLastIndex())); }
+	},
+	// 1. Maximums
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMax(context.GetLastIndex()), 1); }
+	},
+	// 2. Minimums
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMin(context.GetLastIndex()), 1); }
+	},
+	// 3. Spacings
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetSpacing(context.GetLastIndex()), 1); }
+	}
 };
 
-static constexpr ObjectModelArrayDescriptor maxsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMax(context.GetLastIndex()), 1); }
-};
-
-static constexpr ObjectModelArrayDescriptor minsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMin(context.GetLastIndex()), 1); }
-};
-
-static constexpr ObjectModelArrayDescriptor spacingsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetSpacing(context.GetLastIndex()), 1); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(GridDefinition)
 
 constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. GridDefinition members
-	{ "axes",		OBJECT_MODEL_FUNC_NOSELF(&axisArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "maxs",		OBJECT_MODEL_FUNC_NOSELF(&maxsArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "mins",		OBJECT_MODEL_FUNC_NOSELF(&minsArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "axes",		OBJECT_MODEL_FUNC_ARRAY(0), 							ObjectModelEntryFlags::none },
+	{ "maxs",		OBJECT_MODEL_FUNC_ARRAY(1), 							ObjectModelEntryFlags::none },
+	{ "mins",		OBJECT_MODEL_FUNC_ARRAY(2), 							ObjectModelEntryFlags::none },
 	{ "radius",		OBJECT_MODEL_FUNC(self->radius, 1),						ObjectModelEntryFlags::none },
-	{ "spacings",	OBJECT_MODEL_FUNC_NOSELF(&spacingsArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "spacings",	OBJECT_MODEL_FUNC_ARRAY(3), 							ObjectModelEntryFlags::none },
 
 	{ "xMax",		OBJECT_MODEL_FUNC(self->maxs[0], 1),					ObjectModelEntryFlags::obsolete },
 	{ "xMin",		OBJECT_MODEL_FUNC(self->mins[0], 1),					ObjectModelEntryFlags::obsolete },
@@ -76,7 +78,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 
 #endif
 
-const char * const GridDefinition::HeightMapLabelLines[] =
+constexpr const char* GridDefinition::HeightMapLabelLines[] =
 {
 	"xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum",														// old version label line
 	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum",											// label line until 3.3-beta1
@@ -323,10 +325,6 @@ void GridDefinition::PrintError(float originalAxis0range, float originalAxis1ran
 	}
 }
 
-// Increase the version number in the following string whenever we change the format of the height map file significantly.
-// Adding more fields to the header row can be handled in GridDefinition::ReadParameters(), though.
-const char * const HeightMap::HeightMapComment = "RepRapFirmware height map file v2";
-
 HeightMap::HeightMap() noexcept : useMap(false) { }
 
 void HeightMap::SetGrid(const GridDefinition& gd) noexcept
@@ -439,7 +437,11 @@ bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexc
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
-bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
+bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
+# if SUPPORT_PROBE_POINTS_FILE
+							, bool isPointsFile
+# endif
+							) noexcept
 {
 	const size_t MaxLineLength = (MaxAxis0GridPoints * 8) + 2;					// maximum length of a line in the height map file, need 8 characters per grid point
 	const char* const readFailureText = "failed to read line from file";
@@ -450,15 +452,21 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 	GridDefinition newGrid;
 	int gridVersion;
 
-	if (f->ReadLine(buffer, sizeof(buffer)) <= 0)
+	if (f->ReadLine(buffer, sizeof(buffer)) <= 0)								// read the header comment line, which includes the version
 	{
 		r.cat(readFailureText);
 	}
-	else if (!StringStartsWith(buffer, HeightMapComment))						// check the version line is as expected
+	else if (!StringStartsWith(buffer, 											// check the version line is as expected
+# if SUPPORT_PROBE_POINTS_FILE
+								(isPointsFile) ? PointsFileComment :
+# endif
+										HeightMapComment
+								)
+			)
 	{
 		r.cat("bad header line or wrong version header");
 	}
-	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)
+	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)							// read and discard the column names line
 	{
 		r.cat(readFailureText);
 	}
@@ -495,7 +503,12 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				{
 					++p;
 				}
-				if (*p == '0' && (p[1] == ',' || p[1] == 0))
+				if (
+#if SUPPORT_PROBE_POINTS_FILE
+					!isPointsFile &&
+#endif
+						(*p == '0' && (p[1] == ',' || p[1] == 0))
+				   )
 				{
 					// Values of 0 with no decimal places in un-probed values, so leave the point set as not valid
 					++p;
@@ -509,7 +522,23 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 						r.catf("number expected at line %" PRIu32 " column %d", row + 3, (p - buffer) + 1);
 						return true;						// failed to read a number
 					}
-					SetGridHeight(col, row, f);
+#if SUPPORT_PROBE_POINTS_FILE
+					if (isPointsFile)
+					{
+						if (f > 0.0)
+						{
+							gridPointInvalid.ClearBit((row * def.nums[0]) + col);
+						}
+						else
+						{
+							gridPointInvalid.SetBit((row * def.nums[0]) + col);
+						}
+					}
+					else
+#endif
+					{
+						SetGridHeight(col, row, f);
+					}
 					p = np;
 				}
 				if (*p == ',')
@@ -518,14 +547,19 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				}
 			}
 		}
-		ExtrapolateMissing();
-		fileName.copy(fname);
+#if SUPPORT_PROBE_POINTS_FILE
+		if (!isPointsFile)
+#endif
+		{
+			ExtrapolateMissing();
+			fileName.copy(fname);
+		}
 		return false;										// success!
 	}
 	return true;											// an error occurred
 }
 
-#endif
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Return number of points probed, mean and RMS deviation, min and max error
 unsigned int HeightMap::GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept
@@ -565,6 +599,20 @@ bool HeightMap::UseHeightMap(bool b) noexcept
 	return useMap;
 }
 
+// Return true if we can probe this point
+bool HeightMap::CanProbePoint(size_t axis0Index, size_t axis1Index) const noexcept
+{
+#if SUPPORT_PROBE_POINTS_FILE
+	if (gridPointInvalid.IsBitSet((axis1Index * def.nums[0]) + axis0Index))
+	{
+		return false;
+	}
+#endif
+	const float axis0Coord = def.GetCoordinate(0, axis0Index);
+	const float axis1Coord = def.GetCoordinate(1, axis1Index);
+	return def.IsInRadius(axis0Coord, axis1Coord);
+}
+
 // Compute the height error at the specified point
 float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noexcept
 {
@@ -595,7 +643,7 @@ float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noex
 	return InterpolateAxis0Axis1(xIndex, yIndex, xf - xFloor, yf - yFloor);
 }
 
-float HeightMap::InterpolateAxis0Axis1(uint32_t axis0Index, uint32_t axis1Index, float axis0Frac, float axis1Frac) const noexcept
+float HeightMap::InterpolateAxis0Axis1(size_t axis0Index, size_t axis1Index, float axis0Frac, float axis1Frac) const noexcept
 {
 	const uint32_t indexX0Y0 = GetMapIndex(axis0Index, axis1Index);	// (X0,Y0)
 	const uint32_t indexX1Y0 = indexX0Y0 + 1;						// (X1,Y0)
@@ -684,20 +732,86 @@ void HeightMap::ExtrapolateMissing() noexcept
 	const float d = centAxis0*a + centAxis1*b + centZ*c;
 
 	// Fill in the blanks
-	for (uint32_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
+	for (size_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
 	{
-		for (uint32_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
+		for (size_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
 		{
 			const uint32_t index = GetMapIndex(iAxis0, iAxis1);
 			if (!gridHeightSet.IsBitSet(index))
 			{
-				const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
-				const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
-				const float fZ = (d - (a * fAxis0 + b * fAxis1)) * invC;
-				gridHeights[index] = fZ;	// fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+#if SUPPORT_PROBE_POINTS_FILE
+				// The point may be surrounded by points we have probed, in which case we need to interpolate instead of extrapolate
+				if (!InterpolateMissingPoint(iAxis0, iAxis1, gridHeights[index]))
+#endif
+				{
+					const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
+					const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
+					const float fZ = (d - (a * fAxis0 + b * fAxis1)) * invC;
+					gridHeights[index] = fZ;	// fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+				}
 			}
 		}
 	}
+}
+
+#if SUPPORT_PROBE_POINTS_FILE
+
+// Try to fill in a grid height by interpolation, if it is surrounded by a sufficient number of probed points
+// Return true if success with 'height' set to the interpolated height, else false
+bool HeightMap::InterpolateMissingPoint(size_t axis0Index, size_t axis1Index, float& height) const noexcept
+{
+	float total = 0;
+	unsigned int numPointsUsed = 0;
+
+	// Try the 2 points either side
+	if (   axis0Index != 0
+		&& axis0Index + 1 < def.nums[0]
+		&& gridHeightSet.IsBitSet(GetMapIndex(axis0Index - 1, axis1Index))
+		&& gridHeightSet.IsBitSet(GetMapIndex(axis0Index + 1, axis1Index))
+	   )
+	{
+		total += gridHeights[GetMapIndex(axis0Index - 1, axis1Index)] + gridHeights[GetMapIndex(axis0Index + 1, axis1Index)];
+		numPointsUsed += 2;
+	}
+
+	// Try the 2 points above and below
+	if (   axis1Index != 0
+		&& axis1Index + 1 < def.nums[1]
+	   )
+	{
+		if (   gridHeightSet.IsBitSet(GetMapIndex(axis0Index, axis1Index - 1))
+			&& gridHeightSet.IsBitSet(GetMapIndex(axis0Index, axis1Index + 1))
+		   )
+		{
+			total += gridHeights[GetMapIndex(axis0Index, axis1Index - 1)] + gridHeights[GetMapIndex(axis0Index, axis1Index + 1)];
+			numPointsUsed += 2;
+		}
+
+		// If we found 0 or 1 pairs of points to interpolate between, also try both sets of diagonal points
+		if (   numPointsUsed < 4
+			&& axis0Index != 0
+			&& axis0Index + 1 < def.nums[0]
+		   )
+		{
+			if (gridHeightSet.IsBitSet(GetMapIndex(axis0Index - 1, axis1Index - 1)) && gridHeightSet.IsBitSet(GetMapIndex(axis0Index + 1, axis1Index + 1)))
+			{
+				total += gridHeights[GetMapIndex(axis0Index - 1, axis1Index - 1)] + gridHeights[GetMapIndex(axis0Index + 1, axis1Index + 1)];
+				numPointsUsed += 2;
+			}
+			if (gridHeightSet.IsBitSet(GetMapIndex(axis0Index - 1, axis1Index + 1)) && gridHeightSet.IsBitSet(GetMapIndex(axis0Index + 1, axis1Index - 1)))
+			{
+				total += gridHeights[GetMapIndex(axis0Index - 1, axis1Index + 1)] + gridHeights[GetMapIndex(axis0Index + 1, axis1Index - 1)];
+				numPointsUsed += 2;
+			}
+		}
+	}
+
+	if (numPointsUsed != 0)
+	{
+		height = total/numPointsUsed;
+		return true;
+	}
+	return false;
 }
 
 #ifdef LPC_DEBUG

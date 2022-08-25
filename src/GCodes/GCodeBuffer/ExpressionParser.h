@@ -49,15 +49,18 @@ private:
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
 
+	void ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException);
+
 	void ParseArray(size_t& length, function_ref<void(size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
 	time_t ParseDateTime(const char *s) const THROWS(GCodeException);
 
-	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException);
+	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToString(ExpressionValue& val, bool evaluate) noexcept;
 	void ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
+	void ApplyLengthOperator(ExpressionValue& val) const THROWS(GCodeException);
 
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 

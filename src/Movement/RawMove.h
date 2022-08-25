@@ -24,22 +24,28 @@ struct RawMove
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
 
-	Tool *currentTool;												// which tool (if any) is being used
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-#else
-	uint16_t padding;
-#endif
-	uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
+	const Tool *movementTool;										// which tool (if any) is being used by this move
 
-	uint8_t applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
+	uint16_t moveType : 3,											// the S parameter from the G0 or G1 command, 0 for a normal move
+			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
 			usePressureAdvance : 1,									// true if we want to us extruder pressure advance, if there is any extrusion
 			canPauseAfter : 1,										// true if we can pause just after this move and successfully restart
 			hasPositiveExtrusion : 1,								// true if the move includes extrusion; only valid if the move was set up by SetupMove
 			isCoordinated : 1,										// true if this is a coordinated move
 			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
-			reduceAcceleration : 1;									// true if Z probing so we should limit the Z acceleration
+			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
+			inverseTimeMode : 1;									// true if executing the move in inverse time mode
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
+# if !defined(DUET3) && !defined(DUET3MINI)
+	uint16_t padding;												// pad to make the length a multiple of 4 bytes
+# endif
+#elif defined(DUET3) || defined(DUET3MINI)
+	uint16_t padding;												// pad to make the length a multiple of 4 bytes
+#endif
+
 	// If adding any more fields, keep the total size a multiple of 4 bytes so that we can use our optimised assignment operator
 
 	void SetDefaults(size_t firstDriveToZero) noexcept;				// set up default values
@@ -70,6 +76,9 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 struct MovementState : public RawMove
 {
+	Tool *currentTool;												// the current tool of this movement system
+	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
+
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
@@ -115,8 +124,8 @@ struct MovementState : public RawMove
 	FilePosition fileOffsetToPrint;									// The offset to print from
 #endif
 
-	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
-	int16_t newToolNumber;
+	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one per movement system can take place at a time.
+	int16_t newToolNumber;											// the tool number we are switching to, or the tool number we were supposed to switch to but didn't because the current object has been cancelled
 	int16_t previousToolNumber;										// the tool number we were using before the last tool change, or -1 if we weren't using a tool
 	uint8_t toolChangeParam;
 
@@ -127,7 +136,6 @@ struct MovementState : public RawMove
 
 	// Object cancellation variables
 	int currentObjectNumber;										// the current object number, or a negative value if it isn't an object
-	int virtualToolNumber;											// the number of the tool that was active when we cancelled an object
 	bool currentObjectCancelled;									// true if the current object should not be printed
 	bool printingJustResumed;										// true if we have just restarted printing
 
@@ -155,7 +163,6 @@ struct MovementState : public RawMove
 	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
 	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
 	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
-	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
 

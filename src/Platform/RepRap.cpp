@@ -166,102 +166,101 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RepRap, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(RepRap, _condition,__VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
+constexpr ObjectModelArrayTableEntry RepRap::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-#if SUPPORT_CAN_EXPANSION
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-			{	return (context.GetLastIndex() == 0)
-						? ExpressionValue(((const RepRap*)self)->platform, 0)
-							: ExpressionValue(((const RepRap*)self)->expansion, 0); }
-#else
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
-#endif
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::fansArrayDescriptor =
-{
-	&FansManager::fansLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->fansManager->GetNumFansToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->fansManager->FindFan(context.GetLastIndex()).Ptr()); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::inputsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->gCodes->GetNumInputs(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::gpoutArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpOutputsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{
-						const GpOutputPort& port = reprap.GetPlatform().GetGpOutPort(context.GetLastIndex());
-						return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
-					}
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::spindlesArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return MaxSpindles; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const RepRap*)self)->platform->AccessSpindle(context.GetLastIndex())); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
-{
-	&Tool::toolListLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return Tool::GetNumToolsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(Tool::GetLockedTool(context.GetLastIndex()).Ptr()); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::restorePointsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumVisibleRestorePoints; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																		{ return ExpressionValue(&((const RepRap*)self)->gCodes->GetPrimaryMovementState().restorePoints[context.GetLastIndex()]); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
-{
-	nullptr,
+	// 0. Boards
+	{
+		nullptr,					// no lock needed
+	#if SUPPORT_CAN_EXPANSION
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{	return (context.GetLastIndex() == 0)
+							? ExpressionValue(((const RepRap*)self)->platform, 0)
+								: ExpressionValue(((const RepRap*)self)->expansion, 0); }
+	#else
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
+	#endif
+	},
+	// 1. Fans
+	{
+		&FansManager::fansLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->fansManager->GetNumFansToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->fansManager->FindFan(context.GetLastIndex()).Ptr()); }
+	},
+	// 2. Inputs
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->gCodes->GetNumInputs(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
+	},
+	// 3. Spindles
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return MaxSpindles; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const RepRap*)self)->platform->AccessSpindle(context.GetLastIndex())); }
+	},
+	// 4. Tools
+	{
+		&Tool::toolListLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return Tool::GetNumToolsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(Tool::GetLockedTool(context.GetLastIndex()).Ptr()); }
+	},
+	// 5. Volumes
+	{
+		nullptr,
 #if HAS_MASS_STORAGE
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(MassStorage::GetVolume(context.GetLastIndex())); }
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(MassStorage::GetVolume(context.GetLastIndex())); }
 #else
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
 #endif
-};
+	},
+	// 6. GP outputs
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpOutputsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+						{
+							const GpOutputPort& port = reprap.GetPlatform().GetGpOutPort(context.GetLastIndex());
+							return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
+						}
+	},
+	// 7. Restore points
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumVisibleRestorePoints; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+																			{ return ExpressionValue(&((const RepRap*)self)->gCodes->GetCurrentMovementState(context).restorePoints[context.GetLastIndex()]); }
+	}
 
 #if HAS_MASS_STORAGE
-constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																		{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
-};
+	,
+	// 8. Volume changes
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+																			{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
+	}
 #endif
+};
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(RepRap)
 
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
-	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "boards",					OBJECT_MODEL_FUNC_ARRAY(0),												ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
 #endif
-	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
+	{ "fans",					OBJECT_MODEL_FUNC_ARRAY(1),												ObjectModelEntryFlags::live },
 	{ "global",					OBJECT_MODEL_FUNC(&(self->globalVariables)),							ObjectModelEntryFlags::none },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
-	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "inputs",					OBJECT_MODEL_FUNC_ARRAY(2),												ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
@@ -272,10 +271,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
-	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF(&spindlesArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
-	{ "tools",					OBJECT_MODEL_FUNC_NOSELF(&toolsArrayDescriptor),						ObjectModelEntryFlags::live },
-	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(&volumesArrayDescriptor),						ObjectModelEntryFlags::none },
+	{ "tools",					OBJECT_MODEL_FUNC_ARRAY(4),												ObjectModelEntryFlags::live },
+	{ "volumes",				OBJECT_MODEL_FUNC_ARRAY(5),												ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.directories
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
@@ -332,10 +331,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetPrimaryMovementState().GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
 	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
-	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),												ObjectModelEntryFlags::live },
 #if SUPPORT_LASER
 	// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
@@ -350,12 +349,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetPrimaryMovementState().newToolNumber), ObjectModelEntryFlags::none },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetPrimaryMovementState().previousToolNumber),	ObjectModelEntryFlags::none },
-	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::verbose },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
@@ -398,7 +397,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
-	{ "volChanges",				OBJECT_MODEL_FUNC_NOSELF(&volChangesArrayDescriptor),					ObjectModelEntryFlags::live },
+	{ "volChanges",				OBJECT_MODEL_FUNC_ARRAY(8),												ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 #endif
 };
@@ -487,9 +486,6 @@ void RepRap::Init() noexcept
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 	fansManager = new FansManager;
 
-#if SUPPORT_ROLAND
-	roland = new Roland(*platform);
-#endif
 #if SUPPORT_SCANNER
 	scanner = new Scanner(*platform);
 #endif
@@ -523,9 +519,6 @@ void RepRap::Init() noexcept
 	fansManager->Init();
 	printMonitor->Init();
 	FilamentMonitor::InitStatic();
-#if SUPPORT_ROLAND
-	roland->Init();
-#endif
 #if SUPPORT_SCANNER
 	scanner->Init();
 #endif
@@ -764,12 +757,6 @@ void RepRap::Spin() noexcept
 	spinningModule = moduleGcodes;
 	gCodes->Spin();
 
-#if SUPPORT_ROLAND
-	ticksInSpinState = 0;
-	spinningModule = moduleRoland;
-	roland->Spin();
-#endif
-
 #if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
 	ticksInSpinState = 0;
 	spinningModule = moduleScanner;
@@ -810,8 +797,30 @@ void RepRap::Spin() noexcept
 		diagnosticsDestination = MessageType::NoDestinationMessage;
 	}
 
-	// Check if we need to display a cold extrusion warning
 	const uint32_t now = millis();
+
+#if SUPPORT_REMOTE_COMMANDS
+	const DeferredCommand defCom = deferredCommand;			// capture volatile variable
+	if (defCom != DeferredCommand::none && now - whenDeferredCommandScheduled >= 250)
+	{
+		switch (defCom)
+		{
+		case DeferredCommand::reboot:
+			SoftwareReset(SoftwareResetReason::user);
+			break;
+
+		case DeferredCommand::updateFirmware:
+			UpdateFirmware(IAP_CAN_LOADER_FILE, "");
+			break;
+
+		default:
+			deferredCommand = DeferredCommand::none;
+			break;
+		}
+	}
+#endif
+
+	// Check if we need to display a cold extrusion warning
 	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
 		if (Tool::DisplayColdExtrusionWarnings())
@@ -971,44 +980,58 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	justSentDiagnostics = true;
 }
 
-// Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
+// Turn off the heaters, disable the motors, and deactivate the Heat, Move and GCodes classes. Leave everything else working.
 void RepRap::EmergencyStop() noexcept
 {
 #ifdef DUET3_ATE
 	Duet3Ate::PowerOffEUT();
 #endif
 
-	stopped = true;								// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
+	stopped = true;									// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
 
-	platform->DisableAllDrivers();				// need to do this to ensure that any motor brakes are re-engaged
-
-	switch (gCodes->GetMachineType())
+#if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
 	{
-	case MachineType::cnc:
-		for (size_t i = 0; i < MaxSpindles; i++)
+		platform->EmergencyDisableDrivers();		// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
+	}
+	else
+#endif
+	{
+		platform->DisableAllDrivers();				// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
+
+		switch (gCodes->GetMachineType())
 		{
-			platform->AccessSpindle(i).SetState(SpindleState::stopped);
-		}
-		break;
+		case MachineType::cnc:
+			for (size_t i = 0; i < MaxSpindles; i++)
+			{
+				platform->AccessSpindle(i).SetState(SpindleState::stopped);
+			}
+			break;
 
 #if SUPPORT_LASER
-	case MachineType::laser:
-		platform->SetLaserPwm(0);
-		break;
+		case MachineType::laser:
+			platform->SetLaserPwm(0);
+			break;
 #endif
 
-	default:
-		break;
+		default:
+			break;
+		}
 	}
 
-	heat->Exit();								// this also turns off all heaters
-	move->Exit();								// this stops the motors stepping
+	heat->Exit();									// this also turns off all heaters
+	move->Exit();									// this stops the motors stepping
 
 #if SUPPORT_CAN_EXPANSION
-	expansion->EmergencyStop();
+# if SUPPORT_REMOTE_COMMANDS
+	if (!CanInterface::InExpansionMode())
+# endif
+	{
+		expansion->EmergencyStop();
+	}
 #endif
 
 	gCodes->EmergencyStop();
@@ -2515,6 +2538,17 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		reply.printf("Firmware binary \"%s\" not found", firmwareBinaryLocation.c_str());
 		return false;
 	}
+#if SAME5x
+	// UF2 files consist of 512 byte blocks with (for the SAME5x) 256 bytes of data per block
+	if ((firmwareFile->Length() / 512) * 256 > FLASH_SIZE)
+#else
+	if (firmwareFile->Length() > IFLASH_SIZE)
+#endif
+	{
+		firmwareFile->Close();
+		reply.printf("Firmware binary \"%s\" is too big for the available flash memory", filenameRef.c_str());
+		return false;
+	}
 
 	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
 	uint32_t firstDword;
@@ -2548,14 +2582,15 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 	return true;
 }
 
-// Update the firmware. Prerequisites should be checked before calling this.
-void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
-{
 #if HAS_MASS_STORAGE
-	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
+
+// Update the firmware. Prerequisites should be checked before calling this.
+void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept
+{
+	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, iapFilename, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, iapFilename, OpenMode::read);
 		if (iapFile == nullptr)
 		{
 			// This should not happen because we already checked that the file exists, so use a simplified error message
@@ -2569,12 +2604,16 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
-	StartIap(filenameRef.c_str());
-#endif
+	StartIap(iapParam);
 }
 #endif
 
+<<<<<<< HEAD
 #if !LPC17xx
+=======
+#endif
+
+>>>>>>> upstream/3.5-dev
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_DIRECT_LCD

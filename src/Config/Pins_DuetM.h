@@ -32,7 +32,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
@@ -44,7 +43,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		0
-#define ALLOCATE_DEFAULT_PORTS	0
 
 // The physical capabilities of the machine
 

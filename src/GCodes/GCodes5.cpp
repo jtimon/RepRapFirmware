@@ -60,10 +60,73 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 // Handle M596
 GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
-	UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
-	gb.SetActiveQueueNumber(queueNumber);
-	reprap.InputsUpdated();
+	if (gb.Seen('P'))
+	{
+		UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
+		const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
+		gb.SetActiveQueueNumber(queueNumber);
+		reprap.InputsUpdated();
+	}
+	else
+	{
+		reply.printf("Motion system %u is active", gb.GetActiveQueueNumber());
+	}
+	return GCodeResult::ok;
+}
+
+// Handle M597
+GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Find the two specified axes
+	int lowerAxisNumber = -1, upperAxisNumber = -1;
+	float lowerValue, upperValue;
+	for (unsigned int i = 0; i < numVisibleAxes; ++i)
+	{
+		if (gb.Seen(axisLetters[i]))
+		{
+			if (lowerAxisNumber < 0)
+			{
+				lowerAxisNumber = i;
+				lowerValue = gb.GetFValue();
+			}
+			else
+			{
+				upperAxisNumber = i;
+				upperValue = gb.GetFValue();
+				break;
+			}
+		}
+	}
+
+	if (upperAxisNumber >= 0)
+	{
+		// Seen two axes, so go ahead
+		if (upperValue == lowerValue)
+		{
+			reply.copy("Axis values must be different");
+			return GCodeResult::error;
+		}
+		if (upperValue < lowerValue)
+		{
+			std::swap(upperValue, lowerValue);
+			std::swap(upperAxisNumber, lowerAxisNumber);
+			collisionChecker.Set(lowerAxisNumber, upperAxisNumber, upperValue - lowerValue, GetMovementState(gb).coords);
+		}
+	}
+	else if (lowerAxisNumber >= 0)
+	{
+		reply.copy("Only one axis specified");
+		return GCodeResult::error;
+	}
+	else if (collisionChecker.IsValid())
+	{
+		reply.printf("For collision avoidance, axis %c position must be at least %.1fmm higher than axis %c",
+						axisLetters[collisionChecker.GetUpperAxis()], (double)collisionChecker.GetMinSeparation(), axisLetters[collisionChecker.GetLowerAxis()]);
+	}
+	else
+	{
+		reply.copy("Collision avoidance is not active");
+	}
 	return GCodeResult::ok;
 }
 

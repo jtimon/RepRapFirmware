@@ -56,6 +56,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),						ObjectModelEntryFlags::none },
 	{ "feedRate",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->machineState->feedRate), 1),	ObjectModelEntryFlags::live },
 	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::live },
+	{ "inverseTimeMode",	OBJECT_MODEL_FUNC((bool)self->machineState->inverseTimeMode),						ObjectModelEntryFlags::none },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
 #if SUPPORT_ASYNC_MOVES
@@ -68,7 +69,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 13 + SUPPORT_ASYNC_MOVES };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 14 + SUPPORT_ASYNC_MOVES };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
@@ -92,7 +93,11 @@ const char *GCodeBuffer::GetStateText() const noexcept
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
-	: printFilePositionAtMacroStart(0),
+	:
+#if SUPPORT_ASYNC_MOVES
+	  syncState(SyncState::running),
+#endif
+	  printFilePositionAtMacroStart(0),
 	  normalInput(normalIn),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileInput(fileIn),
@@ -105,9 +110,6 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
 	  timerRunning(false), motionCommanded(false)
-#if SUPPORT_ASYNC_MOVES
-	  , waitingForSync(false)
-#endif
 
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -128,7 +130,7 @@ void GCodeBuffer::Reset() noexcept
 	}
 #endif
 
-	while (PopState()) { }
+	while (PopState(false)) { }
 
 #if HAS_SBC_INTERFACE
 	isBinaryBuffer = false;
@@ -337,73 +339,40 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// Check whether we are in sync with another GCodeBUffer. This is only called when we have multiple readers for the same GCode stream.
-// Sync works as follows:
-// 1. All GBs first lock their movement queues and wait for all moves in their own movement queue to finish. Only then do they call this function.
-// 2. The primary GB (the one selected by the most recent M596 command) waits for the other GBs to do one of the following:
-//   (a) reach the same lines in the executing files as the primary GB and set their 'waitingForSync' flags. That way the primary caller know that the secondaries have completed all movements.
-//   (b) reached a later point. That should only happen if the secondary GB didn't execute the command at the sync point due to conditional GCode or executing a loop fewer times.
-// 3. The secondary GBs wait for the primary GB to reach a point strictly later in the executing files, so that the primary can finish executing the command before they resume.
-//    While waiting they set their 'waitingForSync' flags to indicate to the primary that movement has stopped.
-bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
+// Determine whether the other input channel is at a strictly later point than we are
+bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
 	unsigned int otherDepth = other.GetStackDepth();
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;
-	const bool weArePrimary = Executing();
-	bool otherMustBeLater;
-	bool atSamePoint;
-	if (ourDepth > otherDepth)
+	while (ourDepth > otherDepth)
 	{
-		// The other GB can only be in sync with us if it has exited the inner block we are in and moved on in the surrounding blocks
-		otherMustBeLater = true;
-		atSamePoint = false;
-		do
-		{
-			ourState = ourState->GetPrevious();
-			--ourDepth;
-		} while (ourDepth > otherDepth);
+		ourState = ourState->GetPrevious();
+		--ourDepth;
 	}
-	else if (otherDepth > ourDepth)
+	while (otherDepth > ourDepth)
 	{
-		// The other GB is more deeply nested than we are, so it can only be later if it has moved on
-		otherMustBeLater = true;
-		atSamePoint = false;
-		do
-		{
-			otherState = otherState->GetPrevious();
-			--otherDepth;
-		} while (otherDepth > ourDepth);
-	}
-	else
-	{
-		otherMustBeLater = !weArePrimary;
-		atSamePoint = true;
+		otherState = otherState->GetPrevious();
+		--otherDepth;
 	}
 
+	bool otherIsLater = false;
 	while (ourState != nullptr)
 	{
-		if (otherState->lineNumber < ourState->lineNumber)
+		if (otherState->lineNumber > ourState->lineNumber)
 		{
-			otherMustBeLater = true;
-			atSamePoint = false;
+			otherIsLater = true;
 		}
-		else if (otherState->lineNumber > ourState->lineNumber)
+		else if (otherState->lineNumber < ourState->lineNumber)
 		{
-			otherMustBeLater = false;
-			atSamePoint = false;
+			otherIsLater = false;
 		}
 		otherState = otherState->GetPrevious();
 		ourState = ourState->GetPrevious();
 	}
 
-	// At this point, if otherMustBeLater is true then we know that it isn't later, so we are not synced.
-	// Else if atSamePoint is true then the other GB is at the same point as us;
-	//  so if we are the primary we need to check whether is has its waitingForSync flag set, and if we are not the primary we must wait for the primary to complete the command.
-	const bool ret = otherMustBeLater || (atSamePoint && (!weArePrimary || !other.waitingForSync));
-	waitingForSync = ret;
-	return ret;
+	return otherIsLater;
 }
 
 #endif
@@ -455,18 +424,43 @@ float GCodeBuffer::GetFValue() THROWS(GCodeException)
 	return PARSER_OPERATION(GetFValue());
 }
 
+// Get a float after a key letter and check that it is greater then zero
+float GCodeBuffer::GetPositiveFValue() THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	const float val = GetFValue();
+	if (val > 0.0) { return val; }
+	throw GCodeException(GetLineNumber(), column, "value must be greater than zero");
+}
+
+// Get a float after a key letter and check that it is greater than or equal to zero
+float GCodeBuffer::GetNonNegativeFValue() THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	const float val = GetFValue();
+	if (val >= 0.0) { return val; }
+	throw GCodeException(GetLineNumber(), column, "value must be not less than zero");
+}
+
 float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
 {
 	MustSee(c);
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
 	const float ret = GetFValue();
-	if (ret < minValue)
-	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
-	}
-	if (ret > maxValue)
-	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
-	}
+	if (ret < minValue) { throw GCodeException(GetLineNumber(), column, "parameter '%c' too low", (uint32_t)c); }
+	if (ret > maxValue) { throw GCodeException(GetLineNumber(), column, "parameter '%c' too high", (uint32_t)c); }
 	return ret;
 }
 
@@ -716,7 +710,7 @@ bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeExcept
 // Try to get an int array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad) THROWS(GCodeException)
+void GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -728,17 +722,15 @@ bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const S
 		}
 		else
 		{
-			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
-			return true;
+			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 		}
 	}
-	return false;
 }
 
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad) THROWS(GCodeException)
+void GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -750,11 +742,9 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const S
 		}
 		else
 		{
-			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
-			return true;
+			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 		}
 	}
-	return false;
 }
 
 // Try to get a quoted string after parameter letter.
@@ -913,18 +903,24 @@ bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
-bool GCodeBuffer::PopState() noexcept
+bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 {
-	GCodeMachineState * const ms = machineState;
-	if (ms->GetPrevious() == nullptr)
+	bool poppedFileState;
+	do
 	{
-		ms->messageAcknowledged = false;			// avoid getting stuck in a loop trying to pop
-		ms->waitingForAcknowledgement = false;
-		return false;
-	}
+		GCodeMachineState * const ms = machineState;
+		if (ms->GetPrevious() == nullptr)
+		{
+			ms->messageAcknowledged = false;			// avoid getting stuck in a loop trying to pop
+			ms->waitingForAcknowledgement = false;
+			return false;
+		}
 
-	machineState = ms->Pop();						// get the previous state and copy down any error message
-	delete ms;
+		poppedFileState = !ms->localPush;
+		machineState = ms->Pop();						// get the previous state and copy down any error message
+		delete ms;
+	} while (!withinSameFile && !poppedFileState);
+	IF_NOT_BINARY(stringParser.ResetIndentation());
 
 	reprap.InputsUpdated();
 	return true;
@@ -950,7 +946,7 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 #endif
 				machineState->CloseFile();
 			}
-		} while (PopState() && (abortAll || !machineState->DoingFile()));
+		} while (PopState(false) && abortAll);
 
 #if HAS_SBC_INTERFACE
 		abortFile = requestAbort;
@@ -1258,6 +1254,26 @@ VariableSet& GCodeBuffer::GetVariables() const noexcept
 		mc = mc->GetPrevious();
 	}
 	return mc->variables;
+}
+
+void GCodeBuffer::ThrowGCodeException(const char *msg) const THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	throw GCodeException(GetLineNumber(), column, msg);
+}
+
+void GCodeBuffer::ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	throw GCodeException(GetLineNumber(), column, msg, param);
 }
 
 #if SUPPORT_COORDINATE_ROTATION

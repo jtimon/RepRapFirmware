@@ -62,60 +62,63 @@ TASKMEM Task<Move::MoveTaskStackWords> Move::moveTask;
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Move, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(Move, __VA_ARGS__)
 
-static constexpr ObjectModelArrayDescriptor axesArrayDescriptor =
+constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 3); }
-};
-
-static constexpr ObjectModelArrayDescriptor extrudersArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 4); }
-};
-
-constexpr ObjectModelArrayDescriptor Move::queueArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(rings); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
-};
+	// 0. Axes
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 3); }
+	},
+	// 1. Extruders
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 4); }
+	},
+	// 2. Motion system queues
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(rings); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
+	}
 
 #if SUPPORT_COORDINATE_ROTATION
-
-constexpr ObjectModelArrayDescriptor Move::rotationCentreArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
+	,
+	// 3. Rotation centre coordinates
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
+	}
 };
 
 #endif
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Move)
 
 constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
-	{ "axes",					OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 												ObjectModelEntryFlags::live },
+	{ "axes",					OBJECT_MODEL_FUNC_ARRAY(0), 																	ObjectModelEntryFlags::live },
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::none },
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																		ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
-	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),											ObjectModelEntryFlags::live },
+	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxPrintingAcceleration()), 1),	ObjectModelEntryFlags::none },
-	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
+	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
 	{ "rotation",				OBJECT_MODEL_FUNC(self, 44),																	ObjectModelEntryFlags::none },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().latestVirtualExtruderPosition, 5),			ObjectModelEntryFlags::live },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),			ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),					ObjectModelEntryFlags::obsolete },
 
@@ -163,14 +166,14 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 8. move.compensation.skew members
 	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),															ObjectModelEntryFlags::none },
-	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),																ObjectModelEntryFlags::none },
-	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),																ObjectModelEntryFlags::none },
-	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),																ObjectModelEntryFlags::none },
+	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY(), 4),															ObjectModelEntryFlags::none },
+	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ(), 4),															ObjectModelEntryFlags::none },
+	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ(), 4),															ObjectModelEntryFlags::none },
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 8. move.rotation members
 	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle()),								ObjectModelEntryFlags::none },
-	{ "centre",					OBJECT_MODEL_FUNC_NOSELF(&rotationCentreArrayDescriptor),										ObjectModelEntryFlags::none },
+	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(3),																		ObjectModelEntryFlags::none },
 #endif
 };
 
@@ -209,19 +212,19 @@ Move::Move() noexcept
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
-	mainDDARing.Init1(InitialDdaRingLength);
+	rings[0].Init1(InitialDdaRingLength);
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.Init1(AuxDdaRingLength);
+	rings[1].Init1(AuxDdaRingLength);
 #endif
 	DriveMovement::InitialAllocate(InitialNumDms);
 }
 
 void Move::Init() noexcept
 {
-	mainDDARing.Init2();
+	rings[0].Init2();
 
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.Init2();
+	rings[1].Init2();
 	auxMoveAvailable = false;
 	auxMoveLocked = false;
 #endif
@@ -229,7 +232,7 @@ void Move::Init() noexcept
 	// Clear the transforms
 	SetIdentityTransform();
 	compensateXY = true;
-	tanXY = tanYZ = tanXZ = 0.0;
+	tangents[0] = tangents[1] = tangents[2] = 0.0;
 
 	usingMesh = useTaper = false;
 	zShift = 0.0;
@@ -248,9 +251,9 @@ void Move::Init() noexcept
 void Move::Exit() noexcept
 {
 	StepTimer::DisableTimerInterrupt();
-	mainDDARing.Exit();
+	rings[0].Exit();
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.Exit();
+	rings[1].Exit();
 #endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	delete laserTask;
@@ -264,15 +267,16 @@ void Move::Exit() noexcept
 	for (;;)
 	{
 		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-		mainDDARing.RecycleDDAs();
+		rings[0].RecycleDDAs();
 #if SUPPORT_ASYNC_MOVES
-		auxDDARing.RecycleDDAs();
+		rings[1].RecycleDDAs();
 #endif
 
-		// See if we can add another move to the ring
 		bool moveRead = false;
-		const bool canAddMove = mainDDARing.CanAddMove();
-		if (canAddMove)
+
+		// See if we can add another move to ring 0
+		const bool canAddRing0Move = rings[0].CanAddMove();
+		if (canAddRing0Move)
 		{
 			// OK to add another move. First check if a special move is available.
 			if (bedLevellingMoveAvailable)
@@ -280,7 +284,7 @@ void Move::Exit() noexcept
 				moveRead = true;
 				if (simulationMode < SimulationMode::partial)
 				{
-					if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
+					if (rings[0].AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
 						const uint32_t now = millis();
 						const uint32_t timeWaiting = now - whenLastMoveAdded;
@@ -305,10 +309,10 @@ void Move::Exit() noexcept
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.currentTool, true);
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
 						}
 
-						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
+						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - whenLastMoveAdded;
@@ -324,39 +328,70 @@ void Move::Exit() noexcept
 			}
 		}
 
-		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove, millis() - whenLastMoveAdded >= mainDDARing.GetGracePeriod());
+		// Let ring 0 process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
+		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
+		const bool canAddRing1Move = rings[1].CanAddMove();
+		if (canAddRing1Move)
 		{
-			bool waitingForAuxSpace = false;
 			if (auxMoveAvailable)
 			{
-				if (auxDDARing.CanAddMove())
+				moveRead = true;
+				if (rings[1].AddAsyncMove(auxMove))
 				{
-					if (auxDDARing.AddAsyncMove(auxMove))
+					const uint32_t now = millis();
+					const uint32_t timeWaiting = now - whenLastMoveAdded;
+					if (timeWaiting > longestGcodeWaitInterval)
 					{
-						moveState = MoveState::collecting;
+						longestGcodeWaitInterval = timeWaiting;
 					}
-					auxMoveAvailable = false;
+					whenLastMoveAdded = now;
+					moveState = MoveState::collecting;
 				}
-				else
-				{
-					waitingForAuxSpace = true;
-				}
+				auxMoveAvailable = false;
 			}
-			const uint32_t auxPrepareDelay = auxDDARing.Spin(simulationMode, waitingForAuxSpace, true);		// let the DDA ring process moves
-			if (auxPrepareDelay < nextPrepareDelay)
+			else
 			{
-				nextPrepareDelay = auxPrepareDelay;
+				// If there's a G Code move available, add it to the DDA ring for processing.
+				RawMove nextMove;
+				if (reprap.GetGCodes().ReadMove(1, nextMove))				// if we have a new move
+				{
+					moveRead = true;
+					if (simulationMode < SimulationMode::partial)			// in simulation mode partial, we don't process incoming moves beyond this point
+					{
+						if (nextMove.moveType == 0)
+						{
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
+						}
+
+						if (rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
+						{
+							const uint32_t now = millis();
+							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							if (timeWaiting > longestGcodeWaitInterval)
+							{
+								longestGcodeWaitInterval = timeWaiting;
+							}
+							whenLastMoveAdded = now;
+							moveState = MoveState::collecting;
+						}
+					}
+				}
 			}
+		}
+
+		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded >= rings[1].GetGracePeriod());
+		if (auxPrepareDelay < nextPrepareDelay)
+		{
+			nextPrepareDelay = auxPrepareDelay;
 		}
 #endif
 
 		// Reduce motor current to standby if the rings have been idle for long enough
-		if (   mainDDARing.IsIdle()
+		if (   rings[0].IsIdle()
 #if SUPPORT_ASYNC_MOVES
-			&& auxDDARing.IsIdle()
+			&& rings[1].IsIdle()
 #endif
 		   )
 		{
@@ -416,7 +451,7 @@ float Move::PushBabyStepping(size_t axis, float amount) noexcept
 {
 	TaskCriticalSectionLocker lock;						// lock out the Move task
 
-	return mainDDARing.PushBabyStepping(axis, amount);
+	return rings[0].PushBabyStepping(axis, amount);
 }
 
 // Change the kinematics to the specified type if it isn't already
@@ -522,14 +557,14 @@ void Move::Diagnostics(MessageType mtype) noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetGCodes().GetPrimaryMovementState().currentTool, doBedCompensation);
+	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(queueNumber).currentTool, doBedCompensation);
 
-	mainDDARing.SetLiveCoordinates(newPos);
-	mainDDARing.SetPositions(newPos);
+	rings[queueNumber].SetLiveCoordinates(newPos);
+	rings[queueNumber].SetPositions(newPos);
 }
 
 // Convert distance to steps for a particular drive
@@ -617,11 +652,11 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 		{
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += (compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? tanXY() * xyzPoint[lowestYAxis] : 0.0) + tanXZ() * xyzPoint[Z_AXIS];
 			}
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY() * xyzPoint[lowestXAxis]) + tanYZ() * xyzPoint[Z_AXIS];
 			}
 		}
 	}
@@ -643,11 +678,11 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 		{
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY() * xyzPoint[lowestXAxis]) + tanYZ() * xyzPoint[Z_AXIS]);
 			}
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= ((compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? tanXY() * xyzPoint[lowestYAxis] : 0.0) + tanXZ() * xyzPoint[Z_AXIS]);
 			}
 		}
 	}
@@ -752,7 +787,11 @@ void Move::SetIdentityTransform() noexcept
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
-	const bool err = heightMap.LoadFromFile(f, fname, r);
+	const bool err = heightMap.LoadFromFile(f, fname, r
+#if SUPPORT_PROBE_POINTS_FILE
+											, false				// loading the height map, not the probe points file
+#endif
+											);
 	if (err)
 	{
 		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
@@ -773,7 +812,22 @@ bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 	return heightMap.SaveToFile(f, fname, zShift);
 }
 
-#endif
+# if SUPPORT_PROBE_POINTS_FILE
+
+// Load the probe points map from a file returning true if an error occurred
+bool Move::LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
+{
+	return heightMap.LoadFromFile(f, fname, r, true);
+}
+
+void Move::ClearProbePointsInvalid() noexcept
+{
+	return heightMap.ClearProbePointsInvalid();
+}
+
+# endif
+
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 void Move::SetTaperHeight(float h) noexcept
 {
@@ -935,7 +989,7 @@ void Move::Simulate(SimulationMode simMode) noexcept
 	simulationMode = simMode;
 	if (simMode != SimulationMode::off)
 	{
-		mainDDARing.ResetSimulationTime();
+		rings[0].ResetSimulationTime();
 	}
 }
 
@@ -989,7 +1043,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 {
 	if (gb.Seen('S'))
 	{
-		const float advance = gb.GetFValue();
+		const float advance = gb.GetNonNegativeFValue();
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
@@ -1105,15 +1159,55 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 	return rslt;
 }
 
+void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
+{
+	// Construct a MovementLinear message to revert the position. The move must be shorter than clocksAllowed.
+	// When writing this, clocksAllowed was equivalent to 40ms.
+	// We allow 10ms delay time to allow the motor to stop and reverse direction, 10ms acceleration time, 5ms steady time and 10ms deceleration time.
+	CanMessageMovementLinear msg2;
+	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
+	msg2.steadyClocks = msg.clocksAllowed/8;
+	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
+	msg2.numDrivers = NumDirectDrivers;
+	msg2.pressureAdvanceDrives = 0;
+	msg2.seq = 0;
+	msg2.initialSpeedFraction = msg2.finalSpeedFraction = 0.0;
+
+	size_t index = 0;
+	bool needSteps = false;
+	const volatile int32_t * const lastMoveStepsTaken = rings[0].GetLastMoveStepsTaken();
+	constexpr size_t numDrivers = min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave);
+	for (size_t driver = 0; driver < numDrivers; ++driver)
+	{
+		int32_t steps = 0;
+		if (msg.whichDrives & (1u << driver))
+		{
+			const int32_t stepsWanted = msg.finalStepCounts[index++];
+			const int32_t stepsTaken = lastMoveStepsTaken[driver];
+			if (((stepsWanted >= 0 && stepsTaken > stepsWanted) || (stepsWanted <= 0 && stepsTaken < stepsWanted)))
+			{
+				steps = stepsWanted - stepsTaken;
+				needSteps = true;
+			}
+		}
+		msg2.perDrive[driver].steps = steps;
+	}
+
+	if (needSteps)
+	{
+		AddMoveFromRemote(msg2);
+	}
+}
+
 #endif
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
 float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept
 {
-	if (mainDDARing.HaveLiveCoordinatesChanged())
+	if (rings[0].HaveLiveCoordinatesChanged())
 	{
-		mainDDARing.LiveCoordinates(latestLiveCoordinates);
+		rings[0].LiveCoordinates(latestLiveCoordinates);
 		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
 	}
 	return latestLiveCoordinates[axisOrExtruder];
@@ -1203,7 +1297,7 @@ void Move::LaserTaskRun() noexcept
 # if SUPPORT_LASER
 			// Manage the laser power
 			uint32_t ticks;
-			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
+			while ((ticks = rings[0].ManageLaserPower()) != 0)
 			{
 				(void)TaskBase::Take(ticks);
 			}

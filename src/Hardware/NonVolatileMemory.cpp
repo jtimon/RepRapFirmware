@@ -27,12 +27,7 @@ void NonVolatileMemory::EnsureRead() noexcept
 #elif LPC17xx || STM32
 		NVMEmulationRead(&buffer, sizeof(buffer));
 #elif SAM4E || SAM4S || SAME70
-		const bool cacheEnabled = Cache::Disable();
 		Flash::ReadUserSignature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
-		if (cacheEnabled)
-		{
-			Cache::Enable();
-		}
 #else
 # error Unsupported processor
 #endif

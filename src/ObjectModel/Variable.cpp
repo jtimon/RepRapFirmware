@@ -7,15 +7,54 @@
 
 #include "Variable.h"
 #include <Platform/OutputMemory.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-Variable::Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept : name(str), val(pVal), scope(pScope)
+Variable::Variable(const char *str, ExpressionValue& pVal, int8_t pScope) THROWS(GCodeException)
+	: name(str), val(), scope(pScope)
 {
+	Assign(pVal);				// this may throw
 }
 
 Variable::~Variable()
 {
 	name.Delete();
 	val.Release();
+}
+
+void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
+{
+	switch (ev.GetType())
+	{
+	case TypeCode::ObjectModelArray:
+		{
+			// Copy the object model array value to the heap
+			ArrayHandle ah;
+			const ObjectModelArrayTableEntry *const entry = ev.omVal->FindObjectModelArrayEntry(ev.param);
+			ReadLocker lock(entry->lockPointer);
+			ObjectExplorationContext context;
+			const size_t numElements = entry->GetNumElements(ev.omVal, context);
+			if (numElements != 0)
+			{
+				ah.Allocate(numElements);
+				for (size_t i = 0; i < numElements; ++i)
+				{
+					context.AddIndex(i);
+					ExpressionValue elemVal = entry->GetElement(ev.omVal, context);
+					ah.AssignElement(i, elemVal);
+					context.RemoveIndex();
+				}
+			}
+			val = ExpressionValue(ah);
+		}
+		break;
+
+	case TypeCode::ObjectModel_tc:
+		throw GCodeException("Cannot assign a value of type 'object' to a variable");
+
+	default:
+		val = ev;
+		break;
+	}
 }
 
 Variable* VariableSet::Lookup(const char *str) noexcept
@@ -32,13 +71,13 @@ Variable* VariableSet::Lookup(const char *str) noexcept
 	return nullptr;
 }
 
-const Variable* VariableSet::Lookup(const char *str) const noexcept
+const Variable* VariableSet::Lookup(const char *str, size_t length) const noexcept
 {
 	const LinkedVariable *lv;
 	for (lv = root; lv != nullptr; lv = lv->next)
 	{
 		auto vname = lv->v.GetName();
-		if (strcmp(vname.Ptr(), str) == 0)
+		if (strlen(vname.Ptr()) == length && memcmp(vname.Ptr(), str, length) == 0)
 		{
 			return &(lv->v);
 		}
@@ -46,7 +85,7 @@ const Variable* VariableSet::Lookup(const char *str) const noexcept
 	return nullptr;
 }
 
-void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) noexcept
+void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) THROWS(GCodeException)
 {
 	LinkedVariable * const toInsert = new LinkedVariable(str, pVal, pScope, root);
 	root = toInsert;

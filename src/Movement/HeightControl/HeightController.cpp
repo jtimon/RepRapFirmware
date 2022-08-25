@@ -44,7 +44,7 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	gb.TryGetFValue('D', configuredPidD, seen);
 	if (gb.Seen('F'))
 	{
-		const float freq = gb.GetFValue();
+		const float freq = gb.GetPositiveFValue();
 		if (freq >= 0.1 && freq <= 200.0)
 		{
 			sampleInterval = lrintf(1000/freq);
@@ -53,10 +53,7 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 
 	float zLimits[2];
 	bool seenZ = false;
-	if (gb.TryGetFloatArray('Z', 2, zLimits, reply, seenZ, false))
-	{
-		return GCodeResult::error;
-	}
+	gb.TryGetFloatArray('Z', 2, zLimits, seenZ, false);
 	if (seenZ && zLimits[0] < zLimits[1])
 	{
 		zMin = zLimits[0];
@@ -89,7 +86,7 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Start/stop height following
-GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (gb.Seen('P'))
 	{
@@ -107,10 +104,7 @@ GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const String
 
 			float zLimits[2];
 			bool seenZ = false;
-			if (gb.TryGetFloatArray('Z', 2, zLimits, reply, seenZ, false))
-			{
-				return GCodeResult::error;
-			}
+			gb.TryGetFloatArray('Z', 2, zLimits, seenZ, false);
 			if (seenZ && zLimits[0] < zLimits[1])
 			{
 				zMin = zLimits[0];

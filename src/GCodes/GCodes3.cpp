@@ -106,7 +106,9 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			ToolOffsetInverseTransform(ms);		// make sure the limits are reflected in the user position
 		}
-		reprap.GetMove().SetNewPosition(ms.coords, true);
+		reprap.GetMove().SetNewPosition(ms.coords, true, gb.GetActiveQueueNumber());
+		//TODO update the other move system too!
+
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -117,19 +119,6 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
 		}
-
-#if SUPPORT_ROLAND
-		if (reprap.GetRoland()->Active())
-		{
-			for(size_t axis = 0; axis < AXES; axis++)
-			{
-				if (!reprap.GetRoland()->ProcessG92(moveState[axis], axis))
-				{
-					return GCodeResult::notFinished;
-				}
-			}
-		}
-#endif
 	}
 
 	return GCodeResult::ok;
@@ -264,172 +253,6 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 #endif
 
 #endif
-
-// Define the probing grid, called when we see an M557 command
-GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
-{
-	if (!LockMovement(gb))							// to ensure that probing is not already in progress
-	{
-		return GCodeResult::notFinished;
-	}
-
-	bool seenR = false, seenP = false, seenS = false;
-	char axesLetters[2] = { 'X', 'Y'};
-	float axis0Values[2];
-	float axis1Values[2];
-	float spacings[2] = { DefaultGridSpacing, DefaultGridSpacing };
-
-	size_t axesSeenCount = 0;
-	for (size_t axis = 0; axis < numVisibleAxes; axis++)
-	{
-		if (gb.Seen(axisLetters[axis]))
-		{
-			if (axisLetters[axis] == 'Z')
-			{
-				reply.copy("Z axis is not allowed for mesh leveling");
-				return GCodeResult::error;
-			}
-			else if (axesSeenCount > 2)
-			{
-				reply.copy("Mesh leveling expects exactly two axes");
-				return GCodeResult::error;
-			}
-			bool dummy;
-			if (gb.TryGetFloatArray(
-					axisLetters[axis],
-					2,
-					(axesSeenCount == 0) ? axis0Values : axis1Values,
-					reply,
-					dummy,
-					false))
-			{
-				return GCodeResult::error;
-			}
-			axesLetters[axesSeenCount] = axisLetters[axis];
-			++axesSeenCount;
-		}
-	}
-	if (axesSeenCount == 1)
-	{
-		reply.copy("Specify zero or two axes in M557");
-		return GCodeResult::error;
-	}
-	const bool axesSeen = axesSeenCount > 0;
-
-	uint32_t numPoints[2];
-	if (gb.TryGetUIArray('P', 2, numPoints, reply, seenP, true))
-	{
-		return GCodeResult::error;
-	}
-	if (!seenP)
-	{
-		if (gb.TryGetFloatArray('S', 2, spacings, reply, seenS, true))
-		{
-			return GCodeResult::error;
-		}
-	}
-
-	float radius = -1.0;
-	gb.TryGetFValue('R', radius, seenR);
-
-	if (!axesSeen && !seenR && !seenS && !seenP)
-	{
-		// Just print the existing grid parameters
-		if (defaultGrid.IsValid())
-		{
-			reply.copy("Grid: ");
-			defaultGrid.PrintParameters(reply);
-		}
-		else
-		{
-			reply.copy("Grid is not defined");
-		}
-		return GCodeResult::ok;
-	}
-
-	if (!axesSeen && !seenR)
-	{
-		// Must have given just the S or P parameter
-		reply.copy("specify at least radius or two axis ranges in M557");
-		return GCodeResult::error;
-	}
-
-	if (axesSeen)
-	{
-		// Seen both axes
-		if (seenP)
-		{
-			// In the following, we multiply the spacing by 0.9999 to ensure that when we divide the axis range by the spacing, we get the correct number of points
-			// Otherwise, for some values we occasionally get one less point
-			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
-			{
-				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1) * 0.9999;
-			}
-			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
-			{
-				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1) * 0.9999;
-			}
-		}
-	}
-	else
-	{
-		// Seen R
-		if (radius > 0.0)
-		{
-			float effectiveXRadius;
-			if (seenP && numPoints[0] >= 2)
-			{
-				effectiveXRadius = radius - 0.1;
-				if (numPoints[1] % 2 == 0)
-				{
-					effectiveXRadius *= fastSqrtf(1.0 - 1.0/(float)((numPoints[1] - 1) * (numPoints[1] - 1)));
-				}
-				spacings[0] = (2 * effectiveXRadius)/(numPoints[0] - 1);
-			}
-			else
-			{
-				effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
-			}
-			axis0Values[0] = -effectiveXRadius;
-			axis0Values[1] =  effectiveXRadius + 0.1;
-
-			float effectiveYRadius;
-			if (seenP && numPoints[1] >= 2)
-			{
-				effectiveYRadius = radius - 0.1;
-				if (numPoints[0] % 2 == 0)
-				{
-					effectiveYRadius *= fastSqrtf(1.0 - 1.0/(float)((numPoints[0] - 1) * (numPoints[0] - 1)));
-				}
-				spacings[1] = (2 * effectiveYRadius)/(numPoints[1] - 1);
-			}
-			else
-			{
-				effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
-			}
-			axis1Values[0] = -effectiveYRadius;
-			axis1Values[1] =  effectiveYRadius + 0.1;
-		}
-		else
-		{
-			reply.copy("M577 radius must be positive unless X and Y are specified");
-			return GCodeResult::error;
-		}
-	}
-
-	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
-	reprap.MoveUpdated();
-	if (ok)
-	{
-		return GCodeResult::ok;
-	}
-
-	const float axis1Range = axesSeen ? axis0Values[1] - axis0Values[0] : 2 * radius;
-	const float axis2Range = axesSeen ? axis1Values[1] - axis1Values[0] : 2 * radius;
-	reply.copy("bad grid definition: ");
-	defaultGrid.PrintError(axis1Range, axis2Range, reply);
-	return GCodeResult::error;
-}
 
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -725,10 +548,12 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 			// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
 			// So if we have more visible axes than before, then we need to update their positions to get them in sync.
-			for (MovementState& ms : moveStates)
+			//TODO for multiple motion systems, is this correct? Other input channel must wait until we have finished.
+			for (size_t i = 0; i < NumMovementSystems; ++i)
 			{
+				MovementState& ms = moveStates[i];
 				ToolOffsetTransform(ms);										// ensure that the position of any new axes are updated in moveBuffer
-				reprap.GetMove().SetNewPosition(ms.coords, true);				// tell the Move system where the axes are
+				reprap.GetMove().SetNewPosition(ms.coords, true, i);			// tell the Move system where the axes are
 			}
 		}
 #if SUPPORT_CAN_EXPANSION
@@ -1182,7 +1007,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 	DisableDrives();									// all motors off
 
-	if (firmwareUpdateModuleMap.IsEmpty())					// have we worked out which modules to update?
+	if (firmwareUpdateModuleMap.IsEmpty())				// have we worked out which modules to update?
 	{
 		// Find out which modules we have been asked to update
 		if (gb.Seen('S'))
@@ -1205,7 +1030,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		}
 		else
 		{
-			firmwareUpdateModuleMap.SetBit(0);		// no modules specified, so update module 0 to match old behaviour
+			firmwareUpdateModuleMap.SetBit(0);			// no modules specified, so update module 0 to match old behaviour
 		}
 
 		if (firmwareUpdateModuleMap.IsEmpty())
@@ -1729,11 +1554,12 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			g68Angle = angle;
 		}
+		UpdateCurrentUserPosition(gb);
 	}
 	return GCodeResult::ok;
 }
 
-// Account for coordinate rotation. Only called wheh the angle to rotate is nonzero, so we don't check that here.
+// Account for coordinate rotation. Only called when the angle to rotate is nonzero, so we don't check that here.
 void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
 {
 	const float angle = angleDegrees * DegreesToRadians;
@@ -1953,7 +1779,6 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	// Get the event message
 	String<StringLength100> eventText;
 	const MessageType mt = Event::GetTextDescription(eventText.GetRef());
-	platform.MessageF(mt, "%s\n", eventText.c_str());					// tell the user about the event and log it
 
 	// Get the name of the macro file that we should look for
 	String<StringLength50> macroName;
@@ -1979,13 +1804,16 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	// We didn't execute the macro, so do the default action
 	if (Event::GetDefaultPauseReason() == PrintPausedReason::dontPause)
 	{
+		platform.MessageF(mt, "%s\n", eventText.c_str());				// record the event on the console and log it
 		Event::FinishedProcessing();									// nothing more to do
 	}
 	else
 	{
 		// It's a serious event that causes the print to pause by default, so send an alert
-		String<StringLength100> eventText;
-		Event::GetTextDescription(eventText.GetRef());
+		if ((mt & LogLevelMask) != 0)
+		{
+			platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
+		}
 		const bool isPrinting = IsReallyPrinting();
 		platform.SendAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification", 1, 0.0, AxesBitmap());
 		if (IsReallyPrinting())
@@ -2002,10 +1830,10 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 
 #if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
 
-// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
+// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build so that we can test it in the ATE
 void GCodes::SetAux0CommsProperties(uint32_t mode) const noexcept
 {
-	auxGCode->SetCommsProperties(mode);
+	AuxGCode()->SetCommsProperties(mode);
 }
 
 #endif

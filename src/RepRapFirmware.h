@@ -141,7 +141,12 @@ namespace CanInterface
 #include <RRF3Common.h>
 
 #define THROWS(...)				// expands to nothing, for providing exception specifications
+
+// Error reporting for functions that are allowed to throw
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
+
+// Error reporting for functions that are not allowed to throw
+#define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 // Assertion mechanism
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
@@ -319,11 +324,11 @@ class ExpansionManager;
 #if SAME70
 typedef double floatc_t;						// type of matrix element used for calibration
 #else
-// We are more memory-constrained on the older processors
+// We are more memory-constrained on the other processors and they don't support double precision
 typedef float floatc_t;							// type of matrix element used for calibration
 #endif
 
-#if defined(DUET3) || STM32H7
+#if defined(DUET3) || defined(DUET3MINI) || STM32H7
 typedef Bitmap<uint32_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
 #else
 typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
@@ -507,6 +512,12 @@ constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Ma
 
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
+
+// Convert microseconds to step clocks, rounding up to the next step clock
+static inline constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
+{
+	return (uint32_t)ceilf((float)StepClockRate * 0.000001 * us);
+}
 
 // Functions to convert speeds and accelerations between seconds and step clocks
 static inline constexpr float ConvertSpeedFromMmPerSec(float speed) noexcept

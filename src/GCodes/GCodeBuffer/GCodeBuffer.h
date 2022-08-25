@@ -78,6 +78,8 @@ public:
 	inline bool SeenAny(const char *s) const noexcept { return SeenAny(Bitmap<uint32_t>(ParametersToBitmap(s))); }
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
+	float GetPositiveFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than zero
+	float GetNonNegativeFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than or equal to zero
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
 	float GetSpeed() THROWS(GCodeException);										// Get a speed in mm/min or inches/min and convert it to mm/step_clock
 	float GetSpeedFromMm(bool useSeconds) THROWS(GCodeException);					// Get a speed in mm/min or optionally /sec and convert it to mm/step_clock
@@ -115,8 +117,8 @@ public:
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
-	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
-	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
+	void TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
+	void TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen, bool allowEmpty = false) THROWS(GCodeException);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException);
 
@@ -126,15 +128,23 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
+	size_t GetActiveQueueNumber() const noexcept				// Get the movement queue number that this buffer uses
+	{
 #if SUPPORT_ASYNC_MOVES
-	size_t GetActiveQueueNumber() const noexcept { return machineState->GetCommandedQueue(); }	// Get the movement queue number that this buffer uses
+		return machineState->GetCommandedQueue();
+#else
+		return 0;
+#endif
+	}
+
+#if SUPPORT_ASYNC_MOVES
 	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
 	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
+	size_t GetOwnQueueNumber() const noexcept { return machineState->GetOwnQueue(); }
 	void ExecuteAll() noexcept { machineState->ExecuteAll(); }
 	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
 	bool ExecutingAll() const noexcept { return machineState->ExecutingAll(); }
 	size_t GetQueueNumberToLock() const noexcept { return machineState->GetQueueNumberToLock(); }
-
 #endif
 
 	void SetCommsProperties(uint32_t arg) noexcept;
@@ -154,7 +164,7 @@ public:
 	const char *GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)
-	bool PopState() noexcept;									// Pop state returning true if successful (i.e. no stack underrun)
+	bool PopState(bool withinSameFile) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
 
 	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
 	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
@@ -263,15 +273,23 @@ public:
 	void AddParameters(VariableSet& vars, int codeRunning) noexcept;
 	VariableSet& GetVariables() const noexcept;
 
+	[[noreturn]] void ThrowGCodeException(const char *msg) const THROWS(GCodeException);
+	[[noreturn]] void ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException);
+
 #if SUPPORT_COORDINATE_ROTATION
 	bool DoingCoordinateRotation() const noexcept;
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	bool MustWaitForSyncWith(const GCodeBuffer& other) noexcept;
+	bool IsLaterThan(const GCodeBuffer& other) const noexcept;
 #endif
 
 	Mutex mutex;
+
+#if SUPPORT_ASYNC_MOVES
+	enum class SyncState { running, syncing, synced } ;
+	SyncState syncState;
+#endif
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -317,9 +335,6 @@ private:
 	GCodeResult lastResult;
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
-#if SUPPORT_ASYNC_MOVES
-	bool waitingForSync;
-#endif
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 

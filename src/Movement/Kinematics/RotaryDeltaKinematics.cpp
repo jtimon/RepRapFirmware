@@ -35,7 +35,7 @@ constexpr ObjectModelTableEntry RotaryDeltaKinematics::objectModelTable[] =
 
 constexpr uint8_t RotaryDeltaKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(RotaryDeltaKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotaryDeltaKinematics, RoundBedKinematics)
 
 #endif
 
@@ -104,37 +104,20 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		{
 			bool seen = false;
 			size_t numValues = 3;
-			if (gb.TryGetFloatArray('U', numValues, armLengths, reply, seen, true))
-			{
-				error = true;
-				return true;
-			}
+			gb.TryGetFloatArray('U', numValues, armLengths, seen, true);
+			numValues = 3;
+			gb.TryGetFloatArray('L', numValues, rodLengths, seen, true);
 
 			numValues = 3;
-			if (gb.TryGetFloatArray('L', numValues, rodLengths, reply, seen, true))
-			{
-				error = true;
-				return true;
-			}
-
-			numValues = 3;
-			if (gb.TryGetFloatArray('H', numValues, bearingHeights, reply, seen, true))
-			{
-				error = true;
-				return true;
-			}
+			gb.TryGetFloatArray('H', numValues, bearingHeights, seen, true);
 
 			numValues = 2;
-			if (gb.TryGetFloatArray('A', numValues, minMaxArmAngles, reply, seen, false))
-			{
-				error = true;
-				return true;
-			}
+			gb.TryGetFloatArray('A', numValues, minMaxArmAngles, seen, false);
 
 			gb.TryGetFValue('R', radius, seen);
 			if (gb.Seen('B'))
 			{
-				printRadius = gb.GetFValue();
+				printRadius = gb.GetPositiveFValue();
 				// Set the axis limits so that DWC reports them correctly (they are not otherwise used for deltas, except Z min)
 				Platform& p = reprap.GetPlatform();
 				p.SetAxisMinimum(X_AXIS, -printRadius, false);

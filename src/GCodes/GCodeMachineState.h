@@ -230,7 +230,8 @@ public:
 		localPush : 1,							// true if this stack frame was created by M120, so we use the parent variables
 		macroRestartable : 1,					// true if the current macro has used M98 R1 to say that it can be interrupted and restarted
 		firstCommandAfterRestart : 1,			// true if this is the first command after restarting a macro that was interrupted
-		commandRepeated : 1						// true if the current command is being repeated because it returned GCodeResult::notFinished the first time
+		commandRepeated : 1,					// true if the current command is being repeated because it returned GCodeResult::notFinished the first time
+		inverseTimeMode : 1						// true if using inverse time mode
 #if HAS_SBC_INTERFACE
 		, lastCodeFromSbc : 1,
 		macroStartedByCode : 1,
@@ -240,12 +241,14 @@ public:
 
 	uint16_t stateParameter;					// a parameter, the meaning of which depends on what state we are in
 	Compatibility compatibility;				// which firmware we are emulating
+
 #if SUPPORT_ASYNC_MOVES
 	void SetCommandedQueue(size_t qn) noexcept { commandedQueueNumber = qn; }
 	size_t GetCommandedQueue() const noexcept { return commandedQueueNumber; }
 	bool Executing() const noexcept { return executeAllCommands || commandedQueueNumber == ownQueueNumber; }
 	void ExecuteAll() noexcept { executeAllCommands = true; }
 	void ExecuteOnly(size_t qn) noexcept { ownQueueNumber = qn; executeAllCommands = false; }
+	size_t GetOwnQueue() const noexcept { return ownQueueNumber; }
 	bool ExecutingAll() const noexcept { return executeAllCommands; }
 	size_t GetQueueNumberToLock() const noexcept { return (executeAllCommands) ? commandedQueueNumber : ownQueueNumber; }
 #endif
@@ -263,8 +266,9 @@ public:
 
 	// Set the error message and associated state
 	void SetError(const char *msg) noexcept;
+	void SetError(const GCodeException& exc) noexcept;
 	void SetWarning(const char *msg) noexcept;
-	void RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept;
+	void RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept;
 
 	// Copy values that may have been altered into this state record
 	// Called after running config.g and after running resurrect.g
@@ -279,7 +283,7 @@ public:
 
 private:
 	GCodeMachineState *previous;
-	const char *errorMessage;
+	GCodeException errorMessage;				// we use a GCodeException to store a possible message and a parameter
 	uint8_t blockNesting;
 	GCodeState state;
 	GCodeResult stateMachineResult;				// the worst status (ok, warning or error) that we encountered while running the state machine

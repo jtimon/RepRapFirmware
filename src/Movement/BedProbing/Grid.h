@@ -35,7 +35,6 @@ public:
 	uint32_t NumAxisPoints(size_t axis) const noexcept pre(axis < 2) { return nums[axis]; }
 	uint32_t NumPoints() const noexcept { return nums[0] * nums[1]; }
 	float GetCoordinate(size_t axis, size_t coordinateIndex) const noexcept pre(axis < 2) { return mins[axis] + (coordinateIndex * spacings[axis]); }
-	bool IsInRadius(float x, float y) const noexcept;
 	bool IsValid() const noexcept { return isValid; }
 
 	bool Set(const char axisLetters[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept;
@@ -48,9 +47,10 @@ public:
 	pre(!IsValid());
 
 protected:
-	DECLARE_OBJECT_MODEL
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	bool IsInRadius(float x, float y) const noexcept;
 	void CheckValidity(bool setNum0Num1) noexcept;
 
 	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
@@ -84,9 +84,14 @@ public:
 	void SetGridHeight(size_t axis0Index, size_t axis1Index, float height) noexcept;	// Set the height of a grid point
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept	// Save the grid to file returning true if an error occurred
-	pre(IsValid());
-	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the grid from file returning true if an error occurred
+	bool SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept			// Save the grid to file returning true if an error occurred
+		pre(IsValid());
+
+	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r
+# if SUPPORT_PROBE_POINTS_FILE
+						, bool isPointsFile
+# endif
+						) noexcept;	// Load the grid from file returning true if an error occurred
 
 	const char *GetFileName() const noexcept { return fileName.c_str(); }
 #endif
@@ -96,16 +101,27 @@ public:
 	bool UseHeightMap(bool b) noexcept;
 	bool UsingHeightMap() const noexcept { return useMap; }
 
-	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept;
-																	// Return number of points probed, mean and RMS deviation, min and max error
-	void ExtrapolateMissing() noexcept;								// Extrapolate missing points to ensure consistency
+	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept;	// Return number of points probed, mean and RMS deviation, min and max error
+	bool CanProbePoint(size_t axis0Index, size_t axis1Index) const noexcept;			// Return true if we can probe this point
+	void ExtrapolateMissing() noexcept;													// Extrapolate missing points to ensure consistency
+
+#if SUPPORT_PROBE_POINTS_FILE
+	void ClearProbePointsInvalid() noexcept { gridPointInvalid.ClearAll(); }
+#endif
 
 #ifdef LPC_DEBUG
 	void Diagnostics(MessageType mtype) noexcept;
 #endif
 
 private:
-	static const char * const HeightMapComment;						// The start of the comment we write at the start of the height map file
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	// Increase the version number in the following string whenever we change the format of the height map file significantly.
+	// Adding more fields to the header row can be handled in GridDefinition::ReadParameters() though.
+	static constexpr const char* HeightMapComment = "RepRapFirmware height map file v2";	// The start of the comment we write at the start of the height map file
+# if SUPPORT_PROBE_POINTS_FILE
+	static constexpr const char* PointsFileComment = "RepRapFirmware probe points file v2";	// The start of the comment we write at the start of the points map file
+# endif
+#endif
 
 	GridDefinition def;
 	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed
@@ -113,12 +129,19 @@ private:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	String<MaxFilenameLength> fileName;								// The name of the file that this height map was loaded from or saved to
 #endif
+#if SUPPORT_PROBE_POINTS_FILE
+	LargeBitmap<MaxGridProbePoints> gridPointInvalid;				// Bitmap of which points are not valid
+#endif
 	bool useMap;													// True to do bed compensation
 
-	uint32_t GetMapIndex(uint32_t axis0Index, uint32_t axis1Index) const noexcept { return (axis1Index * def.NumAxisPoints(0)) + axis0Index; }
+	size_t GetMapIndex(size_t axis0Index, size_t axis1Index) const noexcept { return (axis1Index * def.NumAxisPoints(0)) + axis0Index; }
 	void SetGridHeight(size_t index, float height) noexcept;							// Set the height of a grid point
 
-	float InterpolateAxis0Axis1(uint32_t axis0Index, uint32_t axis1Index, float axis0Frac, float axis1Frac) const noexcept;
+	float InterpolateAxis0Axis1(size_t axis0Index, size_t axis1Index, float axis0Frac, float axis1Frac) const noexcept;
+
+#if SUPPORT_PROBE_POINTS_FILE
+	bool InterpolateMissingPoint(size_t axis0Index, size_t axis1Index, float& height) const noexcept;
+#endif
 };
 
 #endif /* SRC_MOVEMENT_GRID_H_ */

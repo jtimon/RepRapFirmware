@@ -23,8 +23,9 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	checkEndstops = false;
 	reduceAcceleration = false;
 	hasPositiveExtrusion = false;
+	inverseTimeMode = false;
 	filePos = noFilePosition;
-	currentTool = nullptr;
+	movementTool = nullptr;
 	cosXyAngle = 1.0;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -54,7 +55,7 @@ void MovementState::Reset() noexcept
 	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
 
 	currentZHop = 0.0;								// clear this before calling ToolOffsetInverseTransform
-	currentTool = nullptr;
+	movementTool = currentTool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;
 	speedFactor = 1.0;
@@ -101,7 +102,17 @@ void MovementState::ClearMove() noexcept
 
 void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Segments left Q%u: %u\n", moveSystemNumber, segmentsLeft);
+	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
+#if SUPPORT_ASYNC_MOVES
+											", axes/extruders owned %03x"
+#endif
+												"\n",
+													moveSystemNumber,
+													segmentsLeft
+#if SUPPORT_ASYNC_MOVES
+													, (unsigned int)axesAndExtrudersOwned.GetRaw()
+#endif
+									);
 	codeQueue->Diagnostics(mtype, moveSystemNumber);
 }
 
@@ -195,7 +206,6 @@ float MovementState::GetCurrentToolOffset(size_t axis) const noexcept
 void MovementState::StopPrinting(GCodeBuffer& gb) noexcept
 {
 	currentObjectCancelled = true;
-	virtualToolNumber = GetCurrentToolNumber();
 }
 
 // We are currently not printing because the current object was cancelled, but now we need to print again
@@ -204,9 +214,9 @@ void MovementState::ResumePrinting(GCodeBuffer& gb) noexcept
 	currentObjectCancelled = false;
 	printingJustResumed = true;
 	reprap.GetGCodes().SavePosition(gb, ResumeObjectRestorePointNumber);	// save the position we should be at for the start of the next move
-	if (GetCurrentToolNumber() != virtualToolNumber)						// if the wrong tool is loaded
+	if (GetCurrentToolNumber() != newToolNumber)							// if the wrong tool is loaded
 	{
-		reprap.GetGCodes().StartToolChange(gb, virtualToolNumber, DefaultToolChangeParam);
+		reprap.GetGCodes().StartToolChange(gb, DefaultToolChangeParam);
 	}
 }
 

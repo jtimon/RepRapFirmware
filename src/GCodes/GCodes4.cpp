@@ -351,7 +351,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChange1:						// release the old tool (if any), then run tpre for the new tool
 	case GCodeState::m109ToolChange1:					// release the old tool (if any), then run tpre for the new tool
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tfree.g to finish executing
+		if (LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+										, false
+#endif
+												))		// wait for tfree.g to finish executing
 		{
 			if (ms.currentTool != nullptr)
 			{
@@ -374,7 +378,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChange2:						// select the new tool if it exists and run tpost
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
+		if (LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+										, false
+#endif
+												))		// wait for tpre.g to finish executing
 		{
 			ms.SelectTool(ms.newToolNumber, IsSimulating());
 			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
@@ -391,7 +399,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChangeComplete:
 	case GCodeState::m109ToolChangeComplete:
-		if (LockMovementAndWaitForStandstill(gb))		// wait for the move to height to finish
+		if (LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+										, false
+#endif
+												))		// wait for the move to height to finish
 		{
 			gb.LatestMachineState().feedRate = ms.toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
@@ -511,7 +523,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
 			ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition = ms.pauseRestorePoint.virtualExtruderPosition;			// reset the extruder position in case we are receiving absolute extruder moves
-			fileGCode->LatestMachineState().feedRate = ms.pauseRestorePoint.feedRate;
+			FileGCode()->LatestMachineState().feedRate = ms.pauseRestorePoint.feedRate;
 			ms.moveFractionToSkip = ms.pauseRestorePoint.proportionDone;
 			ms.restartInitialUserC0 = ms.pauseRestorePoint.initialUserC0;
 			ms.restartInitialUserC1 = ms.pauseRestorePoint.initialUserC1;
@@ -520,7 +532,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			pauseState = PauseState::notPaused;
 			if (ms.pausedInMacro)
 			{
-				fileGCode->OriginalMachineState().firstCommandAfterRestart = true;
+				FileGCode()->OriginalMachineState().firstCommandAfterRestart = true;
 			}
 			gb.SetState(GCodeState::normal);
 		}
@@ -587,20 +599,22 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::flashing2:
+#if HAS_MASS_STORAGE
 		if (firmwareUpdateModuleMap.IsBitSet(0))
 		{
 			// Update main firmware
 			firmwareUpdateModuleMap.Clear();
-			String<MaxFilenameLength> filenameString;
 			try
 			{
+				String<MaxFilenameLength> filenameString;
 				bool dummy;
 				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
-				reprap.UpdateFirmware(filenameString.GetRef());
+				reprap.UpdateFirmware(IAP_UPDATE_FILE, filenameString.c_str());
 				// The above call does not return unless an error occurred
 			}
 			catch (const GCodeException&) { }
 		}
+#endif
 		isFlashing = false;
 		gb.SetState(GCodeState::normal);
 		break;
@@ -612,7 +626,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.ExecuteAll();			// only fileGCode gets here so it needs to execute moves for all commands
 #endif
 			gb.SetState(GCodeState::normal);
-			if (!DoFileMacro(*fileGCode, STOP_G, false, AsyncSystemMacroCode))
+			if (!DoFileMacro(*FileGCode(), STOP_G, false, AsyncSystemMacroCode))
 			{
 				reprap.GetHeat().SwitchOffAll(true);
 			}
@@ -624,11 +638,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Move to the current probe point
 			Move& move = reprap.GetMove();
-			const GridDefinition& grid = move.AccessHeightMap().GetGrid();
-			const float axis0Coord = grid.GetCoordinate(0, gridAxis0index);
-			const float axis1Coord = grid.GetCoordinate(1, gridAxis1index);
-			if (grid.IsInRadius(axis0Coord, axis1Coord))
+			const HeightMap& hm = move.AccessHeightMap();
+			if (hm.CanProbePoint(gridAxis0index, gridAxis1index))
 			{
+				const GridDefinition& grid = hm.GetGrid();
+				const float axis0Coord = grid.GetCoordinate(0, gridAxis0index);
+				const float axis1Coord = grid.GetCoordinate(1, gridAxis1index);
 				const size_t axis0Num = grid.GetAxisNumber(0);
 				const size_t axis1Num = grid.GetAxisNumber(1);
 				AxesBitmap axes;
@@ -654,7 +669,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else
 				{
-					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because Z probe cannot reach it\n", grid.GetAxisLetter(0), (double)axis0Coord, grid.GetAxisLetter(1), (double)axis1Coord);
+					platform.MessageF(WarningMessage, "Skipping grid point %c=%.1f, %c=%.1f because the Z probe cannot reach it\n", grid.GetAxisLetter(0), (double)axis0Coord, grid.GetAxisLetter(1), (double)axis1Coord);
 					gb.SetState(GCodeState::gridProbing6);
 				}
 			}
@@ -1073,7 +1088,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
 					ms.coords[Z_AXIS] = zp->GetActualTriggerHeight();
-					reprap.GetMove().SetNewPosition(ms.coords, false);
+					reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
@@ -1157,7 +1172,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, false);
+				reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
 
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
@@ -1184,7 +1199,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
 				// This is useful because it adjusts the XY position to account for the probe offset.
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, false);
+				reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
 				ToolOffsetInverseTransform(ms);
 			}
 			else if (g30SValue >= -1)
@@ -1337,6 +1352,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (ms.currentTool != nullptr)
 			{
 				SetMoveBufferDefaults(ms);
+				ms.movementTool = ms.currentTool;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
@@ -1356,6 +1372,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (ms.currentTool != nullptr && ms.currentTool->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults(ms);
+				ms.movementTool = ms.currentTool;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 				{
@@ -1422,7 +1439,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const uint32_t ms = millis() - timingStartMillis;
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
-				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMbyte file was %.2fMbytes/sec\n", (double)fileMbytes, (double)mbPerSec);
+				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMByte file was %.2fMBytes/sec\n", (double)fileMbytes, (double)mbPerSec);
 				sdTimingFile->Close();
 
 				sdTimingFile = platform.OpenFile(Platform::GetGCodeDir(), TimingFileName, OpenMode::read);
@@ -1464,7 +1481,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
 				sdTimingFile->Close();
-				reply.printf("SD read speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
+				reply.printf("SD read speed for %.1fMByte file was %.2fMBytes/sec", (double)fileMbytes, (double)mbPerSec);
 				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.SetState(GCodeState::normal);
 				break;
@@ -1501,11 +1518,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				gb.SetState(GCodeState::finishedProcessingEvent);	// already paused or pausing
 			}
-			else if (LockMovementAndWaitForStandstill(gb))
+			else
 			{
 				const PrintPausedReason pauseReason = Event::GetDefaultPauseReason();
-				gb.SetState(GCodeState::finishedProcessingEvent);
-				DoPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
+				// In the following, if DoPause fails because it can't get the movement lock then it will not change the state, so we will return here to try again
+				(void)DoAsynchronousPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
 			}
 		}
 		break;
@@ -1527,7 +1544,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We completed a command, so unlock resources and tell the host about it
 		gb.StopTimer();
 		UnlockAll(gb);
-		gb.LatestMachineState().RetrieveStateMachineResult(stateMachineResult, reply);
+		gb.LatestMachineState().RetrieveStateMachineResult(gb, reply, stateMachineResult);
 		HandleReply(gb, stateMachineResult, reply.c_str());
 
 		CheckForDeferredPause(gb);
@@ -1536,7 +1553,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if HAS_SBC_INTERFACE
 	if (reportPause)
 	{
-		fileGCode->Invalidate();
+		FileGCode()->Invalidate();
 		reprap.GetSbcInterface().ReportPause();
 	}
 #endif

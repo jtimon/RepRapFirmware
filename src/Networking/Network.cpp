@@ -21,29 +21,32 @@
 #include "NetworkInterface.h"
 
 #if HAS_LWIP_NETWORKING
-#include "LwipEthernet/LwipEthernetInterface.h"
+# include "LwipEthernet/LwipEthernetInterface.h"
 #endif
 
 #if HAS_W5500_NETWORKING
-#include "W5500Ethernet/W5500Interface.h"
+# include "W5500Ethernet/W5500Interface.h"
 #endif
 
 #if HAS_WIFI_NETWORKING
-#include "ESP8266WiFi/WiFiInterface.h"
+# include "ESP8266WiFi/WiFiInterface.h"
 #endif
 
 #if HAS_RTOSPLUSTCP_NETWORKING
-#include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
+# include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
 #if SUPPORT_HTTP
-#include "HttpResponder.h"
+# include "HttpResponder.h"
 #endif
 #if SUPPORT_FTP
-#include "FtpResponder.h"
+# include "FtpResponder.h"
 #endif
 #if SUPPORT_TELNET
-#include "TelnetResponder.h"
+# include "TelnetResponder.h"
+#endif
+#if SUPPORT_MULTICAST_DISCOVERY
+# include "MulticastDiscovery/MulticastResponder.h"
 #endif
 
 #if LPC17xx
@@ -87,7 +90,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 	interfaces[0] = new LwipEthernetInterface(p);
 #elif defined(DUET_NG) || defined(DUET3MINI_V04)
 	interfaces[0] = nullptr;			// we set this up in Init()
-#elif defined(FMDC_V02)
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	interfaces[0] = new WiFiInterface(p);
 #elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
@@ -104,21 +107,27 @@ Network::Network(Platform& p) noexcept : platform(p)
 }
 
 #if SUPPORT_OBJECT_MODEL
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
-constexpr ObjectModelArrayDescriptor Network::interfacesArrayDescriptor =
+constexpr ObjectModelArrayTableEntry Network::objectModelArrayTable[] =
 {
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
+	// 0. Interfaces
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
 #if HAS_NETWORKING
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetLastIndex()]); }
 #endif
+	}
 };
 
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Network)
 
 constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
@@ -128,7 +137,7 @@ constexpr ObjectModelTableEntry Network::objectModelTable[] =
 	{ "corsSite",	OBJECT_MODEL_FUNC(self->GetCorsSite()),					ObjectModelEntryFlags::none },
 # endif
 	{ "hostname",	OBJECT_MODEL_FUNC(self->GetHostname()),					ObjectModelEntryFlags::none },
-	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfacesArrayDescriptor),	ObjectModelEntryFlags::none },
+	{ "interfaces", OBJECT_MODEL_FUNC_ARRAY(0),								ObjectModelEntryFlags::none },
 #endif
 	{ "name",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetName()), 			ObjectModelEntryFlags::none },
 };
@@ -247,6 +256,11 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 #if SUPPORT_TELNET
 			case TelnetProtocol:
 				TelnetResponder::Disable();
+				break;
+#endif
+
+#if SUPPORT_MULTICAST_DISCOVERY
+			case MulticastDiscoveryProtocol:
 				break;
 #endif
 
@@ -435,6 +449,10 @@ void Network::Activate() noexcept
 	}
 # endif
 
+#if SUPPORT_MULTICAST_DISCOVERY
+	MulticastResponder::Init();
+#endif
+
 	// Finally, create the network task
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
 #endif
@@ -519,6 +537,9 @@ void Network::Spin() noexcept
 			if (nr == nullptr)
 			{
 				nr = responders;		// 'responders' can't be null at this point
+#if SUPPORT_MULTICAST_DISCOVERY
+				MulticastResponder::Spin();
+#endif
 			}
 			doneSomething = nr->Spin();
 			nr = nr->GetNext();
@@ -540,7 +561,12 @@ void Network::Spin() noexcept
 		{
 			slowLoop = dt;
 		}
-		RTOSIface::Yield();
+
+		if (!doneSomething)
+		{
+			TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority);		// restore normal priority
+			RTOSIface::Yield();
+		}
 	}
 }
 #endif
@@ -571,6 +597,10 @@ void Network::Diagnostics(MessageType mtype) noexcept
 	{
 		iface->Diagnostics(mtype);
 	}
+#endif
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	MulticastResponder::Diagnostics(mtype);
 #endif
 }
 
@@ -605,6 +635,33 @@ IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() :
 #endif
 					IPAddress();
+}
+
+IPAddress Network::GetNetmask(unsigned int interface) const noexcept
+{
+	return
+#if HAS_NETWORKING
+			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetNetmask() :
+#endif
+					IPAddress();
+}
+
+IPAddress Network::GetGateway(unsigned int interface) const noexcept
+{
+	return
+#if HAS_NETWORKING
+			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetGateway() :
+#endif
+					IPAddress();
+}
+
+bool Network::UsingDhcp(unsigned int interface) const noexcept
+{
+#if HAS_NETWORKING
+	return interface < NumNetworkInterfaces && interfaces[interface]->UsingDhcp();
+#else
+	return false;
+#endif
 }
 
 void Network::SetHostname(const char *name) noexcept

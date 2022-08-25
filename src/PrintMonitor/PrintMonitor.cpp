@@ -38,29 +38,33 @@ ReadWriteLock PrintMonitor::printMonitorLock;
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
 
-const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
+const ObjectModelArrayTableEntry PrintMonitor::objectModelArrayTable[] =
 {
-	&printMonitorLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
-			{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
+	// 0. Filaments
+		{
+		&printMonitorLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
+				{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetLastIndex()], 1); }
+	},
+	// 1. Thumbnails
+	{
+		&printMonitorLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
+				{
+					size_t count = 0;
+					while (count < MaxThumbnails && ((const PrintMonitor*)self)->printingFileInfo.thumbnails[count].IsValid())
+					{
+						count++;
+					}
+					return count;
+				},
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
+	}
 };
 
-const ObjectModelArrayDescriptor PrintMonitor::thumbnailArrayDescriptor =
-{
-	&printMonitorLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
-			{
-				size_t count = 0;
-				while (count < MaxThumbnails && ((const PrintMonitor*)self)->printingFileInfo.thumbnails[count].IsValid())
-				{
-					count++;
-				}
-				return count;
-			},
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(PrintMonitor)
 
 constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
@@ -82,7 +86,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
 	// 1. ParsedFileInfo members
-	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(&filamentArrayDescriptor),							 										ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC_ARRAY(0),							 																ObjectModelEntryFlags::none },
 	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
 	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
@@ -92,7 +96,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
 	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
 	{ "size",				OBJECT_MODEL_FUNC(self->printingFileInfo.fileSize),																	ObjectModelEntryFlags::none },
-	{ "thumbnails",			OBJECT_MODEL_FUNC_NOSELF(&thumbnailArrayDescriptor),																ObjectModelEntryFlags::none },
+	{ "thumbnails",			OBJECT_MODEL_FUNC_ARRAY(1),																							ObjectModelEntryFlags::none },
 
 	// 2. ParsedFileInfo.thumbnails[] members
 	{ "format",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].format.ToString()),						ObjectModelEntryFlags::none },
@@ -231,11 +235,7 @@ void PrintMonitor::Spin() noexcept
 
 	// Otherwise collect some stats after a certain period of time
 	const uint64_t now = millis64();
-	if (isPrinting
-#if SUPPORT_ROLAND
-		&& !reprap.GetRoland()->Active()
-#endif
-		&& (uint32_t)now - lastUpdateTime > UpdateIntervalMillis)
+	if (isPrinting && (uint32_t)now - lastUpdateTime > UpdateIntervalMillis)
 	{
 		if (gCodes.GetPauseState() != PauseState::notPaused)
 		{
@@ -391,7 +391,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 	ReadLocker locker(printMonitorLock);
 
 	// We can't provide an estimation if we don't have any information about the file
-	if (!printingFileParsed)
+	if (!printingFileParsed || !isPrinting)
 	{
 		return 0.0;
 	}

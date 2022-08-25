@@ -23,7 +23,7 @@
 # elif defined(DUET3MINI_V04)
 #  define DUET3MINI		1
 #  define PLATFORM Duet3Mini
-# elif defined(FMDC_V02)
+# elif defined(FMDC_V02) || defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
 # elif defined(__LPC17xx__)
@@ -74,6 +74,10 @@
 
 #ifndef SUPPORT_ILI9488_LCD
 # define SUPPORT_ILI9488_LCD	0
+#endif
+
+#ifndef USE_FONT_CHIP
+# define USE_FONT_CHIP		0
 #endif
 
 #define SUPPORT_DIRECT_LCD		(SUPPORT_12864_LCD || SUPPORT_ILI9488_LCD)
@@ -191,6 +195,10 @@
 # define SUPPORT_TELNET			HAS_NETWORKING
 #endif
 
+#ifndef SUPPORT_MULTICAST_DISCOVERY
+# define SUPPORT_MULTICAST_DISCOVERY	0
+#endif
+
 #ifndef HAS_SBC_INTERFACE
 # define HAS_SBC_INTERFACE		0
 #endif
@@ -228,6 +236,10 @@
 
 #ifndef SUPPORT_ACCELEROMETERS
 # define SUPPORT_ACCELEROMETERS	0
+#endif
+
+#ifndef SUPPORT_PROBE_POINTS_FILE
+# define SUPPORT_PROBE_POINTS_FILE	0
 #endif
 
 // Optional kinematics support, to allow us to reduce flash memory usage

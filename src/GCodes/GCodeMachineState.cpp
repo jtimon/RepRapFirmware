@@ -20,7 +20,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  selectedPlane(0), drivesRelative(false), axesRelative(false),
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false), macroRestartable(false), firstCommandAfterRestart(false), commandRepeated(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false), macroRestartable(false), firstCommandAfterRestart(false), commandRepeated(false), inverseTimeMode(false),
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
 #endif
@@ -50,6 +50,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
 	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(withinSameFile), firstCommandAfterRestart(prev.firstCommandAfterRestart), commandRepeated(false),
+	  inverseTimeMode(withinSameFile && prev.inverseTimeMode),
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
@@ -184,6 +185,7 @@ void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 	feedRate = other.feedRate;
 	volumetricExtrusion = other.volumetricExtrusion;
 	usingInches = other.usingInches;
+	inverseTimeMode = other.inverseTimeMode;
 }
 
 // Set the error message and associated state
@@ -191,7 +193,16 @@ void GCodeMachineState::SetError(const char *msg) noexcept
 {
 	if (stateMachineResult != GCodeResult::error)
 	{
-		errorMessage = msg;
+		errorMessage = GCodeException(msg);
+		stateMachineResult = GCodeResult::error;
+	}
+}
+
+void GCodeMachineState::SetError(const GCodeException& exc) noexcept
+{
+	if (stateMachineResult != GCodeResult::error)
+	{
+		errorMessage = exc;
 		stateMachineResult = GCodeResult::error;
 	}
 }
@@ -200,20 +211,20 @@ void GCodeMachineState::SetWarning(const char *msg) noexcept
 {
 	if (stateMachineResult == GCodeResult::ok)
 	{
-		errorMessage = msg;
+		errorMessage = GCodeException(msg);
 		stateMachineResult = GCodeResult::warning;
 	}
 }
 
 // Retrieve the result and error message if it is worse than the one we already have
-void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept
+void GCodeMachineState::RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept
 {
 	if (stateMachineResult >= rslt)
 	{
 		rslt = stateMachineResult;
-		if (errorMessage != nullptr)
+		if (!errorMessage.IsNull())
 		{
-			reply.copy(errorMessage);
+			errorMessage.GetMessage(reply, &gb);
 		}
 	}
 }
@@ -221,7 +232,7 @@ void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const Stri
 GCodeMachineState *GCodeMachineState::Pop() const noexcept
 {
 	GCodeMachineState * const rslt = GetPrevious();
-	if (errorMessage != nullptr)
+	if (!errorMessage.IsNull())
 	{
 		rslt->errorMessage = errorMessage;
 		rslt->stateMachineResult = stateMachineResult;
@@ -234,7 +245,7 @@ void GCodeMachineState::SetState(GCodeState newState) noexcept
 	if (state == GCodeState::normal && newState != GCodeState::normal)
 	{
 		stateMachineResult = GCodeResult::ok;
-		errorMessage = nullptr;
+		errorMessage = GCodeException();
 	}
 	state = newState;
 }

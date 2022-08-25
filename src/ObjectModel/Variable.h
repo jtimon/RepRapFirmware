@@ -13,18 +13,19 @@
 #include <Platform/Heap.h>
 #include <ObjectModel/ObjectModel.h>
 #include <General/function_ref.h>
+#include <GCodes/GCodeException.h>
 
 // Class to represent a variable having a name and a value
 class Variable
 {
 public:
-	Variable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope) noexcept;
+	Variable(const char *_ecv_array str, ExpressionValue& pVal, int8_t pScope) THROWS(GCodeException);
 	~Variable();
 
 	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
-	void Assign(ExpressionValue ev) noexcept { val = ev; }
+	void Assign(ExpressionValue& ev) THROWS(GCodeException);
 
 private:
 	StringHandle name;
@@ -45,9 +46,9 @@ public:
 	void AssignFrom(VariableSet& other) noexcept;
 
 	Variable *Lookup(const char *_ecv_array str) noexcept;
-	const Variable *Lookup(const char *_ecv_array str) const noexcept;
-	void InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
-	void InsertNewParameter(const char *str, ExpressionValue pVal) noexcept { InsertNew(str, pVal, -1); }
+	const Variable *Lookup(const char *_ecv_array str, size_t length) const noexcept pre(length <= strlen(str));
+	void InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) THROWS(GCodeException);
+	void InsertNewParameter(const char *str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
@@ -59,7 +60,8 @@ private:
 	{
 		DECLARE_FREELIST_NEW_DELETE(LinkedVariable)
 
-		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) : next(p_next), v(str, pVal, pScope) {}
+		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) THROWS(GCodeException)
+			: next(p_next), v(str, pVal, pScope) {}
 
 		LinkedVariable * null next;
 		Variable v;

@@ -131,8 +131,9 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
 #elif defined(DUET3_MB6XD)
-	Duet3_6XD = 1,
-#elif defined(FMDC_V02)
+	Duet3_6XD_v01 = 1,
+	Duet3_6XD_v100 = 2,
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
@@ -335,6 +336,7 @@ public:
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype) noexcept;
+	static const char *GetResetReasonText() noexcept;
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException);
 	static bool WasDeliberateError() noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
@@ -687,10 +689,12 @@ public:
 	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
 #endif
 
+#if defined(DUET3MINI) && SUPPORT_TMC2240
+	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
+#endif
+
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(axisDrivers)
-	OBJECT_MODEL_ARRAY(workplaceOffsets)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
@@ -711,12 +715,6 @@ private:
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
-
-	// Convert microseconds to step clocks, rounding up to the next step clock
-	static constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
-	{
-		return (uint32_t)ceilf((float)StepClockRate * 0.000001 * us);
-	}
 
 #ifdef DUET3_MB6XD
 	void UpdateDriverTimings() noexcept;
@@ -798,6 +796,7 @@ private:
 	uint32_t stepPulseMinimumPeriodClocks;					// minimum period between leading edges of step pulses, in step clocks
 	uint32_t directionSetupClocks;							// minimum direction change to step high time, in step clocks
 	uint32_t directionHoldClocksFromLeadingEdge;			// minimum step high to direction low step clocks, calculated from the step low to direction change hold time
+	const Pin *ENABLE_PINS;									// 6XD version 0.1 uses different enable pins from version 1.0 and later
 #else
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
@@ -819,6 +818,10 @@ private:
 
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	bool warnDriversNotPowered;
+#endif
+
+#if defined(DUET3MINI) && SUPPORT_TMC2240
+	bool hasTmc2240Expansion;
 #endif
 
 #if HAS_STALL_DETECT
@@ -927,7 +930,7 @@ private:
 	// Event handling
 	uint32_t lastDriverPollMillis;						// when we last checked the drivers and voltage monitoring
 
-#ifdef DUET3MINI
+#if SUPPORT_CAN_EXPANSION
 	uint32_t whenLastCanMessageProcessed;
 #endif
 

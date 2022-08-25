@@ -60,12 +60,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
-#if defined(USE_SBC)
-# define SUPPORT_SCANNER		0
-#else
-# define SUPPORT_SCANNER		1					// set zero to disable support for FreeLSS scanners
-#endif
+#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
@@ -92,7 +87,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #endif
 
 #define SUPPORT_ASYNC_MOVES		0
-#define ALLOCATE_DEFAULT_PORTS	0
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
@@ -561,6 +555,12 @@ constexpr DmaChannel DmacChanSbcRx = 2;
 #if HAS_WIFI_NETWORKING
 constexpr DmaChannel DmacChanWiFiTx = 1;
 constexpr DmaChannel DmacChanWiFiRx = 2;
+#endif
+
+#if HAS_W5500_NETWORKING
+// We can use the same DMA channels as for WiFi because only one of them will be present
+constexpr DmaChannel DmacChanW5500Tx = 1;
+constexpr DmaChannel DmacChanW5500Rx = 2;
 #endif
 
 namespace StepPins

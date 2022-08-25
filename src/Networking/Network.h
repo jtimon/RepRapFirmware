@@ -97,6 +97,9 @@ public:
 
 	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept;
 	IPAddress GetIPAddress(unsigned int interface) const noexcept;
+	IPAddress GetNetmask(unsigned int interface) const noexcept;
+	IPAddress GetGateway(unsigned int interface) const noexcept;
+	bool UsingDhcp(unsigned int interface) const noexcept;
 	const char *GetHostname() const noexcept { return hostname; }
 	void SetHostname(const char *name) noexcept;
 	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
@@ -116,8 +119,7 @@ public:
 	uint32_t GetHttpReplySeq() noexcept;
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(interfaces)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	WiFiInterface *FindWiFiInterface() const noexcept;

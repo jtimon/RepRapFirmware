@@ -88,8 +88,8 @@ constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WiFiResponseTimeoutMillis = 200;					// SPI timeout when when the ESP does not have to write to flash memory
-const uint32_t WiFiTransferTimeoutMillis = 60;					// Christian measured this at 29 to 31ms when the ESP has to write to flash memory
+const uint32_t WiFiSlowResponseTimeoutMillis = 300;				// SPI timeout when when the ESP has to write to flash memory. Christian measured this at 29 to 31ms when using NVRAM. Renz measured up to 178ms when using SPIFFS.
+const uint32_t WiFiFastResponseTimeoutMillis = 20;				// SPI timeout when when the ESP does not have to write to flash memory.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 1000;
 const uint32_t WiFiStableMillis = 100;
@@ -232,6 +232,55 @@ static inline void EnableEspInterrupt() noexcept
 static inline void DisableEspInterrupt() noexcept
 {
 	detachInterrupt(EspDataReadyPin);
+}
+
+static const char* GetWiFiAuthFriendlyStr(WiFiAuth auth)
+{
+	const char* res = "Unknown";
+
+	switch (auth)
+	{
+	case WiFiAuth::OPEN:
+		res = "Open";
+		break;
+
+	case WiFiAuth::WEP:
+		res = "WEP";
+		break;
+
+	case WiFiAuth::WPA_PSK:
+		res = "WPA-Personal";
+		break;
+
+	case WiFiAuth::WPA2_PSK:
+		res = "WPA2-Personal";
+		break;
+
+	case WiFiAuth::WPA_WPA2_PSK:
+		res = "WPA/WPA2-Personal";
+		break;
+
+	case WiFiAuth::WPA2_ENTERPRISE:
+		res = "WPA2-Enterprise";
+		break;
+
+	case WiFiAuth::WPA3_PSK:
+		res = "WPA3-Personal";
+		break;
+
+	case WiFiAuth::WPA2_WPA3_PSK:
+		res = "WPA2/WPA3-Personal";
+		break;
+
+	case WiFiAuth::WAPI_PSK:
+		res = "WAPI-Personal";
+		break;
+
+	default:
+		break;
+	}
+
+	return res;
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -885,7 +934,7 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.MessageF(mtype, "- WiFi -\nNetwork state is %s\n", GetStateName());
+	platform.MessageF(mtype, "= WiFi =\nNetwork state is %s\n", GetStateName());
 	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
 	platform.MessageF(mtype, "Bad header: %u/%u\n", badHeaderCount, actualBadHeaderCount);
@@ -1035,6 +1084,7 @@ void WiFiInterface::EspRequestsTransfer() noexcept
 void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	ipAddress = p_ip;
+	usingDhcp = ipAddress.IsNull();
 	netmask = p_netmask;
 	gateway = p_gateway;
 }
@@ -1044,105 +1094,172 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 	switch (mcode)
 	{
 	case 587:	// Add WiFi network or list remembered networks
-		if (gb.Seen('S'))
+		switch (gb.GetCommandFraction())
 		{
-			WirelessConfigurationData config;
-			memset(&config, 0, sizeof(config));
-			String<ARRAY_SIZE(config.ssid)> ssid;
-			gb.GetQuotedString(ssid.GetRef());
-			SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-
-			// Get the password
-			gb.MustSee('P');
-			{
-				String<ARRAY_SIZE(config.password)> password;
-				gb.GetQuotedString(password.GetRef());
-				if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+			case -1:
+			case 0:
+				if (gb.Seen('S'))
 				{
-					reply.copy("WiFi password must be at least 8 characters");
-					return GCodeResult::error;
-				}
-				SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-			}
+					WirelessConfigurationData config;
+					memset(&config, 0, sizeof(config));
+					String<ARRAY_SIZE(config.ssid)> ssid;
+					gb.GetQuotedString(ssid.GetRef());
+					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
-			if (gb.Seen('I'))
-			{
-				IPAddress temp;
-				gb.GetIPAddress(temp);
-				config.ip = temp.GetV4LittleEndian();
-			}
-			if (gb.Seen('J'))
-			{
-				IPAddress temp;
-				gb.GetIPAddress(temp);
-				config.gateway = temp.GetV4LittleEndian();
-			}
-			if (gb.Seen('K'))
-			{
-				IPAddress temp;
-				gb.GetIPAddress(temp);
-				config.netmask = temp.GetV4LittleEndian();
-			}
-
-			const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
-			if (rslt == ResponseEmpty)
-			{
-				return GCodeResult::ok;
-			}
-			else
-			{
-				reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
-			}
-		}
-		else
-		{
-			// List remembered networks
-			if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
-			{
-				return GCodeResult::notFinished;			// try again later
-			}
-
-			const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
-
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
-			uint32_t buffer[NumDwords(declaredBufferLength)];
-			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
-			if (rslt >= 0)
-			{
-				longReply->copy((jsonFormat) ? "{\"rememberedNetworks\":[" : "Remembered networks:");
-				size_t offset = (jsonFormat) ? 0 : ReducedWirelessConfigurationDataSize;		// skip own SSID details unless reporting in JSON format
-				bool found = false;
-				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
-				{
-					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
-					if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
+					// Get the password
+					gb.MustSee('P');
 					{
-						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-						if (jsonFormat && found)
+						String<ARRAY_SIZE(config.password)> password;
+						gb.GetQuotedString(password.GetRef());
+						if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
 						{
-							longReply->cat(',');
+							reply.copy("WiFi password must be at least 8 characters");
+							return GCodeResult::error;
 						}
-						longReply->catf((jsonFormat)
-										? "{\"ssid\":\"%.s\",\"ip\":\"%s\",\"gw\":\"%s\",\"mask\":\"%s\"}"
-											: "\n%s IP=%s GW=%s NM=%s",
-											  	 wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
-						found = true;
+						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 					}
-					offset += ReducedWirelessConfigurationDataSize;
-				}
 
-				if (jsonFormat)
-				{
-					longReply->cat("],\"err\":0}\n");
-				}
-				else if (!found)
-				{
-					longReply->cat(" none");
-				}
-				return GCodeResult::ok;
-			}
+					if (gb.Seen('I'))
+					{
+						IPAddress temp;
+						gb.GetIPAddress(temp);
+						config.ip = temp.GetV4LittleEndian();
+					}
+					if (gb.Seen('J'))
+					{
+						IPAddress temp;
+						gb.GetIPAddress(temp);
+						config.gateway = temp.GetV4LittleEndian();
+					}
+					if (gb.Seen('K'))
+					{
+						IPAddress temp;
+						gb.GetIPAddress(temp);
+						config.netmask = temp.GetV4LittleEndian();
+					}
 
-			longReply->printf((jsonFormat) ? "{\"rememberedNetworks\":[],\"err\":1,\"errText\":\"%.s\"}" : "Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
+					const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+					if (rslt == ResponseEmpty)
+					{
+						return GCodeResult::ok;
+					}
+					else
+					{
+						reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
+					}
+				}
+				else
+				{
+					// List remembered networks
+					if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
+					{
+						return GCodeResult::notFinished;			// try again later
+					}
+
+					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
+
+					const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
+					uint32_t buffer[NumDwords(declaredBufferLength)];
+					const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+					if (rslt >= 0)
+					{
+						longReply->copy((jsonFormat) ? "{\"rememberedNetworks\":[" : "Remembered networks:");
+						size_t offset = (jsonFormat) ? 0 : ReducedWirelessConfigurationDataSize;		// skip own SSID details unless reporting in JSON format
+						bool found = false;
+						while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
+						{
+							WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
+							if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
+							{
+								wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
+								if (jsonFormat && found)
+								{
+									longReply->cat(',');
+								}
+								longReply->catf((jsonFormat)
+												? "{\"ssid\":\"%.s\",\"ip\":\"%s\",\"gw\":\"%s\",\"mask\":\"%s\"}"
+													: "\n%s IP=%s GW=%s NM=%s",
+														wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+								found = true;
+							}
+							offset += ReducedWirelessConfigurationDataSize;
+						}
+
+						if (jsonFormat)
+						{
+							longReply->cat("],\"err\":0}\n");
+						}
+						else if (!found)
+						{
+							longReply->cat(" none");
+						}
+						return GCodeResult::ok;
+					}
+
+					longReply->printf((jsonFormat) ? "{\"rememberedNetworks\":[],\"err\":1,\"errText\":\"%.s\"}" : "Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
+				}
+				break;
+
+			case 1:
+				{
+					const int32_t rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
+					if (rslt >= 0) {
+						return GCodeResult::ok;
+					}
+					reply.printf("failed to start scan: %s\n", TranslateWiFiResponse(rslt));
+				}
+				break;
+
+			case 2:
+				{
+					if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
+					{
+						return GCodeResult::notFinished;			// try again later
+					}
+
+					uint32_t buffer[NumDwords(MaxDataLength + 1)];
+					memset(buffer, 0, sizeof(buffer));
+
+					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
+					const int32_t rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
+
+					if (rslt >= 0) {
+						bool found = false;
+						longReply->copy((jsonFormat) ? "{\"networkScanResults\":[" : "Network Scan Results:");
+						WiFiScanData *data = reinterpret_cast<WiFiScanData*>(buffer);
+
+						for(int i = 0; data[i].ssid[0] != 0; i++) {
+							if (jsonFormat && found)
+							{
+								longReply->cat(',');
+							}
+							longReply->catf((jsonFormat)
+											? "{\"ssid\":\"%s\",\"rssi\":\"%d\",\"phymode\":\"%s\",\"auth\":\"%s\"}"
+											: "\nssid=%s rssi=%d phymode=%s auth=%s",
+												data[i].ssid,
+												data[i].rssi,
+												data[i].phymode == EspWiFiPhyMode::N ? "n" : data[i].phymode == EspWiFiPhyMode::G ? "g" : "b",
+												GetWiFiAuthFriendlyStr(data[i].auth));
+							found = true;
+						}
+
+						if (jsonFormat)
+						{
+							longReply->cat("],\"err\":0}\n");
+						}
+						else if (!found)
+						{
+							longReply->cat(" none");
+						}
+						return GCodeResult::ok;
+					}
+
+					longReply->printf((jsonFormat) ? "{\"networkScanResults\":[],\"err\":1,\"errText\":\"%.s\"}" : "failed to retrieve scan results: %s", TranslateWiFiResponse(rslt));
+				}
+				break;
+
+			default:
+				break;
 		}
 		return GCodeResult::error;
 
@@ -1807,7 +1924,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #if SAME5x
     spi_slave_dma_setup(dataOutLength, dataInLength);
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
-	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
+	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt
 	EnableSpi();
 #elif LPC17xx || STM32
     spi_slave_dma_setup(dataOutLength, dataInLength);
@@ -1831,9 +1948,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
+	const uint32_t timeout = (cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkFactoryReset)
+								? WiFiSlowResponseTimeoutMillis
+									: WiFiFastResponseTimeoutMillis;
 	do
 	{
-		if (!TaskBase::Take(WiFiResponseTimeoutMillis))
+		if (!TaskBase::Take(timeout))
 		{
 			if (reprap.Debug(moduleNetwork))
 			{
@@ -1850,27 +1970,6 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	{
-		// We don't get an end-of-transfer interrupt, just a start-of-transfer one. So wait until SS is high, then disable the SPI.
-		// The normal maximum block time is about 2K * 8/spi_clock_speed plus any pauses that the ESP takes, which at 26.7MHz clock rate is 620us plus pause time
-		// However, when we send a command that involves writing to flash memory, then the flash write occurs between sending the header and the body, so it takes much longer
-		const uint32_t startedWaitingAt = millis();
-		const bool writingFlash = (   cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkConfigureAccessPoint
-								   || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkFactoryReset);
-		while (!digitalRead(EspSSPin))
-		{
-			const uint32_t millisWaiting = millis() - startedWaitingAt;
-			if (millisWaiting >= WiFiTransferTimeoutMillis)
-			{
-				return ResponseTimeout;
-			}
-
-			// The new RTOS SDK for the ESP8266 often interrupts out transfer task for long periods of time. So if the transfer is taking a while to complete, give up the CPU.
-			// Also give up the CPU if we are writing to flash memory, because we know that takes a long time.
-			if (writingFlash || millisWaiting >= 2)
-			{
-				delay(2);
-			}
-		}
 		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;
@@ -1989,6 +2088,8 @@ void WiFiInterface::GetNewStatus() noexcept
 	case ResponseBufferTooSmall:			return "response buffer too small";
 	case ResponseBadReplyFormatVersion:		return "bad reply format version";
 	case ResponseBadParameter:				return "bad parameter in request";
+	case ResponseNoScanStarted:				return "no scan has been started";
+	case ResponseScanInProgress:			return "scan still in progress";
 	case ResponseUnknownError:				return "unknown error";
 	default:								return "unknown response code";
 	}
@@ -2000,7 +2101,7 @@ void WiFiInterface::GetNewStatus() noexcept
 #  error ESP_SPI_HANDLER not defined
 # endif
 
-// SPI interrupt handler, called when NSS goes high (SAM4E, SAME70) or low (SAME5x)
+// SPI interrupt handler, called when NSS goes high (SAM4E, SAME70) or end of transfer (SAME5x)
 void ESP_SPI_HANDLER() noexcept
 {
 	wifiInterface->SpiInterrupt();
@@ -2009,13 +2110,11 @@ void ESP_SPI_HANDLER() noexcept
 void WiFiInterface::SpiInterrupt() noexcept
 {
 #if SAME5x
-	// On the SAM5x we can't get an end-of-transfer interrupt, only a start-of-transfer interrupt.
-	// So we can't disable SPI or DMA in this ISR.
 	const uint8_t status = WiFiSpiSercom->SPI.INTFLAG.reg;
-	if ((status & SERCOM_SPI_INTENSET_SSL) != 0)
+	if ((status & SERCOM_SPI_INTFLAG_TXC) != 0)
 	{
-		WiFiSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_SSL;		// disable the interrupt
-		WiFiSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTENSET_SSL;		// clear the status
+		WiFiSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENCLR_TXC;		// disable the interrupt
+		WiFiSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTFLAG_TXC;		// clear the status
 #else
 	const uint32_t status = ESP_SPI->SPI_SR;							// read status and clear interrupt
 	ESP_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt

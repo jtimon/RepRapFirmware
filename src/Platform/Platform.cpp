@@ -205,21 +205,25 @@ DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Platform, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(Platform, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor Platform::axisDriversArrayDescriptor =
+constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Platform*)self)->axisDrivers[context.GetLastIndex()].numDrivers; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-			{ return ExpressionValue(((const Platform*)self)->axisDrivers[context.GetIndex(1)].driverNumbers[context.GetLastIndex()]); }
+	// 0. Axis drivers
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Platform*)self)->axisDrivers[context.GetLastIndex()].numDrivers; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const Platform*)self)->axisDrivers[context.GetIndex(1)].driverNumbers[context.GetLastIndex()]); }
+	},
+	// 1. Workplace coordinate offsets
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor Platform::workplaceOffsetsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-			{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetIndex(0)), 3); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Platform)
 
 static inline const char *_ecv_array GetFilamentName(size_t extruder) noexcept
 {
@@ -292,11 +296,11 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
-	{ "drivers",			OBJECT_MODEL_FUNC_NOSELF(&axisDriversArrayDescriptor),															ObjectModelEntryFlags::none },
+	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),							ObjectModelEntryFlags::none },
-	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveCoordinate(context.GetLastIndex(), reprap.GetGCodes().GetPrimaryMovementState().currentTool), 3),	ObjectModelEntryFlags::live },
+	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveCoordinate(context.GetLastIndex(), reprap.GetGCodes().GetCurrentMovementState(context).currentTool), 3),	ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
 	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 7),																						ObjectModelEntryFlags::none },
@@ -308,9 +312,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),											ObjectModelEntryFlags::none },
-	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetPrimaryMovementState(), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
+	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
 	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
-	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_NOSELF(&workplaceOffsetsArrayDescriptor),														ObjectModelEntryFlags::none },
+	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(1),																						ObjectModelEntryFlags::none },
 
 	// 4. move.extruders[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
@@ -318,6 +322,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
+	{ "filamentDiameter",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilamentDiameter(context.GetLastIndex()), 3),											ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																												ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																												ObjectModelEntryFlags::none },
@@ -325,7 +330,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #ifndef DUET_NG
 	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),														ObjectModelEntryFlags::none },
 #endif
-	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetGCodes().GetPrimaryMovementState().currentTool), 1)), ObjectModelEntryFlags::live },
+	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(context.GetLastIndex()), reprap.GetGCodes().GetCurrentMovementState(context).currentTool), 1)), ObjectModelEntryFlags::live },
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocks(context.GetLastIndex())/StepClockRate, 2),							ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
@@ -374,10 +379,10 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 #endif
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
 	19,																		// section 3: move.axes[]
-	14,																		// section 4: move.extruders[]
+	15,																		// section 4: move.extruders[]
 #else
 	20,																		// section 3: move.axes[]
-	15,																		// section 4: move.extruders[]
+	16,																		// section 4: move.extruders[]
 #endif
 	3,																		// section 5: move.extruders[].nonlinear
 #if HAS_12V_MONITOR
@@ -435,7 +440,7 @@ Platform::Platform() noexcept :
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
-#ifdef DUET3MINI
+#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed(0),
 #endif
 
@@ -588,40 +593,6 @@ void Platform::Init() noexcept
 # endif
 #endif
 
-#if defined(DUET_06_085)
-	ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
-
-	// Motor current setting on Duet 0.6 and 0.8.5
-	I2C::Init();
-	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
-	ARRAY_INIT(potWipes, POT_WIPES);
-	senseResistor = SENSE_RESISTOR;
-	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
-	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
-#elif defined(__ALLIGATOR__)
-	pinMode(EthernetPhyResetPin, INPUT);													// Init Ethernet Phy Reset Pin
-
-	// Alligator Init DAC for motor current vref
-	ARRAY_INIT(spiDacCS, SPI_DAC_CS);
-	dacAlligator.Init(spiDacCS[0]);
-	dacPiggy.Init(spiDacCS[1]);
-	// Get macaddress from EUI48 eeprom
-	eui48MacAddress.Init(Eui48csPin);
-	if (!eui48MacAddress.getEUI48(defaultMacAddress))
-	{
-		ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
-	}
-
-	Microstepping::Init();																	// Init Motor FAULT detect Pin
-	pinMode(ExpansionVoltageLevelPin, ExpansionVoltageLevel==3 ? OUTPUT_LOW : OUTPUT_HIGH); // Init Expansion Voltage Level Pin
-	pinMode(MotorFaultDetectPin,INPUT);														// Init Motor FAULT detect Pin
-	pinMode(ExpansionPiggyDetectPin,INPUT);													// Init Expansion Piggy module presence Pin
-	pinMode(FTDIconverterResetPin,INPUT);													// Init FTDI Serial Converter Reset Pin
-	pinMode(SpiEEPROMcsPin,OUTPUT_HIGH);													// Init Spi EEPROM Cs pin, not implemented, default unselected
-	pinMode(SpiFLASHcsPin,OUTPUT_HIGH);														// Init Spi FLASH Cs pin, not implemented, default unselected
-#endif
-
 #if LPC17xx
 	if (hasDriverCurrentControl)
 	{
@@ -682,7 +653,15 @@ void Platform::Init() noexcept
 	}
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
+#if defined(DUET3MINI) && SUPPORT_TMC2240
+	// Check whether we have a TMC2240 prototype expansion board connected, before we set the driver direction pins to outputs
+	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	delayMicroseconds(20);						// give the pullup resistor time to work
+	hasTmc2240Expansion = !digitalRead(DIRECTION_PINS[5]);
+#endif
+
 #ifdef DUET3_MB6XD
+	ENABLE_PINS = (GetBoardType() == BoardType::Duet3_6XD_v01) ? ENABLE_PINS_v01 : ENABLE_PINS_v100;
 	unsigned int numErrorHighDrivers = 0;
 #endif
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
@@ -717,19 +696,9 @@ void Platform::Init() noexcept
 
 #ifdef DUET3_MB6XD
 	driverErrPinsActiveLow = (numErrorHighDrivers >= NumDirectDrivers/2);				// determine the error signal polarity by assuming most drivers are not in the error state
-
-	// Set up the step gate timer
-	pmc_enable_periph_clk(STEP_GATE_TC_ID);
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKDIS;
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
-														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
-														| TC_CMR_WAVE					// waveform mode
-														| TC_CMR_WAVSEL_UP				// count up
-														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
-														| TC_CMR_EEVT_XC0   			// set external events from XC0 (this allows TIOB to be an output)
-														| TC_CMR_TCCLKS_TIMER_CLOCK2;	// divide MCLK (150MHz) by 8 = 18.75MHz
+	pmc_enable_periph_clk(STEP_GATE_TC_ID);												// need to do this before we set up the step gate TC
+	UpdateDriverTimings();																// this also initialises the step gate TC
 	SetPinFunction(StepGatePin, StepGatePinFunction);
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKEN;
 #endif
 
 	// Set up the axis+extruder arrays
@@ -775,9 +744,7 @@ void Platform::Init() noexcept
 #endif
 	}
 
-#ifdef DUET3_MB6XD
-	UpdateDriverTimings();
-#else
+#ifndef DUET3_MB6XD
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
 		entry = 0;												// reset all to zero as we have no known slow drivers yet
@@ -800,6 +767,8 @@ void Platform::Init() noexcept
 # elif SUPPORT_TMC22xx
 #  if TMC22xx_VARIABLE_NUM_DRIVERS
 	SmartDrivers::Init(numSmartDrivers);
+#  elif SUPPORT_TMC2240 && defined(DUET3MINI)
+	SmartDrivers::Init(hasTmc2240Expansion);
 #  else
 	SmartDrivers::Init();
 #  endif
@@ -1084,8 +1053,7 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if defined(DUET3) || defined(DUET3MINI) || LPC17xx || STM32
-# if SUPPORT_REMOTE_COMMANDS
+#if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
 		if (StepTimer::IsSynced())
@@ -1097,22 +1065,14 @@ void Platform::Spin() noexcept
 			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
 		}
 	}
-	else
-# endif
-	{
-		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-		//digitalWrite(DiagPin, XNor(DiagOnPolarity, millis() & (512)) != 0);
-		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
-	}
 #endif
 
-#if defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 	// Turn off the ACT LED if it is time to do so
 	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
 	{
 		digitalWrite(ActLedPin, !ActOnPolarity);
 	}
-
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -1208,7 +1168,8 @@ void Platform::Spin() noexcept
 			{
 				StandardDriverStatus stat =
 #if defined(DUET3_MB6XD)
-											StandardDriverStatus((HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
+											// Don't raise driver error events while we are being tested by ATE
+											StandardDriverStatus((!CanInterface::InTestMode() && HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
 #else
 											SmartDrivers::GetStatus(nextDriveToPoll, true, true);
 #endif
@@ -1747,6 +1708,43 @@ void Platform::InitialiseInterrupts() noexcept
 //extern "C" uint32_t longestWriteWaitTime, shortestWriteWaitTime, longestReadWaitTime, shortestReadWaitTime;
 //extern uint32_t maxRead, maxWrite;
 extern void SPWMDiagnostics();
+
+/*static*/ const char *Platform::GetResetReasonText() noexcept
+{
+#if SAME5x
+	const uint8_t resetReason = RSTC->RCAUSE.reg;
+	// The datasheet says only one of these bits will be set
+	if (resetReason & RSTC_RCAUSE_POR)		{ return "power up"; }
+	if (resetReason & RSTC_RCAUSE_BODCORE)	{ return "core brownout"; }
+	if (resetReason & RSTC_RCAUSE_BODVDD)	{ return "Vdd brownout"; }
+	if (resetReason & RSTC_RCAUSE_WDT)		{ return "watchdog"; }
+	if (resetReason & RSTC_RCAUSE_NVM)		{ return "NVM"; }
+	if (resetReason & RSTC_RCAUSE_EXT)		{ return "reset button"; }
+	if (resetReason & RSTC_RCAUSE_SYST)		{ return "software"; }
+	if (resetReason & RSTC_RCAUSE_BACKUP)	{ return "backup/hibernate"; }
+	return "unknown";
+#elif defined(__LPC17xx__)
+	if (LPC_SYSCTL->RSID & RSID_POR) { return "power up"; }
+	if (LPC_SYSCTL->RSID & RSID_EXTR) { return "reset button"; }
+	if (LPC_SYSCTL->RSID & RSID_WDTR) { return "watchdog"; }
+	if (LPC_SYSCTL->RSID & RSID_BODR) { return "brownout"; }
+	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { return "software"; }
+	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { return "lockup"; }
+	return "unknown";
+#else
+	constexpr const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
+# ifdef DUET_NG
+	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
+	// The SAM4S is the same but the Duet Maestro has a diode in the reset circuit to avoid this problem.
+									"reset button or watchdog",
+# else
+									"reset button",
+# endif
+									"unknown", "unknown", "unknown" };
+	return resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos];
+#endif
+}
+
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype) noexcept
 {
@@ -1765,56 +1763,8 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
+	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), GetResetReasonText());
 
-#if SAME5x
-	{
-		String<StringLength100> resetString;
-		resetString.printf("Last reset %02d:%02d:%02d ago, cause", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
-		const uint8_t resetReason = RSTC->RCAUSE.reg;
-		// The datasheet says only one of these bits will be set, but we don't assume that
-		if (resetReason & RSTC_RCAUSE_POR)		{ resetString.cat(": power up"); }
-		if (resetReason & RSTC_RCAUSE_BODCORE)	{ resetString.cat(": core brownout"); }
-		if (resetReason & RSTC_RCAUSE_BODVDD)	{ resetString.cat(": Vdd brownout"); }
-		if (resetReason & RSTC_RCAUSE_WDT)		{ resetString.cat(": watchdog"); }
-		if (resetReason & RSTC_RCAUSE_NVM)		{ resetString.cat(": NVM"); }
-		if (resetReason & RSTC_RCAUSE_EXT)		{ resetString.cat(": reset button"); }
-		if (resetReason & RSTC_RCAUSE_SYST)		{ resetString.cat(": software"); }
-		if (resetReason & RSTC_RCAUSE_BACKUP)	{ resetString.cat(": backup/hibernate"); }
-		resetString.cat('\n');
-		Message(mtype, resetString.c_str());
-	}
-#elif !LPC17xx && !STM32
-	const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
-# ifdef DUET_NG
-	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
-	// The SAM4S is the same but the Duet M has a diode in the reset circuit to avoid this problem.
-									"reset button or watchdog",
-# else
-									"reset button",
-# endif
-									"?", "?", "?" };
-	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
-			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
-			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
-#endif
-#if LPC17xx || STM32
-		// Reset Reason
-	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: ",
-				 (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
-
-# if LPC17xx
-	if (LPC_SYSCTL->RSID & RSID_POR) { MessageF(mtype, "[power up]"); }
-	if (LPC_SYSCTL->RSID & RSID_EXTR) { MessageF(mtype, "[reset button]"); }
-	if (LPC_SYSCTL->RSID & RSID_WDTR) { MessageF(mtype, "[watchdog]"); }
-	if (LPC_SYSCTL->RSID & RSID_BODR) { MessageF(mtype, "[brownout]"); }
-	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { MessageF(mtype, "[software]"); }
-	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { MessageF(mtype, "[lockup]"); }
-# else
-	const char *_ecv_array resetReasons[] = {"unknown", "low power", "window watchdog", "ind. watchdog", "software", "power on/off", "pin", "brownout"};
-	MessageF(mtype, "[%s]", resetReasons[GetResetCause()]);
-# endif
-	MessageF(mtype, "\n");
-#endif
 	// Show the reset code stored at the last software reset
 	{
 
@@ -1896,7 +1846,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 	ResetVoltageMonitors();
 
-	StringHandle::Diagnostics(mtype, *this);
+	Heap::Diagnostics(mtype, *this);
 	Event::Diagnostics(mtype, *this);
 
 	// Show the motor position and stall status
@@ -2399,9 +2349,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		MessageF(MessageType::GenericMessage,
 					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
 					"\nFansManager %08" PRIx32 "-%08" PRIx32
-#if SUPPORT_ROLAND
-					"\nRoland %08" PRIx32 "-%08" PRIx32
-#endif
 #if SUPPORT_SCANNER
 					"\nScanner %08" PRIx32 "-%08" PRIx32
 #endif
@@ -2417,9 +2364,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
-#if SUPPORT_ROLAND
-					, reinterpret_cast<uint32_t>(&reprap.GetRoland()), reinterpret_cast<uint32_t>(&reprap.GetRoland()) + sizeof(Roland) - 1
-#endif
 #if SUPPORT_SCANNER
 					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
 #endif
@@ -2706,7 +2650,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 			{
 				SmartDrivers::EnableDrive(driver, true);
 			}
-# if !defined(DUET3MINI)		// no enable pins on 5LC
+# if !defined(DUET3MINI)								// no enable pins on 5LC
 			else
 			{
 				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
@@ -2954,15 +2898,31 @@ void Platform::UpdateDriverTimings() noexcept
 	}
 
 	// Convert the step pulse width to clocks of the step pulse gate timer. First define some constants.
-	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
-	constexpr float StepGateClocksPerMicrosecond = (float)StepGateTcClockFrequency/1.0e6;
+	constexpr uint32_t StepGateTcBaseClockFrequency = (SystemCoreClockFreq/2)/8;										// the step gate T clock frequency when we use a prescaler of 8
+	constexpr float StepGateBaseClocksPerMicrosecond = (float)StepGateTcBaseClockFrequency * 1.0e-6;
+	const float fclocks = min<float>(ceilf(worstTimings[0] * StepGateBaseClocksPerMicrosecond), (float)(4 * 65535));	// the TC is only 16 bits wide, but we increase the prescaler to 32 if necessary
 
-	const float fclocks = ceilf(worstTimings[0] * StepGateClocksPerMicrosecond);
-	const uint32_t gateClocks = (uint32_t)fclocks;
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = gateClocks;
+	uint32_t iclocks = (uint32_t)fclocks;
+	uint32_t clockPrescaler = TC_CMR_TCCLKS_TIMER_CLOCK2;								// divide MCLK (150MHz) by 8 = 18.75MHz
+	if (iclocks > 65535)
+	{
+		clockPrescaler = TC_CMR_TCCLKS_TIMER_CLOCK3;									// divide MCLK (150MHz) by 32 = 4.6875MHz
+		iclocks >>= 2;
+	}
+
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKDIS;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
+														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
+														| TC_CMR_WAVE					// waveform mode
+														| TC_CMR_WAVSEL_UP				// count up
+														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
+														| TC_CMR_EEVT_XC0   			// set external events from XC0 (this allows TIOB to be an output)
+														| clockPrescaler;				// divide MCLK (150MHz) by 8 or 32
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = iclocks;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKEN;
 
 	// Convert the quantised step pulse width back to microseconds
-	const float actualStepPulseMicroseconds = fclocks/StepGateClocksPerMicrosecond;
+	const float actualStepPulseMicroseconds = fclocks/StepGateBaseClocksPerMicrosecond;
 
 	// Now convert the other values from microseconds to step clocks
 	stepPulseMinimumPeriodClocks = MicrosecondsToStepClocks(worstTimings[1] + actualStepPulseMicroseconds);
@@ -2974,8 +2934,12 @@ void Platform::UpdateDriverTimings() noexcept
 
 void Platform::GetActualDriverTimings(float timings[4]) noexcept
 {
-	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
-	constexpr float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
+	uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
+	if ((STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR & TC_CMR_TCCLKS_Msk) == TC_CMR_TCCLKS_TIMER_CLOCK3)
+	{
+		StepGateTcClockFrequency >>= 2;;
+	}
+	const float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
 	constexpr float StepClocksToMicroseconds = 1.0e6/(float)StepClockRate;
 	timings[0] = (float)STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC * MicrosecondsPerStepGateClock;
 	timings[1] = stepPulseMinimumPeriodClocks * StepClocksToMicroseconds - timings[0];
@@ -4008,13 +3972,16 @@ void Platform::SetBoardType(BoardType bt) noexcept
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
+		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
 		delayMicroseconds(20);									// give the pullup resistor time to work
 		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 #elif defined(DUET3_MB6XD)
-		board = BoardType::Duet3_6XD;
-#elif defined(FMDC_V02)
+		// Driver 0 direction has a pulldown resistor on v1.0  boards, but not on v0.1 boards
+		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+		delayMicroseconds(20);									// give the pullup resistor time to work
+		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01 : BoardType::Duet3_6XD_v100;
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
@@ -4097,8 +4064,9 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(DUET3_MB6XD)
-	case BoardType::Duet3_6XD:				return "Duet 3 " BOARD_SHORT_NAME;					// we have only one version at present
-#elif defined(FMDC_V02)
+	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
+	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
@@ -4141,8 +4109,9 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 #elif defined(DUET3_MB6XD)
-	case BoardType::Duet3_6XD:				return "duet3mb6xd";					// we have only one version at present
-#elif defined(FMDC_V02)
+	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";					// we have only one version at present
+	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";					// we have only one version at present
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
@@ -4806,7 +4775,7 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 
 void Platform::OnProcessingCanMessage() noexcept
 {
-#ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
+#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed = millis();
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
 #endif

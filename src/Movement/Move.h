@@ -58,6 +58,9 @@ public:
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
+#if SUPPORT_ASYNC_MOVES
+	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept;	// Get the current position of some axes from one of the rings
+#endif
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
@@ -66,7 +69,8 @@ public:
 	bool WaitingForAllMovesFinished(size_t queueNumber) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
+	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
+			pre(queueNumber < NumMovementSystems);							// Set the current position to be this
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
@@ -130,18 +134,18 @@ public:
 	void SetIdleTimeout(float timeout) noexcept;											// Set the idle timeout in seconds
 
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
-	float GetSimulationTime() const noexcept { return mainDDARing.GetSimulationTime(); }	// Get the accumulated simulation time
+	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }	// Get the accumulated simulation time
 
 	bool PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept;					// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept;			// Pause the print immediately, returning true if we were able to
 #endif
 
-	bool NoLiveMovement() const noexcept { return mainDDARing.IsIdle(); }					// Is a move running, or are there any queued?
+	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }					// Is a move running, or are there any queued?
 
-	uint32_t GetScheduledMoves() const noexcept { return mainDDARing.GetScheduledMoves(); }	// How many moves have been scheduled?
-	uint32_t GetCompletedMoves() const noexcept { return mainDDARing.GetCompletedMoves(); }	// How many moves have been completed?
-	void ResetMoveCounters() noexcept { mainDDARing.ResetMoveCounters(); }
+	uint32_t GetScheduledMoves() const noexcept { return rings[0].GetScheduledMoves(); }	// How many moves have been scheduled?
+	uint32_t GetCompletedMoves() const noexcept { return rings[0].GetCompletedMoves(); }	// How many moves have been completed?
+	void ResetMoveCounters() noexcept { rings[0].ResetMoveCounters(); }
 
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
@@ -149,15 +153,19 @@ public:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
 	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
+# if SUPPORT_PROBE_POINTS_FILE
+	bool LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the probe points map from a file returning true if an error occurred
+	void ClearProbePointsInvalid() noexcept;
+# endif
 #endif
 
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands
 
-	DDARing& GetMainDDARing() noexcept { return mainDDARing; }
-	float GetTopSpeedMmPerSec() const noexcept { return mainDDARing.GetTopSpeedMmPerSec(); }
-	float GetRequestedSpeedMmPerSec() const noexcept { return mainDDARing.GetRequestedSpeedMmPerSec(); }
-	float GetAccelerationMmPerSecSquared() const noexcept { return mainDDARing.GetAccelerationMmPerSecSquared(); }
-	float GetDecelerationMmPerSecSquared() const noexcept { return mainDDARing.GetDecelerationMmPerSecSquared(); }
+	DDARing& GetMainDDARing() noexcept { return rings[0]; }
+	float GetTopSpeedMmPerSec() const noexcept { return rings[0].GetTopSpeedMmPerSec(); }
+	float GetRequestedSpeedMmPerSec() const noexcept { return rings[0].GetRequestedSpeedMmPerSec(); }
+	float GetAccelerationMmPerSecSquared() const noexcept { return rings[0].GetAccelerationMmPerSecSquared(); }
+	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
@@ -167,7 +175,7 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
 #endif
 
-	uint32_t ExtruderPrintingSince() const noexcept { return mainDDARing.ExtruderPrintingSince(); }	// When we started doing normal moves after the most recent extruder-only move
+	uint32_t ExtruderPrintingSince() const noexcept { return rings[0].ExtruderPrintingSince(); }	// When we started doing normal moves after the most recent extruder-only move
 
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
@@ -202,25 +210,27 @@ public:
 # if USE_REMOTE_INPUT_SHAPING
 	void AddShapeddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept		// add a move from the ATE to the movement queue
 	{
-		mainDDARing.AddMoveFromRemote(msg);
+		rings[0].AddMoveFromRemote(msg);
 		MoveAvailable();
 	}
 # else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
-		mainDDARing.AddMoveFromRemote(msg);
+		rings[0].AddMoveFromRemote(msg);
 		MoveAvailable();
 	}
 # endif
+
+	void StopDrivers(uint16_t whichDrives) noexcept
+	{
+		rings[0].StopDrivers(whichDrives);
+	}
+
+	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(queue)
-
-#if SUPPORT_COORDINATE_ROTATION
-	OBJECT_MODEL_ARRAY(rotationCentre)
-#endif
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	enum class MoveState : uint8_t
@@ -250,10 +260,8 @@ private:
 	static TASKMEM Task<MoveTaskStackWords> moveTask;
 
 	DDARing rings[NumMovementSystems];
-	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
 
 #if SUPPORT_ASYNC_MOVES
-	DDARing& auxDDARing = rings[1];						// the DDA ring used for live babystepping, height following and other asynchronous moves
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
@@ -273,10 +281,11 @@ private:
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
-	float& tanXY = tangents[0];
-	float& tanYZ = tangents[1];
-	float& tanXZ = tangents[2];
-	bool compensateXY;
+	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate
+
+	float tanXY() const noexcept { return tangents[0]; }
+	float tanYZ() const noexcept { return tangents[1]; }
+	float tanXZ() const noexcept { return tangents[2]; }
 
 	HeightMap heightMap;    							// The grid definition in use and height map for G29 bed probing
 	RandomProbePointSet probePoints;					// G30 bed probe points
@@ -314,24 +323,34 @@ private:
 // Get the current position in untransformed coords
 inline void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept
 {
-	return mainDDARing.GetCurrentMachinePosition(m, disableMotorMapping);
+	return rings[0].GetCurrentMachinePosition(m, disableMotorMapping);
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Get the current position of some axes from one of the rings
+inline void Move::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept
+{
+	rings[queueNumber].GetPartialMachinePosition(m, whichAxes);
+}
+
+#endif
 
 // Get the current position of a motor
 inline int32_t Move::GetEndPoint(size_t drive) const noexcept
 {
-	return mainDDARing.GetEndPoint(drive);
+	return rings[0].GetEndPoint(drive);
 }
 
 // Perform motor endpoint adjustment
 inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
 {
-	mainDDARing.AdjustMotorPositions(adjustment, numMotors);
+	rings[0].AdjustMotorPositions(adjustment, numMotors);
 }
 
 inline void Move::ResetExtruderPositions() noexcept
 {
-	mainDDARing.ResetExtruderPositions();
+	rings[0].ResetExtruderPositions();
 }
 
 inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
@@ -343,7 +362,7 @@ inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 // Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 {
-	return mainDDARing.GetAccumulatedMovement(drive, isPrinting);
+	return rings[0].GetAccumulatedMovement(drive, isPrinting);
 }
 
 #if HAS_SMART_DRIVERS
@@ -352,7 +371,7 @@ inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noe
 // This is called from the stepper drivers SPI interface ISR
 inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
 {
-	return (simulationMode == SimulationMode::off) ? mainDDARing.GetStepInterval(axis, microstepShift) : 0;
+	return (simulationMode == SimulationMode::off) ? rings[0].GetStepInterval(axis, microstepShift) : 0;
 }
 
 #endif

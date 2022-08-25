@@ -59,6 +59,8 @@ constexpr float DefaultTravelAcceleration = 20000.0;	// higher than the likely m
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
 
+constexpr float DefaultFilamentDiameter = 1.75;			// the default filament diameter assumed
+
 constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialised object model getting too large
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
 
@@ -157,11 +159,12 @@ constexpr size_t StringLength256 = 256;
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
-constexpr size_t FormatStringLength = StringLength256;
 #ifdef DUET3_ATE
 constexpr size_t GCodeReplyLength = StringLength500;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer (ATE codes can generate long replies)
+constexpr size_t FormatStringLength = StringLength500;	// GCode replies are processed by Platform::MessageF which uses an intermediate buffer of this length
 #else
 constexpr size_t GCodeReplyLength = StringLength256;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
+constexpr size_t FormatStringLength = StringLength256;
 #endif
 constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
@@ -225,7 +228,7 @@ constexpr unsigned int MaxFilaments = 8;
 
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
-constexpr float DefaultG0FeedRate = 18000.0;			// The initial feed rate for G0 commands after resetting the printer, in mm/min
+constexpr float MaximumG0FeedRate = 60000.0;			// The maximum feed rate for G0 commands in mm/min, if the M203 settings permit
 constexpr float MinRetractSpeed = 60.0;					// The minimum firmware retraction/un-retraction speed in mm/min
 constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm/min
 constexpr float DefaultRetractLength = 2.0;
@@ -253,6 +256,9 @@ constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 constexpr unsigned int MaxStackDepth = 10;				// Maximum depth of stack (was 5 in 3.01-RC2, increased to 7 for 3.01-RC3, 10 for 3.4.0beta6)
 
 // CNC and laser support
+constexpr float DefaultMinSpindlePwm = 0.0;				// Default minimum PWM level for spindle control
+constexpr float DefaultMaxSpindlePwm = 1.0;				// Default maximum PWM level for spindle control
+constexpr float DefaultIdleSpindlePwm = 0.0;			// Default idle PWM level for spindle control
 constexpr int32_t DefaultMinSpindleRpm = 60;			// Default minimum available spindle RPM
 constexpr int32_t DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power

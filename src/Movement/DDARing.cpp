@@ -580,6 +580,13 @@ void DDARing::CurrentMoveCompleted() noexcept
 	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	liveCoordinatesChanged = true;
 
+#if SUPPORT_REMOTE_COMMANDS
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		lastMoveStepsTaken[driver] = cdda->GetStepsTaken(driver);
+	}
+#endif
+
 	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
 	{
 		AtomicCriticalSectionLocker lock;
@@ -636,6 +643,17 @@ void DDARing::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMappi
 		}
 	}
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Return the machine coordinates of just some axes
+void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept
+{
+	DDA * const lastQueuedMove = addPointer->GetPrevious();
+	whichAxes.Iterate([m, lastQueuedMove](unsigned int axis, unsigned int count) { m[axis] = lastQueuedMove->GetEndCoordinate(axis, false); });
+}
+
+#endif
 
 // These are the actual numbers we want in the positions, so don't transform them.
 void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
@@ -1020,6 +1038,22 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 }
 
 # endif
+
+void DDARing::StopDrivers(uint16_t whichDrives) noexcept
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);
+	DDA *cdda = currentDda;							// capture volatile
+	if (cdda != nullptr)
+	{
+		cdda->StopDrivers(whichDrives);
+		if (cdda->GetState() == DDA::completed)
+		{
+			CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
+		}
+	}
+	RestoreBasePriority(oldPrio);
+}
+
 #endif
 
 // End

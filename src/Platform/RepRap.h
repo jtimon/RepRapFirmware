@@ -61,7 +61,7 @@ public:
 	RepRap(const RepRap&) = delete;
 
 	void EmergencyStop() noexcept;
-	void Init() noexcept;
+ 	void Init() noexcept;
 	void Spin() noexcept;
 	void Exit() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
@@ -90,9 +90,6 @@ public:
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
-#if SUPPORT_ROLAND
-	Roland& GetRoland() const noexcept { return *roland; }
-#endif
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
@@ -107,6 +104,11 @@ public:
 #endif
 #if SUPPORT_CAN_EXPANSION
  	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+ 	void ScheduleReset() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::reboot; }
+ 	void ScheduleFirmwareUpdateOverCan() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::updateFirmware; }
 #endif
 
 	void Tick() noexcept;
@@ -138,7 +140,9 @@ public:
 
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
-	void UpdateFirmware(const StringRef& filenameRef) noexcept;
+#if HAS_MASS_STORAGE
+	void UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept;
+#endif
 	void PrepareToLoadIap() noexcept;
 	[[noreturn]] void StartIap(const char *filename) noexcept;
 
@@ -171,16 +175,7 @@ public:
 	WriteLockedPointer<VariableSet> GetGlobalVariablesForWriting() noexcept { return globalVariables.GetForWriting(); }
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(boards)
-	OBJECT_MODEL_ARRAY(fans)
-	OBJECT_MODEL_ARRAY(gpout)
-	OBJECT_MODEL_ARRAY(inputs)
-	OBJECT_MODEL_ARRAY(spindles)
-	OBJECT_MODEL_ARRAY(tools)
-	OBJECT_MODEL_ARRAY(restorePoints)
-	OBJECT_MODEL_ARRAY(volumes)
-	OBJECT_MODEL_ARRAY(volChanges)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
@@ -217,10 +212,6 @@ private:
  	SbcInterface *sbcInterface;
 #endif
 
-#if SUPPORT_ROLAND
-	Roland* roland;
-#endif
-
 #if SUPPORT_CAN_EXPANSION
  	ExpansionManager *expansion;
 #endif
@@ -237,6 +228,12 @@ private:
 	uint16_t ticksInSpinState;
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
+
+#if SUPPORT_REMOTE_COMMANDS
+	enum class DeferredCommand : uint8_t { none, reboot, updateFirmware };
+	volatile uint32_t whenDeferredCommandScheduled;
+	volatile DeferredCommand deferredCommand;
+#endif
 
 	DebugFlags debugMaps[Module::numModules];
 
@@ -271,8 +268,6 @@ extern RepRap reprap;
 
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
-
-#define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 #endif
 

@@ -32,32 +32,36 @@ constexpr float DefaultPrintRadius = 1500.0;
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(HangprinterKinematics, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor HangprinterKinematics::anchorCoordinatesArrayDescriptor =
+constexpr ObjectModelArrayTableEntry HangprinterKinematics::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 3; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const HangprinterKinematics *)self)->anchors[context.GetIndex(1)][context.GetLastIndex()], 1); }
+	// 10. Coordinates of one anchor
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 3; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const HangprinterKinematics *)self)->anchors[context.GetIndex(1)][context.GetLastIndex()], 1); }
+	},
+	// 11. Anchors
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return HANGPRINTER_AXES; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10 | (context.GetLastIndex() << 8), true); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor HangprinterKinematics::anchorsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return HANGPRINTER_AXES; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&anchorCoordinatesArrayDescriptor); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics, 10)
 
 constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "anchors",		OBJECT_MODEL_FUNC_NOSELF(&anchorsArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "anchors",		OBJECT_MODEL_FUNC_ARRAY(11), 						ObjectModelEntryFlags::none },
 	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 			ObjectModelEntryFlags::none },
 	{ "printRadius",	OBJECT_MODEL_FUNC(self->printRadius, 1), 			ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 3 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, Kinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics)
 
 #endif
 
@@ -175,7 +179,7 @@ void HangprinterKinematics::Recalc() noexcept
 	float constexpr origin[3] = { 0.0F, 0.0F, 0.0F };
 	StaticForces(origin, fOrigin);
 	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
-		distancesWithRelaxedSpringsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
+		relaxedSpringLengthsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
 	}
 
 #if DUAL_CAN
@@ -199,30 +203,14 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	if (mCode == 669)
 	{
 		const bool seenNonGeometry = TryConfigureSegmentation(gb);
-		if (gb.TryGetFloatArray('A', 3, anchors[A_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('B', 3, anchors[B_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('C', 3, anchors[C_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('D', 3, anchors[D_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('A', 3, anchors[A_AXIS], seen);
+		gb.TryGetFloatArray('B', 3, anchors[B_AXIS], seen);
+		gb.TryGetFloatArray('C', 3, anchors[C_AXIS], seen);
+		gb.TryGetFloatArray('D', 3, anchors[D_AXIS], seen);
 
 		if (gb.Seen('P'))
 		{
-			printRadius = gb.GetFValue();
+			printRadius = gb.GetPositiveFValue();
 			seen = true;
 		}
 
@@ -250,59 +238,18 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	else if (mCode == 666)
 	{
 		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
-		if (gb.TryGetFloatArray('R', HANGPRINTER_AXES, spoolRadii, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('U', HANGPRINTER_AXES, mechanicalAdvantage, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('O', HANGPRINTER_AXES, linesPerSpool, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('L', HANGPRINTER_AXES, motorGearTeeth, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('H', HANGPRINTER_AXES, spoolGearTeeth, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('J', HANGPRINTER_AXES, fullStepsPerMotorRev, reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('R', HANGPRINTER_AXES, spoolRadii, seen);
+		gb.TryGetUIArray('U', HANGPRINTER_AXES, mechanicalAdvantage, seen);
+		gb.TryGetUIArray('O', HANGPRINTER_AXES, linesPerSpool, seen);
+		gb.TryGetUIArray('L', HANGPRINTER_AXES, motorGearTeeth, seen);
+		gb.TryGetUIArray('H', HANGPRINTER_AXES, spoolGearTeeth, seen);
+		gb.TryGetUIArray('J', HANGPRINTER_AXES, fullStepsPerMotorRev, seen);
 		gb.TryGetFValue('W', moverWeight_kg, seen);
 		gb.TryGetFValue('S', springKPerUnitLength, seen);
-		if (gb.TryGetFloatArray('I', HANGPRINTER_AXES, minPlannedForce_Newton, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('X', HANGPRINTER_AXES, maxPlannedForce_Newton, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('Y', HANGPRINTER_AXES, guyWireLengths, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		gb.TryGetFValue('T', targetForce_Newton, seen);
-		if (gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('I', HANGPRINTER_AXES, minPlannedForce_Newton, seen);
+		gb.TryGetFloatArray('X', HANGPRINTER_AXES, maxPlannedForce_Newton, seen);
+		gb.TryGetFloatArray('Y', HANGPRINTER_AXES, guyWireLengths, seen);
+		gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, seen);
 		if (seen)
 		{
 			Recalc();
@@ -367,15 +314,15 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float distancesWithRelaxedSprings[HANGPRINTER_AXES];
+	float relaxedSpringLengths[HANGPRINTER_AXES];
 	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
-		distancesWithRelaxedSprings[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
+		relaxedSpringLengths[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
 		// The second term there is the mover's movement in mm due to flex
 	}
 
 	float linePos[HANGPRINTER_AXES];
 	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
-		linePos[i] = distancesWithRelaxedSprings[i] - distancesWithRelaxedSpringsOrigin[i];
+		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	}
 
 	motorPos[A_AXIS] = lrintf(k0[A_AXIS] * (fastSqrtf(spoolRadiiSq[A_AXIS] + linePos[A_AXIS] * k2[A_AXIS]) - spoolRadii[A_AXIS]));
@@ -392,16 +339,66 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 	return (fsquare(motorPos / k0[axis] + spoolRadii[axis]) - spoolRadiiSq[axis]) / k2[axis];
 }
 
+
+void HangprinterKinematics::flexDistances(float const machinePos[3], float const distanceA,
+                                          float const distanceB, float const distanceC,
+                                          float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept {
+	float springKs[HANGPRINTER_AXES] = {
+		SpringK(distanceA * mechanicalAdvantage[A_AXIS] + guyWireLengths[A_AXIS]),
+		SpringK(distanceB * mechanicalAdvantage[B_AXIS] + guyWireLengths[B_AXIS]),
+		SpringK(distanceC * mechanicalAdvantage[C_AXIS] + guyWireLengths[C_AXIS]),
+		SpringK(distanceD * mechanicalAdvantage[D_AXIS] + guyWireLengths[D_AXIS])
+	};
+
+	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
+	StaticForces(machinePos, F);
+
+	float relaxedSpringLengths[HANGPRINTER_AXES] = {
+		distanceA - F[A_AXIS] / (springKs[A_AXIS] * mechanicalAdvantage[A_AXIS]),
+		distanceB - F[B_AXIS] / (springKs[B_AXIS] * mechanicalAdvantage[B_AXIS]),
+		distanceC - F[C_AXIS] / (springKs[C_AXIS] * mechanicalAdvantage[C_AXIS]),
+		distanceD - F[D_AXIS] / (springKs[D_AXIS] * mechanicalAdvantage[D_AXIS])
+	};
+
+	float linePos[HANGPRINTER_AXES] = {
+		relaxedSpringLengths[A_AXIS] - relaxedSpringLengthsOrigin[A_AXIS],
+		relaxedSpringLengths[B_AXIS] - relaxedSpringLengthsOrigin[B_AXIS],
+		relaxedSpringLengths[C_AXIS] - relaxedSpringLengthsOrigin[C_AXIS],
+		relaxedSpringLengths[D_AXIS] - relaxedSpringLengthsOrigin[D_AXIS]
+	};
+
+	float distanceDifferences[HANGPRINTER_AXES] = {
+		distanceA - distancesOrigin[A_AXIS],
+		distanceB - distancesOrigin[B_AXIS],
+		distanceC - distancesOrigin[C_AXIS],
+		distanceD - distancesOrigin[D_AXIS]
+	};
+
+	flex[A_AXIS] = linePos[A_AXIS] - distanceDifferences[A_AXIS];
+	flex[B_AXIS] = linePos[B_AXIS] - distanceDifferences[B_AXIS];
+	flex[C_AXIS] = linePos[C_AXIS] - distanceDifferences[C_AXIS];
+	flex[D_AXIS] = linePos[D_AXIS] - distanceDifferences[D_AXIS];
+}
+
 // Convert motor coordinates to machine coordinates.
 // Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	ForwardTransform(
-		MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS],
-		MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS],
-		MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS],
-		MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + distancesOrigin[D_AXIS],
-		machinePos);
+	float const distanceA = MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS];
+	float const distanceB = MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS];
+	float const distanceC = MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS];
+	float const distanceD = MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + distancesOrigin[D_AXIS];
+	ForwardTransform(distanceA, distanceB, distanceC, distanceD, machinePos);
+
+	// Now we have an approximate machinePos
+	// Let's correct for line flex
+	float flex[HANGPRINTER_AXES] = { 0.0F };
+	flexDistances(machinePos, distanceA, distanceB, distanceC, distanceD, flex);
+	float const adjustedDistanceA = distanceA - flex[A_AXIS];
+	float const adjustedDistanceB = distanceB - flex[B_AXIS];
+	float const adjustedDistanceC = distanceC - flex[C_AXIS];
+	float const adjustedDistanceD = distanceD - flex[D_AXIS];
+	ForwardTransform(adjustedDistanceA, adjustedDistanceB, adjustedDistanceC, adjustedDistanceD, machinePos);
 }
 
 static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], float const v3[3], float const p[3]){
@@ -975,8 +972,8 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	}
 
 	GCodeResult res = GCodeResult::ok;
-	constexpr double MIN_TORQUE_N = 0.001;
-	if (fabs(force_Newton) < MIN_TORQUE_N)
+	constexpr float MIN_TORQUE_N = 0.001;
+	if (fabsf(force_Newton) < MIN_TORQUE_N)
 	{
 		res = SetODrive3PosMode(driver, reply);
 		if (res == GCodeResult::ok)

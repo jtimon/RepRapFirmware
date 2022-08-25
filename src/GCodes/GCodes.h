@@ -32,6 +32,7 @@ Licence: GPL
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "GCodeMachineState.h"
+#include <GCodes/CollisionAvoider.h>
 #include <GCodes/TriggerItem.h>
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
@@ -129,7 +130,8 @@ public:
 
 	float GetPrimarySpeedFactor() const noexcept { return moveStates[0].speedFactor; }	// Return the current speed factor as a fraction
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
-
+	float GetFilamentDiameter(size_t extruder) const noexcept
+		pre(extruder < MaxExtruders) { return filamentDiameters[extruder]; }
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const noexcept
@@ -225,7 +227,7 @@ public:
 
 	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
-	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
+	void StartToolChange(GCodeBuffer& gb, uint8_t param) noexcept;
 
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
@@ -258,7 +260,9 @@ public:
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
+	const MovementState& GetMovementState(unsigned int queueNumber) pre(queueNumber < NumMovementSystems) const noexcept { return moveStates[queueNumber]; }
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
+	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 
@@ -314,6 +318,9 @@ public:
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
 	static constexpr const char* DAEMON_G = "daemon.g";
 	static constexpr const char* RUNONCE_G = "runonce.g";
+#if SUPPORT_PROBE_POINTS_FILE
+	static constexpr const char* DefaultProbeProbePointsFile = "probePoints.csv";
+#endif
 
 private:
 	GCodes(const GCodes&) = delete;
@@ -335,6 +342,7 @@ private:
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock movement
+	bool LockAllMovement(const GCodeBuffer& gb) noexcept;						// Lock movement on all queues
 	void GrabResource(const GCodeBuffer& gb, Resource r) noexcept;				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab the movement lock even if it is already owned
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
@@ -367,11 +375,11 @@ private:
 
 	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;												// Try to find a macro file that implements a G or M command
 
-	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)		// Execute an arc move
+	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)							// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
-	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;										// Check that enough axes have been homed
+	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
 	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
@@ -405,10 +413,10 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
+	void LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb) noexcept;																// Pop feedrate etc
+	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
 	void DisableDrives() noexcept;																	// Turn the motors off
 	bool SendConfigToLine();																		// Deal with M503
 
@@ -423,16 +431,17 @@ private:
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
-	void SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException);				// Set all a tool's heaters active and standby temperatures, for M104/M109
+	void SetToolHeaters(const GCodeBuffer& gb, Tool *tool, float temperature) THROWS(GCodeException);	// Set all a tool's heaters active and standby temperatures, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
-	void GenerateTemperatureReport(const StringRef& reply) const noexcept;					// Store a standard-format temperature report in reply
+	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
 
-	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the current position from the Move class
+	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the machine position from the Move class and transform it to the user position
+	void UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, MovementState& ms) noexcept;	// Update the user position from the machine position
 	void ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																							// Convert user coordinates to head reference point coordinates
 	void ToolOffsetTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
@@ -448,15 +457,15 @@ private:
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;	// save some information in config-override.g
 #endif
 
-	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);								// Retract or un-retract filaments
+	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeException);			// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
 	void CheckTriggers() noexcept;															// Check for and execute triggers
 	void DoEmergencyStop() noexcept;														// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept	// Pause the print
-		pre(resourceOwners[movementResource] == &gb);
+	bool DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print due to a command in the file itself
+	bool DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print returning true if successful, false if we can't yet
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;									// Check if a pause is pending, action it if so
 	void ProcessEvent(GCodeBuffer& gb) noexcept;											// Start processing a new event
 
@@ -466,16 +475,20 @@ private:
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the height map from file
-	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;		// Save the height map to the specified file
-	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;				// Save the height map to the file specified by P parameter
+	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the height map from file
+	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;				// Save the height map to the specified file
+	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const THROWS(GCodeException);	// Save the height map to the file specified by P parameter
+# if SUPPORT_PROBE_POINTS_FILE
+	GCodeResult LoadProbePointsMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load map of reachable probe points from file
+	void ClearProbePointsInvalid() noexcept;
+# endif
 #endif
-	void ClearBedMapping();																	// Stop using bed compensation
-	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
-	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
-	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps(bool fastThenSlow) noexcept;										// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply);						// Probes a series of points and sets the bed equation
+	void ClearBedMapping() noexcept;																// Stop using bed compensation
+	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Start probing the grid, returning true if we didn't because of an error
+	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);	// Set up currentZProbeNumber and return the probe
+	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Probes at a given position - see the comment at the head of the function itself
+	void InitialiseTaps(bool fastThenSlow) noexcept;												// Set up to do the first of a possibly multi-tap probe
+	void SetBedEquationWithProbe(int sParam, const StringRef& reply) noexcept;						// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
@@ -530,6 +543,10 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
+	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M597
+	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
+	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;	// synchronise motion systems
+	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION
@@ -542,14 +559,11 @@ private:
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
 #if HAS_AUX_DEVICES
-#if !ALLOW_ARBITRARY_PANELDUE_PORT
-	static constexpr
-#endif
-	uint8_t serialChannelForPanelDueFlashing
-#if !ALLOW_ARBITRARY_PANELDUE_PORT
-	= 1
-#endif
-	;
+# if ALLOW_ARBITRARY_PANELDUE_PORT
+	uint8_t serialChannelForPanelDueFlashing;
+# else
+	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+# endif
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
 #endif
@@ -563,26 +577,25 @@ private:
 
 	GCodeBuffer* gcodeSources[NumGCodeChannels];						// The various sources of gcodes
 
-	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
-	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
-	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
-	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
-	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
-	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
-	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];
-	GCodeBuffer*& lcdGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)];					// This one for the 12864 LCD
-	GCodeBuffer*& spiGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)];
-	GCodeBuffer*& daemonGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)];
-	GCodeBuffer*& aux2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)];				// This one is reserved for the second async serial interface
-	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer* HttpGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)]; }
+	GCodeBuffer* TelnetGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)]; }
+	GCodeBuffer* FileGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)]; }
+	GCodeBuffer* UsbGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)]; }
+	GCodeBuffer* AuxGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)]; }					// This one is for the PanelDue on the async serial interface
+	GCodeBuffer* TriggerGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)]; }			// Used for executing config.g and trigger macro files
+	GCodeBuffer* QueuedGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)]; }
+	GCodeBuffer* LcdGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)]; }					// This one for the 12864 LCD
+	GCodeBuffer* SpiGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)]; }
+	GCodeBuffer* DaemonGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)]; }
+	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }					// This one is reserved for the second async serial interface
+	GCodeBuffer* AutoPauseGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)]; }		// GCode state machine used to run macros on power fail, heater faults and filament out
 #if SUPPORT_ASYNC_MOVES
-	GCodeBuffer*& file2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)];
-	GCodeBuffer*& queue2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)];
+	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
+	GCodeBuffer* Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
-	static Mutex resourceMutex;
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
 	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
@@ -634,6 +647,7 @@ private:
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
+	float filamentDiameters[MaxExtruders];		// diameter of the filament in each extruder
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
 
@@ -654,6 +668,9 @@ private:
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
 	int8_t tapsDone;							// how many times we tapped the current point
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
+#if SUPPORT_PROBE_POINTS_FILE
+	bool probePointsFileLoaded;					// true if we loaded a probe point file since we last cleared the grid
+#endif
 
 	// Simulation and print time
 	float simulationTime;						// Accumulated simulation time
@@ -694,6 +711,11 @@ private:
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
+
+#if SUPPORT_ASYNC_MOVES
+	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
+	CollisionAvoider collisionChecker;
+#endif
 
 #if HAS_MASS_STORAGE
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
@@ -748,6 +770,11 @@ inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 }
 
 inline const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
+{
+	return moveStates[0];
+}
+
+inline const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
 {
 	return moveStates[0];
 }
