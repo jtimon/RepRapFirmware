@@ -2537,6 +2537,8 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		reply.printf("Firmware binary \"%s\" not found", firmwareBinaryLocation.c_str());
 		return false;
 	}
+// FIXME: Add STM32 size check
+#if !STM32
 #if SAME5x
 	// UF2 files consist of 512 byte blocks with (for the SAME5x) 256 bytes of data per block
 	if ((firmwareFile->Length() / 512) * 256 > FLASH_SIZE)
@@ -2548,7 +2550,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		reply.printf("Firmware binary \"%s\" is too big for the available flash memory", filenameRef.c_str());
 		return false;
 	}
-
+#endif
 	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
 	uint32_t firstDword;
 	bool ok =

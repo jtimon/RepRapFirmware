@@ -813,6 +813,7 @@ bool HeightMap::InterpolateMissingPoint(size_t axis0Index, size_t axis1Index, fl
 	}
 	return false;
 }
+#endif
 
 #ifdef LPC_DEBUG
 void HeightMap::Diagnostics(MessageType mtype) noexcept
