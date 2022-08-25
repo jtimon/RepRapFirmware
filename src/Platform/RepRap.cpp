@@ -2608,12 +2608,7 @@ void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexc
 }
 #endif
 
-<<<<<<< HEAD
 #if !LPC17xx
-=======
-#endif
-
->>>>>>> upstream/3.5-dev
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_DIRECT_LCD
