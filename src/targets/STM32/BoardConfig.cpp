@@ -39,8 +39,6 @@
 # include "DMABitIO.h"
 #endif
 
-extern char _sccmram;					// defined in linker script
-extern char _eccmram;					// defined in linker script
 static constexpr char boardConfigFile[] = "board.txt";
 
 //Single entry for Board name
@@ -53,6 +51,9 @@ static const boardConfigEntry_t boardEntryConfig[]=
 static const boardConfigEntry_t boardConfigs[]=
 {
     {"leds.diagnostic", &DiagPin, nullptr, cvPinType},
+    {"leds.diagnosticOn", &DiagOnPolarity, nullptr, cvBoolType},
+    {"leds.activity", &ActLedPin, nullptr, cvPinType},
+    {"leds.activityOn", &ActOnPolarity, nullptr, cvBoolType},
 
     //Steppers
     {"stepper.powerEnablePin", &StepperPowerEnablePin, nullptr, cvPinType},
@@ -75,6 +76,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"heat.tempSensePins", TEMP_SENSE_PINS, &NumThermistorInputs, cvPinType},
     {"heat.spiTempSensorCSPins", SpiTempSensorCsPins, &MaxSpiTempSensors, cvPinType},
     {"heat.spiTempSensorChannel", &TempSensorSSPChannel, nullptr, cvUint8Type},
+    {"heat.thermistorSeriesResistor", &DefaultThermistorSeriesR, nullptr, cvFloatType},
     
     //ATX Power
     {"atx.powerPin", &ATX_POWER_PIN, nullptr, cvPinType},
@@ -120,6 +122,7 @@ static const boardConfigEntry_t boardConfigs[]=
     {"8266wifi.csPin", &SamCsPin, nullptr, cvPinType},
     {"8266wifi.serialRxTxPins", &WifiSerialRxTxPins, &NumberSerialPins, cvPinType},
     {"8266wifi.spiChannel", &WiFiSpiChannel, nullptr, cvUint8Type},    
+    {"8266wifi.clockReg", &WiFiClockReg, nullptr, cvUint32Type},
 #endif
 
 #if HAS_SBC_INTERFACE
@@ -695,6 +698,7 @@ void BoardConfig::Init() noexcept
 #if HAS_WIFI_NETWORKING
     if(SamCsPin != NoPin) pinMode(SamCsPin, OUTPUT_LOW);
     if(EspResetPin != NoPin) pinMode(EspResetPin, OUTPUT_LOW);
+    // Setup WiFi pins for compatibility
     APIN_ESP_SPI_MOSI = SPIPins[WiFiSpiChannel][2];
     APIN_ESP_SPI_MISO = SPIPins[WiFiSpiChannel][1];
     APIN_ESP_SPI_SCK = SPIPins[WiFiSpiChannel][0];
@@ -841,6 +845,18 @@ void BoardConfig::PrintValue(MessageType mtype, configValueType configType, void
 
 
 extern "C" uint32_t USBReadOverrun;
+extern uint32_t _sdata;
+extern uint32_t _estack;
+#if STM32F4
+extern uint32_t _sccmram;
+extern uint32_t _ccmramend;
+#elif STM32H7
+extern uint32_t _nocache_ram_start;
+extern uint32_t _nocache_ram_end;
+extern uint32_t _nocache2_ram_start;
+extern uint32_t _nocache2_ram_end;
+#endif
+
 //Information printed by M122 P200
 void BoardConfig::Diagnostics(MessageType mtype) noexcept
 {
@@ -955,6 +971,15 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
     MessageF(mtype, "T_MCU calc (corrected) %f\n", (double)(((tmcuraw*3.3f)/(float)((1 << LegacyAnalogIn::AdcBits) - 1) - 0.76f)/0.0025f + 25.0f));
     MessageF(mtype, "Device Id %x Revison Id %x CPUId r%dp%d \n", (unsigned)LL_DBGMCU_GetDeviceID(), (unsigned)LL_DBGMCU_GetRevisionID(),  
                                             (unsigned)((SCB->CPUID >> 20) & 0x0F), (unsigned)(SCB->CPUID & 0x0F));
+    MessageF(mtype, "\n== RAM ==\n");
+    MessageF(mtype, "RAM start 0x%x end 0x%x\n", (unsigned)&_sdata, (unsigned)&_estack);
+#if STM32F4
+    MessageF(mtype, "CCMRAM start 0x%x end 0x%x\n", (unsigned)&_sccmram, (unsigned)&_ccmramend);
+#elif STM32H7
+    MessageF(mtype, "No cache RAM 1 start 0x%x end 0x%x\n", (unsigned)&_nocache_ram_start, (unsigned)&_nocache_ram_end);
+    MessageF(mtype, "No cache RAM 2 start 0x%x end 0x%x\n", (unsigned)&_nocache2_ram_start, (unsigned)&_nocache2_ram_end);
+#endif
+
     MessageF(mtype, "\n== USB ==\n");
     MessageF(mtype, "Read overrun %d\n", (int)USBReadOverrun);
     USBReadOverrun = 0;

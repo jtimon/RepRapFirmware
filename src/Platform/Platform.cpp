@@ -1066,6 +1066,10 @@ void Platform::Spin() noexcept
 		}
 	}
 #endif
+#if !SUPPORT_CAN_EXPANSION
+	// Blink the LED at about 2Hz.
+	digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+#endif
 
 #if SUPPORT_CAN_EXPANSION
 	// Turn off the ACT LED if it is time to do so
@@ -1723,7 +1727,7 @@ extern void SPWMDiagnostics();
 	if (resetReason & RSTC_RCAUSE_SYST)		{ return "software"; }
 	if (resetReason & RSTC_RCAUSE_BACKUP)	{ return "backup/hibernate"; }
 	return "unknown";
-#elif defined(__LPC17xx__)
+#elif LPC17xx
 	if (LPC_SYSCTL->RSID & RSID_POR) { return "power up"; }
 	if (LPC_SYSCTL->RSID & RSID_EXTR) { return "reset button"; }
 	if (LPC_SYSCTL->RSID & RSID_WDTR) { return "watchdog"; }
@@ -1731,6 +1735,9 @@ extern void SPWMDiagnostics();
 	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { return "software"; }
 	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { return "lockup"; }
 	return "unknown";
+#elif STM32
+	const char *_ecv_array resetReasons[] = {"unknown", "low power", "window watchdog", "ind. watchdog", "software", "power on/off", "pin", "brownout"};
+	return resetReasons[GetResetCause()];
 #else
 	constexpr const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG

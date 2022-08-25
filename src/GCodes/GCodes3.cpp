@@ -620,6 +620,12 @@ void GCodes::SwitchToExpansionMode() noexcept
 	numVisibleAxes = numTotalAxes = NumDirectDrivers;
 	FilamentMonitor::DeleteAll();
 	memcpy(axisLetters, AllowedAxisLetters, sizeof(axisLetters));
+	for (size_t extr = 0; extr < MaxExtruders; ++extr)
+	{
+		DriverId driver;
+		driver.SetLocal(extr + MinAxes);
+		platform.SetExtruderDriver(extr, driver);
+	}
 	for (size_t axis = 0; axis < NumDirectDrivers; ++axis)
 	{
 		DriverId driver;
@@ -1278,8 +1284,8 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 #endif
 	case 7:			// configure brake
 		return platform.ConfigureDriverBrakePort(gb, reply, drive);
-#if STM32F4 && HAS_SMART_DRIVERS
-	case 8:
+#if STM32 && HAS_SMART_DRIVERS
+	case 9:
 		{
 			bool seen = false;
 			float fval;

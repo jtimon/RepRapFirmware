@@ -45,6 +45,10 @@ constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for read
 char sbcFirmwareChunk[MaxFileChunkSize];
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include "SoftwareReset.h"
+# include "Hardware/ExceptionHandlers.h"
+#endif
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
@@ -56,7 +60,17 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 	   )																	// we only understand bootloader version 0 and files requests for main firmware and bootloader
 	{
 		String<MaxFilenameLength> fname;
-		fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
+#if STM32
+		// allow use of non Duet firmware
+		if (!strncmp("stm", msg.boardType, 3))
+		{
+			fname.copy("firmware-");
+		}
+		else
+#endif
+		{
+			fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
+		}
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
 		fname.cat((msg.uf2Format) ? ".uf2" : ".bin");
 
@@ -402,11 +416,14 @@ static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& ms
 
 	if (msg.module == 0)
 	{
+// We use a built in IAP on STM32
+#if !STM32
 		if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, IAP_CAN_LOADER_FILE))
 		{
 			reply.printf("In-application programming binary \"%s\" not found on board %u", FIRMWARE_DIRECTORY IAP_CAN_LOADER_FILE, CanInterface::GetCanAddress());
 			return GCodeResult::error;
 		}
+#endif
 		reply.printf("Board %u starting firmware update", CanInterface::GetCanAddress());
 		reprap.ScheduleFirmwareUpdateOverCan();
 		return GCodeResult::ok;

@@ -346,11 +346,11 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 		}
 		if (currentPort != (int32_t)ledPortNumber)
 		{
+			numAlreadyInBuffer = 0;
 			currentPort = ledPortNumber;
 			StartNeoPixelStartFrame();
 			return GCodeResult::notFinished;
 		}
-		numAlreadyInBuffer = 0;
 	}
 	// Check to make sure we have a port selected
 	if (currentPort < 0)

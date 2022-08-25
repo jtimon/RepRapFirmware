@@ -8,7 +8,7 @@
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
-
+#if STM32F4
 constexpr PinEntry PinTable_FYSETC_SPIDER[] =
 {
     //Thermistors
@@ -115,4 +115,121 @@ constexpr BoardDefaults fysetc_spider_Defaults = {
 #endif
 };
 
+constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
+{
+    //Thermistors
+    {PC_1, "e0temp,t0"},
+    {PF_9, "e1temp,t1"},
+    {PC_3, "e2temp,t2"},
+    {PC_2, "e3temp,t3"},
+    {PC_0, "e4temp,t4"},
+    {PF_10, "bedtemp,t5"},
+
+    //Endstops
+    {PC_5,   "xstop,x-"},
+    {PC_4,   "ystop,y-"},
+    {PB_6,   "zstop,z-"},
+    {PB_5,   "xstopmax,x+"},
+    {PF_13,  "ystopmax,y+"},
+    {PF_14,  "zstopmax,z+"},
+    
+    //Heaters and Fans (Big and Small Mosfets}
+    {PE_10,   "bed,hbed" },
+    {PB_4,    "e0heat,he0" },
+    {PB_0,    "e1heat,he1" },
+    {PD_13,   "e2heat,he2" },
+    {PC_8,    "e3heat,he3" },
+    {PA_15,   "e4heat,he4" },
+    {PE_8,    "fan0,fan" },
+    {PE_9,    "fan1" },
+    {PD_15,   "fan2" },
+    {PD_12,   "fan3" },
+    {PD_14,   "fan4" },
+
+    //Servos
+    {PA_1,    "servo0" },
+
+    {PB_3,  "PB3"}, //RST
+    {PG_2,  "PG2"}, //IO0
+    {PG_1,  "PG1"}, //IO4
+    {PB_12, "PB12"}, //CS
+    {PB_13, "PB13"}, //CLK
+    {PB_14, "PB14"}, //MISO
+    {PB_15, "PB15"}, //MOSI
+    
+    //EXP1
+//    {PE_7,   "PE7"},
+//    {PG_4,   "PG4"},
+//    {PC_11,   "PC11"},
+//    {PC_10,   "PC10"},
+//    {PD_0,   "PD0"},
+//    {PC_12,   "PC12"},
+//    {PA_8,   "PA8"},
+//    {PC_7,   "PC9"},
+
+    //EXP2
+//    {PA_6,   "PA6"},  // MISO
+//    {PA_5,   "PA5"},  // SCK
+//    {PC_6,   "PC6"},  // ENC_A
+//    {PA_4,   "PA4"},  // CS
+//    {PC_7,   "PC7"},  // ENC_B
+//    {PA_7,   "PA7"},  // MOSI
+//    {PB_10,  "PB10"},// SD_DET
+	
+  	//SPI
+//    {PE_12,   "PE12"}, // SCK4
+//    {PE_13,   "PE13"}, // MISO4
+//    {PE_14,   "PE14"}, // MOSI4
+//    {PD_2,    "X-CS,PD2"},
+//    {PE_15,   "X2-CS,PE15"},
+//    {PD_8,    "Y-CS,PD8"},
+//    {PD_7,    "Z-CS,PD7"},
+//    {PC_14,   "Z2-CS,PC14"},
+//    {PC_15,   "E0-CS,PC15"},
+//    {PG_3,    "E1-CS,PG3"},
+//    {PD_9,    "E2-CS,PD9"},
+//    {PF_5,    "E3-CS,PF5"},
+//    {PG_11,   "E4-CS,PG11"},
+  	
+  	//I2C
+//    {PF_0,   "PF1"},  // SDA
+//    {PF_1,   "PF0"},  // SCL
+  	
+  	//UART
+    {PA_9,   "PA9"},  // TX1
+    {PA_10,  "PA10"}, // RX1
+
+  	// NEOPIXEL
+//    {PD_3,   "PD3"},
+};
+
+constexpr BoardDefaults fysetc_spider_king407_Defaults = {
+    {0xb86f16db},                               // Signature
+    SD_SPI1_B,                                  // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {PC_10, PC_11, PC_12},                  //SPI2
+        {PE_12, PE_13, PE_14},                  //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+    },
+	  10,											// Number of drivers
+    {PE_11, PG_10, PG_15, PD_5, PE_6,  PE_2,  PG_9,  PB_2,  PF_2, PG_5,},   //enablePins
+    {PG_7,  PD_10, PG_14, PD_4, PE_5,  PE_3,  PG_13, PE_1,  PF_4, PF_15,},  //stepPins
+    {PG_6,  PD_10, PG_12, PD_6, PC_13, PE_4,  PG_8,  PE_0,  PF_3, PG_0},   	//dirPins
+#if HAS_SMART_DRIVERS
+    {PD_12, PE_15, PD_8,  PD_7, PC_14, PC_15, PG_3,  PD_9,  PF_5, PG_11},   //uartPins
+    10,                                      	// Smart drivers
+#endif
+    0,                                       	//digiPot Factor
+#if HAS_VOLTAGE_MONITOR
+    NoPin,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
+};
+#endif
 #endif

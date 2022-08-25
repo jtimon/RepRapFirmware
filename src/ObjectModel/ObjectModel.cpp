@@ -368,6 +368,15 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 			break;
 
 		case ExpansionDetail::firmwareFileName:
+#if STM32
+			// allow use of non Duet firmware
+			if (indexOfDivider1 >= 3 && !strncmp("stm", sVal, 3))
+			{
+				rslt.cat("firmware-");
+			}
+			else
+#endif
+
 			rslt.cat("Duet3Firmware_");
 			rslt.catn(sVal, indexOfDivider1);
 			rslt.cat((strncmp(sVal, "Mini5plus", indexOfDivider1) == 0) ? ".uf2" : ".bin");

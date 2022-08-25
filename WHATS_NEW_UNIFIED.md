@@ -1,3 +1,66 @@
+Version 3.4.2rc2_101
+====================
+* Duet3d 3.4.2rc2
+
+Version 3.4.2rc1+_105
+=====================
+* Fix H7 bootloader to allow it to work with klipper
+* Stop stack being trashed during some software reset calls
+* Fix reporting of board reset reason
+
+
+Version 3.4.2rc1+_104
+=====================
+* Duet3d 3.4.2rc1+ as of 28/07/2022
+* Allow firmware update over CAN-FD for boards in expansion mode
+* Adjust firmware filenames to allow CAN-FD updates
+* Enable FTP
+* Add Fysetc Spider King
+* Report RAM addresses in M122 P200
+
+
+Version 3.4.2rc1+_101
+=====================
+* Duet3d 3.4.2rc1+ as of 17/07/2022
+* Fix timeouts with single TMC22xx driver
+* Improved UART error detection for TMC22xx drivers
+* Add new configuration options:
+  leds.diagnosticOn : boolean, sets polarity of diag LED
+  leds.activity : Pin, sets pin for CAN activity LED
+  leds.activityOn : boolean, sets polarity of CAN activity LED
+* Added support for Reset and EmergencyReset when in CAN expansion board mode
+
+
+Version 3.4.2beta1_101
+=================
+* Duet3d 3.4.2beta1 as of 29/6/2022
+* Changed M569.8 to M569.9 to avoid clash
+* Added Fly super8_pro
+* PWM hardware now only allocated first time it is needed (output != 0 && output != 1)
+* STM32H7: Software PWM not working on H7 builds (either full on or off)
+* STM32H7: M569.8/M569.9 not recognised
+
+Version 3.4.1_102
+=================
+* Fixed bug when freeing attached I/O pin
+
+Version 3.4.1_101
+==================
+* Duet3D 3.4.1
+* Fix pins for Fly e3_prov3
+* Firmware filenames are now mcu specific (firmware.bin -> firmware-stm32h7.bin/firmware-stm32f4.bin)
+* A firmware update (via M997) now performs an emergency stop (shutdown heaters/additional boards)
+* Reset WiFi SPI device after setting new clock speed (avoids spurious error report)
+
+Version 3.4.1RC2_101
+====================
+* Duet3D 3.4.1RC2
+* Allow default thermistor series resistor value to be configured (heat.thermistorSeriesResistor)
+* Allow default esp WiFi clock registor to be configured (8266wifi.clockReg)
+* Don't reset accumulated pixel state unless pixel string changes
+* Cleanup pin names to allow usage of "_" and "-" as in Duet3D version
+* STM32F4: Allow pin D.13 to use hardware PWM
+
 Version 3.4.1RC102
 ==================
 * Duet3d 3.4.1RC1

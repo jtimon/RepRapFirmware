@@ -34,23 +34,23 @@ void InitResetCause() noexcept
         ResetCause = RESET_CAUSE_INDEPENDENT_WATCHDOG_RESET;
     }
 #endif
-    else if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
-    {
-        ResetCause = RESET_CAUSE_SOFTWARE_RESET; // This reset is induced by calling the ARM CMSIS `NVIC_SystemReset()` function!
-    }
     else if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST))
     {
         ResetCause = RESET_CAUSE_POWER_ON_POWER_DOWN_RESET;
-    }
-    else if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST))
-    {
-        ResetCause = RESET_CAUSE_EXTERNAL_RESET_PIN_RESET;
     }
     // Needs to come *after* checking the `RCC_FLAG_PORRST` flag in order to ensure first that the reset cause is 
     // NOT a POR/PDR reset. See note below. 
     else if (__HAL_RCC_GET_FLAG(RCC_FLAG_BORRST))
     {
         ResetCause = RESET_CAUSE_BROWNOUT_RESET;
+    }
+    else if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
+    {
+        ResetCause = RESET_CAUSE_SOFTWARE_RESET; // This reset is induced by calling the ARM CMSIS `NVIC_SystemReset()` function!
+    }
+    else if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST))
+    {
+        ResetCause = RESET_CAUSE_EXTERNAL_RESET_PIN_RESET;
     }
     else
     {

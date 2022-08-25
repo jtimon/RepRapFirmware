@@ -266,7 +266,6 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept
 {
 	DDA *cdda = currentDda;											// capture volatile variable
-
 	// If we are simulating, simulate completion of the current move.
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
 	if (simulationMode != SimulationMode::off && cdda != nullptr)
@@ -316,7 +315,6 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 							: 0;
 			}
 		}
-
 		uint32_t ret = PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
 		if (simulationMode >= SimulationMode::normal)
 		{
@@ -332,10 +330,8 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 				ret = moveTime;
 			}
 		}
-
 		return ret;
 	}
-
 	// No DDA is executing, so start executing a new one if possible
 	DDA * dda = getPointer;											// capture volatile variable
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...

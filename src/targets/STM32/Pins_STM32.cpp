@@ -12,7 +12,7 @@ constexpr BoardEntry LPC_Boards[] =
     {{"generic"},      PinTable_Generic,    ARRAY_SIZE(PinTable_Generic),    Generic_Defaults},
 #if STM32H7
     {{"fly_super5"},      PinTable_FLY_SUPER5,    ARRAY_SIZE(PinTable_FLY_SUPER5),    fly_super5_Defaults},
-    {{"fly_super8h7"},      PinTable_FLY_SUPER8H7,    ARRAY_SIZE(PinTable_FLY_SUPER8H7),    fly_super8h7_Defaults},
+    {{"fly_super8h7", "fly_super8_pro"},      PinTable_FLY_SUPER8H7,    ARRAY_SIZE(PinTable_FLY_SUPER8H7),    fly_super8h7_Defaults},
     {{"biquskr_se_bx_2.0"},      PinTable_BIQU_SKR_SE_BX_v2_0,    ARRAY_SIZE(PinTable_BIQU_SKR_SE_BX_v2_0),    biqu_skr_se_bx_v2_0_Defaults},
     {{"biquskr_3"},      PinTable_BTT_SKR_3,    ARRAY_SIZE(PinTable_BTT_SKR_3),    btt_skr_3_Defaults},
 #else
@@ -32,6 +32,7 @@ constexpr BoardEntry LPC_Boards[] =
     {{"biqoctopus_1.1", "biquoctopus_1.1"}, PinTable_BTT_OCTOPUS, ARRAY_SIZE(PinTable_BTT_OCTOPUS), btt_octopus_Defaults},
     {{"biqoctopuspro_1.0", "biqoctopuspro_1.0"}, PinTable_BTT_OCTOPUSPRO, ARRAY_SIZE(PinTable_BTT_OCTOPUSPRO), btt_octopuspro_Defaults},
     {{"fysetc_spider"}, PinTable_FYSETC_SPIDER, ARRAY_SIZE(PinTable_FYSETC_SPIDER), fysetc_spider_Defaults},
+    {{"fysetc_spider_king407"}, PinTable_FYSETC_SPIDER_KING407, ARRAY_SIZE(PinTable_FYSETC_SPIDER_KING407), fysetc_spider_king407_Defaults},
 #endif
 };
 constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
@@ -45,6 +46,7 @@ constexpr size_t NumBoardEntries = ARRAY_SIZE(LPC_Boards);
 Pin TEMP_SENSE_PINS[NumThermistorInputs];
 Pin SpiTempSensorCsPins[MaxSpiTempSensors]; // Used to deselect all devices at boot
 SSPChannel TempSensorSSPChannel = SSPNONE;  // Off by default
+float DefaultThermistorSeriesR = 4700.0;
 
 Pin ATX_POWER_PIN = NoPin;                  // Pin to use to control external power
 bool ATX_POWER_INVERTED = false;            // Should the state of this pin be inverted
@@ -69,6 +71,9 @@ Pin PanelButtonPin = NoPin;         //Extra button on Viki and RRD Panels (reset
 SSPChannel LcdSpiChannel = SSPNONE; //Off by default
 
 Pin DiagPin = NoPin;
+bool DiagOnPolarity = true;
+Pin ActLedPin = NoPin;
+bool ActOnPolarity = true;
 
 //Stepper settings
 Pin ENABLE_PINS[NumDirectDrivers];
@@ -104,6 +109,7 @@ Pin SPIPins[NumSPIDevices][NumSPIPins];                 //GPIO pins for hardware
     Pin APIN_ESP_SPI_MOSI = NoPin;
     Pin APIN_ESP_SPI_MISO = NoPin;
     Pin APIN_ESP_SPI_SCK = NoPin;
+    uint32_t WiFiClockReg = 0;
 
     Pin WifiSerialRxTxPins[NumberSerialPins] = {NoPin, NoPin};
 #endif
@@ -289,7 +295,7 @@ bool LookupPinName(const char*pn, LogicalPin& lpin, bool& hardwareInverted) noex
             {
                 ++p;
                 ++q;
-                while (*p == '_') p++;
+                while (*p == '_' || *p =='-') p++;
             }
             if ((*p == 0 || *p == ',') && (*q == 0 || *q == ','))
             {

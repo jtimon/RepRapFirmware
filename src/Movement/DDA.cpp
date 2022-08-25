@@ -2224,7 +2224,6 @@ void DDA::StopDrive(size_t drive) noexcept
 		}
 #endif
 	}
-
 #if SUPPORT_CAN_EXPANSION
 	afterPrepare.drivesMoving.ClearBit(drive);
 	if (afterPrepare.drivesMoving.IsEmpty())

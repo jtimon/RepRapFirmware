@@ -256,7 +256,17 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	}
 
 	String<StringLength50> firmwareFilename;
-	firmwareFilename.copy((moduleNumber == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
+	#if STM32
+	// allow use of non Duet firmware
+	if (!strncmp("stm", reply.c_str(), 3))
+	{
+		firmwareFilename.copy("firmware-");
+	}
+	else
+	#endif
+	{
+		firmwareFilename.copy((moduleNumber == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
+	}
 	firmwareFilename.cat(reply.c_str());
 	firmwareFilename.cat((strcmp(reply.c_str(), "Mini5plus") == 0) ? ".uf2" : ".bin");
 
