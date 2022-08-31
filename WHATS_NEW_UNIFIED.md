@@ -1,3 +1,10 @@
+Version 3.4.2rc2_102
+====================
+* Duet3d 3.4-extruder-only-movement-fix
+* STM32F4 Fix SDIO error during firmware update
+* Added "biquskr_3_ez"
+* Added configuration options "pins.SetHigh" and "pins.SetLow"
+
 Version 3.4.2rc2_101
 ====================
 * Duet3d 3.4.2rc2
