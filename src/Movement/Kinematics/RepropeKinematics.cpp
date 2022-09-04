@@ -17,12 +17,25 @@
 
 #include <General/Portability.h>
 
+constexpr float DefaultAnchorZ = 260.0;
+// TODO Move away from RoundBedKinematics, allow max_x and max_y to be different
+// max_x = 260
+// max_y = 260
+// pulley_distance_from_corner = 20 + 15 + 42/2 = 56
+// pulley_distance_from_frame = 15
+// 260 / 2 - pulley_distance_from_corner = 130 - 56 = 74
+// 260 / 2 - pulley_distance_from_frame = 130 - 15 = 115
+
 // Default anchor coordinates
 // These are only placeholders. Each machine must have these values calibrated in order to work correctly.
-constexpr float DefaultAnchors[4][3] = {{    0.0, -2000.0, -100.0},
-                                        { 2000.0,  1000.0, -100.0},
-                                        {-2000.0,  1000.0, -100.0},
-                                        {    0.0,     0.0, 3000.0}};
+constexpr float DefaultAnchors[8][3] = {{ -115.0,    74.0, DefaultAnchorZ},
+                                        {  -74.0,   115.0, DefaultAnchorZ},
+                                        {   74.0,   115.0, DefaultAnchorZ},
+                                        {  115.0,    74.0, DefaultAnchorZ},
+                                        {  115.0,   -74.0, DefaultAnchorZ},
+                                        {   74.0,  -115.0, DefaultAnchorZ},
+                                        {  -74.0,  -115.0, DefaultAnchorZ},
+                                        { -115.0,   -74.0, DefaultAnchorZ}};
 constexpr float DefaultPrintRadius = 1500.0;
 
 #if SUPPORT_OBJECT_MODEL
@@ -81,13 +94,13 @@ void RepropeKinematics::Init() noexcept
 	 * In practice you might want to compensate a bit more or a bit less */
 	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[4] = { 75.0, 75.0, 75.0, 75.0}; // HP4 default
+	constexpr float DefaultSpoolRadii[8] = { 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0};
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 2, 2, 2, 4}; // HP4 default
-	constexpr uint32_t DefaultLinesPerSpool[4] = { 1, 1, 1, 1}; // HP4 default
-	constexpr uint32_t DefaultMotorGearTeeth[4] = {  20,  20,  20,  20}; // HP4 default
-	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 255, 255, 255, 255}; // HP4 default
-	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 25, 25, 25, 25};
+	constexpr uint32_t DefaultMechanicalAdvantage[8] = { 2, 2, 2, 2, 2, 2, 2, 2};
+	constexpr uint32_t DefaultLinesPerSpool[8] = { 1, 1, 1, 1, 1, 1, 1, 1};
+	constexpr uint32_t DefaultMotorGearTeeth[8] = {  20,  20,  20,  20,  20,  20,  20,  20};
+	constexpr uint32_t DefaultSpoolGearTeeth[8] = { 255, 255, 255, 255, 255, 255, 255, 255};
+	constexpr uint32_t DefaultFullStepsPerMotorRev[8] = { 25, 25, 25, 25, 25, 25, 25, 25};
 	ARRAY_INIT(anchors, DefaultAnchors);
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
@@ -107,11 +120,10 @@ void RepropeKinematics::Recalc() noexcept
 
 	// This is the difference between a "line length" and a "line position"
 	// "line length" == ("line position" + "line length in origin")
-	lineLengthsOrigin[A_AXIS] = fastSqrtf(fsquare(anchors[A_AXIS][0]) + fsquare(anchors[A_AXIS][1]) + fsquare(anchors[A_AXIS][2]));
-	lineLengthsOrigin[B_AXIS] = fastSqrtf(fsquare(anchors[B_AXIS][0]) + fsquare(anchors[B_AXIS][1]) + fsquare(anchors[B_AXIS][2]));
-	lineLengthsOrigin[C_AXIS] = fastSqrtf(fsquare(anchors[C_AXIS][0]) + fsquare(anchors[C_AXIS][1]) + fsquare(anchors[C_AXIS][2]));
-	lineLengthsOrigin[D_AXIS] = fastSqrtf(fsquare(anchors[D_AXIS][0]) + fsquare(anchors[D_AXIS][1]) + fsquare(anchors[D_AXIS][2]));
-
+	for (size_t i = 0; i < REPROPE_AXES; ++i)
+	{
+		lineLengthsOrigin[i] = fastSqrtf(fsquare(anchors[i][0]) + fsquare(anchors[i][1]) + fsquare(anchors[i][2]));
+	}
 
 	// Line buildup compensation
 	float stepsPerUnitTimesRTmp[REPROPE_AXES] = { 0.0 };
@@ -172,6 +184,26 @@ bool RepropeKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Str
 			error = true;
 			return true;
 		}
+		if (gb.TryGetFloatArray('E', 3, anchors[E_AXIS], reply, seen))
+		{
+			error = true;
+			return true;
+		}
+		if (gb.TryGetFloatArray('F', 3, anchors[F_AXIS], reply, seen))
+		{
+			error = true;
+			return true;
+		}
+		if (gb.TryGetFloatArray('G', 3, anchors[G_AXIS], reply, seen))
+		{
+			error = true;
+			return true;
+		}
+		if (gb.TryGetFloatArray('H', 3, anchors[H_AXIS], reply, seen))
+		{
+			error = true;
+			return true;
+		}
 
 		if (gb.Seen('P'))
 		{
@@ -191,8 +223,16 @@ bool RepropeKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Str
 				"B:%.2f, %.2f, %.2f\n"
 				"C:%.2f, %.2f, %.2f\n"
 				"D:%.2f, %.2f, %.2f\n"
+				"E:%.2f, %.2f, %.2f\n"
+				"F:%.2f, %.2f, %.2f\n"
+				"G:%.2f, %.2f, %.2f\n"
+				"H:%.2f, %.2f, %.2f\n"
 				"P:Print radius: %.1f",
 				(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
+				(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
+				(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
+				(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
+				(double)anchors[E_AXIS][X_AXIS], (double)anchors[E_AXIS][Y_AXIS], (double)anchors[E_AXIS][Z_AXIS],
 				(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
 				(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
 				(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
@@ -241,19 +281,25 @@ bool RepropeKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Str
 		{
 			reply.printf(
 				"Q:Buildup fac %.4f\n"
-				"R:Spool r %.2f, %.2f, %.2f, %.2f\n"
-				"U:Mech Adv %d, %d, %d, %d\n"
-				"O:Lines/spool %d, %d, %d, %d\n"
-				"L:Motor gear teeth %d, %d, %d, %d\n"
-				"H:Spool gear teeth %d, %d, %d, %d\n"
-				"J:Full steps/rev %d, %d, %d, %d",
+				"R:Spool r %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n"
+				"U:Mech Adv %d, %d, %d, %d, %d, %d, %d, %d\n"
+				"O:Lines/spool %d, %d, %d, %d, %d, %d, %d, %d\n"
+				"L:Motor gear teeth %d, %d, %d, %d, %d, %d, %d, %d\n"
+				"H:Spool gear teeth %d, %d, %d, %d, %d, %d, %d, %d\n"
+				"J:Full steps/rev %d, %d, %d, %d, %d, %d, %d, %d",
 				(double)spoolBuildupFactor,
 				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
+				(double)spoolRadii[E_AXIS], (double)spoolRadii[F_AXIS], (double)spoolRadii[G_AXIS], (double)spoolRadii[H_AXIS],
 				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
+				(int)mechanicalAdvantage[E_AXIS], (int)mechanicalAdvantage[F_AXIS], (int)mechanicalAdvantage[G_AXIS], (int)mechanicalAdvantage[H_AXIS],
 				(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
+				(int)linesPerSpool[E_AXIS], (int)linesPerSpool[F_AXIS], (int)linesPerSpool[G_AXIS], (int)linesPerSpool[H_AXIS],
 				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
+				(int)motorGearTeeth[E_AXIS], (int)motorGearTeeth[F_AXIS], (int)motorGearTeeth[G_AXIS], (int)motorGearTeeth[H_AXIS],
 				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
+				(int)spoolGearTeeth[E_AXIS], (int)spoolGearTeeth[F_AXIS], (int)spoolGearTeeth[G_AXIS], (int)spoolGearTeeth[H_AXIS],
+				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS],
+				(int)fullStepsPerMotorRev[E_AXIS], (int)fullStepsPerMotorRev[F_AXIS], (int)fullStepsPerMotorRev[G_AXIS], (int)fullStepsPerMotorRev[H_AXIS]
 				);
 		}
 	}
@@ -275,21 +321,13 @@ bool RepropeKinematics::CartesianToMotorSteps(const float machinePos[], const fl
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	float squaredLineLengths[REPROPE_AXES];
-	squaredLineLengths[A_AXIS] = LineLengthSquared(machinePos, anchors[A_AXIS]);
-	squaredLineLengths[B_AXIS] = LineLengthSquared(machinePos, anchors[B_AXIS]);
-	squaredLineLengths[C_AXIS] = LineLengthSquared(machinePos, anchors[C_AXIS]);
-	squaredLineLengths[D_AXIS] = LineLengthSquared(machinePos, anchors[D_AXIS]);
-
 	float linePos[REPROPE_AXES];
 	for (size_t i = 0; i < REPROPE_AXES; ++i)
 	{
+		squaredLineLengths[i] = LineLengthSquared(machinePos, anchors[i]);
 		linePos[i] = fastSqrtf(squaredLineLengths[i]) - lineLengthsOrigin[i];
+		motorPos[i] = lrintf(k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]));
 	}
-
-	motorPos[A_AXIS] = lrintf(k0[A_AXIS] * (fastSqrtf(spoolRadiiSq[A_AXIS] + linePos[A_AXIS] * k2[A_AXIS]) - spoolRadii[A_AXIS]));
-	motorPos[B_AXIS] = lrintf(k0[B_AXIS] * (fastSqrtf(spoolRadiiSq[B_AXIS] + linePos[B_AXIS] * k2[B_AXIS]) - spoolRadii[B_AXIS]));
-	motorPos[C_AXIS] = lrintf(k0[C_AXIS] * (fastSqrtf(spoolRadiiSq[C_AXIS] + linePos[C_AXIS] * k2[C_AXIS]) - spoolRadii[C_AXIS]));
-	motorPos[D_AXIS] = lrintf(k0[D_AXIS] * (fastSqrtf(spoolRadiiSq[D_AXIS] + linePos[D_AXIS] * k2[D_AXIS]) - spoolRadii[D_AXIS]));
 
 	return true;
 }
@@ -416,10 +454,13 @@ void RepropeKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
 AxesBitmap RepropeKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 {
-	// If all of X, Y and Z have been specified then we know the positions of all 4 spool motors, otherwise we don't
+	// If all of X, Y and Z have been specified then we know the positions of all 8 spool motors, otherwise we don't
 	if ((g92Axes & XyzAxes) == XyzAxes)
 	{
-		g92Axes.SetBit(D_AXIS);
+		for (size_t i = D_AXIS; i < REPROPE_AXES; ++i)
+		{
+			g92Axes.SetBit(i);
+		}
 	}
 	else
 	{
@@ -453,31 +494,103 @@ bool RepropeKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 		ok = f->Write(scratchString.c_str());
 		if (ok)
 		{
-			scratchString.printf(" C%.3f:%.3f:%.3f D%.3f:%.3f:%.3f P%.1f\n",
+			scratchString.printf(" C%.3f:%.3f:%.3f D%.3f:%.3f:%.3f",
 								(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
-								(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
+								(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS]);
+			ok = f->Write(scratchString.c_str());
+			if (!ok)
+			{
+				return ok;
+			}
+
+			scratchString.printf(" E%.3f:%.3f:%.3f F%.3f:%.3f:%.3f",
+							(double)anchors[E_AXIS][X_AXIS], (double)anchors[E_AXIS][Y_AXIS], (double)anchors[E_AXIS][Z_AXIS],
+							(double)anchors[F_AXIS][X_AXIS], (double)anchors[F_AXIS][Y_AXIS], (double)anchors[F_AXIS][Z_AXIS]);
+			ok = f->Write(scratchString.c_str());
+			if (!ok)
+			{
+				return ok;
+			}
+
+			scratchString.printf(" G%.3f:%.3f:%.3f H%.3f:%.3f:%.3f P%.1f\n",
+								(double)anchors[G_AXIS][X_AXIS], (double)anchors[G_AXIS][Y_AXIS], (double)anchors[G_AXIS][Z_AXIS],
+								(double)anchors[H_AXIS][X_AXIS], (double)anchors[H_AXIS][Y_AXIS], (double)anchors[H_AXIS][Z_AXIS],
 								(double)printRadius);
 			ok = f->Write(scratchString.c_str());
+			if (!ok)
+			{
+				return ok;
+			}
+
 			if (ok)
 			{
-				scratchString.printf("M666 Q%.6f R%.3f:%.3f:%.3f:%.3f U%d:%d:%d:%d",
+				scratchString.printf("M666 Q%.6f R%.3f:%.3f:%.3f:%.3f%.3f:%.3f:%.3f:%.3f",
 									(double)spoolBuildupFactor, (double)spoolRadii[A_AXIS],
 									(double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
-									(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS],
-									(int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS]
+									(double)spoolRadii[E_AXIS], (double)spoolRadii[F_AXIS],
+									(double)spoolRadii[G_AXIS], (double)spoolRadii[H_AXIS]
 						);
 				ok = f->Write(scratchString.c_str());
+				if (!ok)
+				{
+					return ok;
+				}
+
+				scratchString.printf(" U%d:%d:%d:%d%d:%d:%d:%d",
+									(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS],
+									(int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
+									(int)mechanicalAdvantage[E_AXIS], (int)mechanicalAdvantage[F_AXIS],
+									(int)mechanicalAdvantage[G_AXIS], (int)mechanicalAdvantage[H_AXIS]
+						);
+				ok = f->Write(scratchString.c_str());
+				if (!ok)
+				{
+					return ok;
+				}
+
+				scratchString.printf(" O%d:%d:%d:%d%d:%d:%d:%d",
+									(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS],
+									(int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
+									(int)linesPerSpool[E_AXIS], (int)linesPerSpool[F_AXIS],
+									(int)linesPerSpool[G_AXIS], (int)linesPerSpool[H_AXIS]
+						);
+				ok = f->Write(scratchString.c_str());
+				if (!ok)
+				{
+					return ok;
+				}
+
+				scratchString.printf(" L%d:%d:%d:%d%d:%d:%d:%d",
+									(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS],
+									(int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
+									(int)motorGearTeeth[E_AXIS], (int)motorGearTeeth[F_AXIS],
+									(int)motorGearTeeth[G_AXIS], (int)motorGearTeeth[H_AXIS]
+						);
+				ok = f->Write(scratchString.c_str());
+				if (!ok)
+				{
+					return ok;
+				}
+
+				scratchString.printf(" H%d:%d:%d:%d%d:%d:%d:%d",
+									(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS],
+									(int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
+									(int)spoolGearTeeth[E_AXIS], (int)spoolGearTeeth[F_AXIS],
+									(int)spoolGearTeeth[G_AXIS], (int)spoolGearTeeth[H_AXIS]
+						);
+				ok = f->Write(scratchString.c_str());
+				if (!ok)
+				{
+					return ok;
+				}
+
 				if (ok)
 				{
-					scratchString.printf(" O%d:%d:%d:%d L%d:%d:%d:%d H%d:%d:%d:%d J%d:%d:%d:%d\n",
-										(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS],
-										(int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
-										(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS],
-										(int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
-										(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS],
-										(int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
+					scratchString.printf(" J%d:%d:%d:%d:%d:%d:%d:%d\n",
 										(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS],
-										(int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
+										(int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS],
+										(int)fullStepsPerMotorRev[E_AXIS], (int)fullStepsPerMotorRev[F_AXIS],
+										(int)fullStepsPerMotorRev[G_AXIS], (int)fullStepsPerMotorRev[H_AXIS]
 							);
 					ok = f->Write(scratchString.c_str());
 				}
@@ -587,10 +700,12 @@ void RepropeKinematics::ForwardTransform(float const a, float const b, float con
 // Print all the parameters for debugging
 void RepropeKinematics::PrintParameters(const StringRef& reply) const noexcept
 {
-	reply.printf("Anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f)\n",
-					(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
-					(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
-					(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS]);
+	reply.printf("Anchor coordinates");
+	for (size_t i = 0; i < REPROPE_AXES; ++i)
+	{
+		reply.printf(" (%.2f,%.2f,%.2f)", (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
+	}
+	reply.printf("\n");
 }
 
 #endif // SUPPORT_REPROPE
