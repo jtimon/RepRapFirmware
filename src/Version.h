@@ -16,7 +16,7 @@
 # else
 #  define VERSION_SUFFIX	""
 # endif
-# define VERSION MAIN_VERSION VERSION_SUFFIX
+# define VERSION MAIN_VERSION VERSION_SUFFIX " (reprope)"
 #endif
 
 extern const char *const DATE;
