@@ -255,6 +255,10 @@
 # define SUPPORT_HANGPRINTER	1
 #endif
 
+#ifndef SUPPORT_REPROPE
+# define SUPPORT_REPROPE	1
+#endif
+
 // We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
 #if SAM4E || SAM4S || SAME70 || SAME5x || STM32H7 || STM32F4
 # define MCU_HAS_UNIQUE_ID		1

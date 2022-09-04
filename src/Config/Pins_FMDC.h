@@ -72,6 +72,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_SCARA			0
 #define SUPPORT_FIVEBARSCARA	0
 #define SUPPORT_HANGPRINTER		0
+#define SUPPORT_REPROPE		0
 
 // The physical capabilities of the machine
 
