@@ -1,6 +1,7 @@
 # Object and intermediate files
 *.o
 *.d
+*~
 
 # Misc
 /.settings/language.settings.xml
