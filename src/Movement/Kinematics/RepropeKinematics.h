@@ -61,7 +61,7 @@ private:
 	void Init() noexcept;
 	void Recalc() noexcept;
 	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const noexcept;		// Calculate the square of the line length from a spool from a Cartesian coordinate
-	void ForwardTransform(float a, float b, float c, float d, float machinePos[3]) const noexcept;
+	void ForwardTransform(float a, float b, float c, float d, float e, float f, float g, float h, float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
 	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging

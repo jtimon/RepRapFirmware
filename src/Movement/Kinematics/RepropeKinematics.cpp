@@ -347,6 +347,10 @@ void RepropeKinematics::MotorStepsToCartesian(const int32_t motorPos[], const fl
 		MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + lineLengthsOrigin[B_AXIS],
 		MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + lineLengthsOrigin[C_AXIS],
 		MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + lineLengthsOrigin[D_AXIS],
+		MotorPosToLinePos(motorPos[E_AXIS], E_AXIS) + lineLengthsOrigin[E_AXIS],
+		MotorPosToLinePos(motorPos[F_AXIS], F_AXIS) + lineLengthsOrigin[F_AXIS],
+		MotorPosToLinePos(motorPos[G_AXIS], G_AXIS) + lineLengthsOrigin[G_AXIS],
+		MotorPosToLinePos(motorPos[H_AXIS], H_AXIS) + lineLengthsOrigin[H_AXIS],
 		machinePos);
 }
 
@@ -639,8 +643,19 @@ bool RepropeKinematics::WriteResumeSettings(FileStore *f) const noexcept
  * Find y by inserting z into (I)
  *
  * Warning: truncation errors will typically be in the order of a few tens of microns.
+ *
+ * TODO Adapt to reprope anchor positions
+ * We don't really need the 8 lengths, that's overkill.
+ * 3 should be enough (3 spheres lead to two potential points, but one will be above the anchor and that would mean the ropes are going upwards and we have antigravity or something, so one of them can be easily discarded)
+ * https://en.wikipedia.org/wiki/True-range_multilateration#Three_Cartesian_dimensions,_three_measured_slant_ranges
+ * But if the hangprinter was able to do an optimization by using an extra distance an some extra assumptions, hopefully we can
+ * get one too by using the 8 rope lengths?
+ * instead of "Ax=0 Dx=0 Dy=0" as extra assumptions, we have: "Az=Bz=Cz=Dz=Ez=Fz=Gz=Hz"
+ * REM for better understanding of this code and the math behind more speeds for lower anchors
+ * https://gitlab.com/tobben/hangprinter-forward-transform/-/blob/main/motorstepstocartesiantest.cpp
  */
-void RepropeKinematics::ForwardTransform(float const a, float const b, float const c, float const d, float machinePos[3]) const noexcept
+void RepropeKinematics::ForwardTransform(float const a, float const b, float const c, float const d,
+					 float const e, float const f, float const g, float const h, float machinePos[3]) const noexcept
 {
 	// Force the anchor location norms Ax=0, Dx=0, Dy=0
 	// through a series of rotations.
