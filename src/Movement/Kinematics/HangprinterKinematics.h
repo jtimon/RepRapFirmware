@@ -52,13 +52,14 @@ protected:
 
 private:
 	// Basic facts about movement system
-	static constexpr size_t HANGPRINTER_MAX_AXES = 6;
+	static constexpr size_t HANGPRINTER_MAX_AXES = 7;
 	static constexpr size_t A_AXIS = 0;
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
 	static constexpr size_t D_AXIS = 3;
 	static constexpr size_t E_AXIS = 4;
 	static constexpr size_t F_AXIS = 5;
+	static constexpr size_t G_AXIS = 6;
 
 	void Init() noexcept;
 	void Recalc() noexcept;
