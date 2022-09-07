@@ -435,6 +435,8 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 
 bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
+	// UNDO Always reachable temporarily for testing
+	return true;
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
 
 	bool reachable = isSameSide(anchors[0], anchors[1], anchors[2], anchors[numAnchors - 1], coords);
