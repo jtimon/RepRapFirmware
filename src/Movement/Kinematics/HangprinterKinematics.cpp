@@ -344,17 +344,27 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 	return dot0*dot1 > 0.0F;
 }
 
-static bool isInsideTetrahedron(float const point[3], float const tetrahedron[4][3]){
-	return isSameSide(tetrahedron[0], tetrahedron[1], tetrahedron[2], tetrahedron[3], point) &&
-	       isSameSide(tetrahedron[2], tetrahedron[1], tetrahedron[3], tetrahedron[0], point) &&
-	       isSameSide(tetrahedron[2], tetrahedron[3], tetrahedron[0], tetrahedron[1], point) &&
-	       isSameSide(tetrahedron[0], tetrahedron[3], tetrahedron[1], tetrahedron[2], point);
-}
-
+// For each triangle side in a pyramid, check if the point is inside the pyramid. Plus check the base too.
 bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
-	return isInsideTetrahedron(coords, anchors);
+
+	bool reachable = isSameSide(anchors[0], anchors[1], anchors[2], anchors[HANGPRINTER_AXES - 1], coords);
+
+	for (size_t i = 1; reachable && i < HANGPRINTER_AXES - 3; ++i)
+	{
+		reachable = isSameSide(anchors[i], anchors[i + 1], anchors[HANGPRINTER_AXES - 1], anchors[i + 2], coords);
+	}
+	if (reachable)
+	{
+		reachable = isSameSide(anchors[HANGPRINTER_AXES - 3], anchors[HANGPRINTER_AXES - 2], anchors[HANGPRINTER_AXES - 1], anchors[0], coords);
+	}
+	if (reachable)
+	{
+		reachable = isSameSide(anchors[HANGPRINTER_AXES - 2], anchors[0], anchors[HANGPRINTER_AXES - 1], anchors[1], coords);
+	}
+
+	return reachable;
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
