@@ -132,11 +132,12 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
     {PB_5,   "xstopmax,x+"},
     {PF_13,  "ystopmax,y+"},
     {PF_14,  "zstopmax,z+"},
+	{PA_0,   "probe"},
     
     //Heaters and Fans (Big and Small Mosfets}
     {PE_10,   "bed,hbed" },
     {PB_4,    "e0heat,he0" },
-    {PB_0,    "e1heat,he1" },
+    {PB_7,    "e1heat,he1" },
     {PD_13,   "e2heat,he2" },
     {PC_8,    "e3heat,he3" },
     {PA_15,   "e4heat,he4" },
@@ -145,36 +146,30 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
     {PD_15,   "fan2" },
     {PD_12,   "fan3" },
     {PD_14,   "fan4" },
+	{PB_1,    "tacho0" },
+	{PB_0,    "tacho1" },
 
     //Servos
     {PA_1,    "servo0" },
-
-    {PB_3,  "PB3"}, //RST
-    {PG_2,  "PG2"}, //IO0
-    {PG_1,  "PG1"}, //IO4
-    {PB_12, "PB12"}, //CS
-    {PB_13, "PB13"}, //CLK
-    {PB_14, "PB14"}, //MISO
-    {PB_15, "PB15"}, //MOSI
-    
+	
     //EXP1
-//    {PE_7,   "PE7"},
-//    {PG_4,   "PG4"},
-//    {PC_11,   "PC11"},
-//    {PC_10,   "PC10"},
-//    {PD_0,   "PD0"},
-//    {PC_12,   "PC12"},
-//    {PA_8,   "PA8"},
-//    {PC_7,   "PC9"},
+    {PE_7,   "LCDD7"},
+    {PG_4,   "LCDD6"},
+    {PC_11,   "LCDD5"},
+    {PC_10,   "LCDD4"},
+    {PD_0,   "LCDRS"},
+    {PC_12,   "LCDEN"},
+    {PA_8,   "BTNENC"},
+    {PC_7,   "BEEP"},
 
     //EXP2
-//    {PA_6,   "PA6"},  // MISO
-//    {PA_5,   "PA5"},  // SCK
-//    {PC_6,   "PC6"},  // ENC_A
-//    {PA_4,   "PA4"},  // CS
-//    {PC_7,   "PC7"},  // ENC_B
-//    {PA_7,   "PA7"},  // MOSI
-//    {PB_10,  "PB10"},// SD_DET
+    {PA_6,   "LCDMISO"},  // MISO
+    {PA_5,   "LCDSCK"},  // SCK
+    {PC_6,   "BTNEN1"},  // ENC_A
+    {PA_4,   "LCDSS"},  // CS
+    {PC_7,   "BTNEN2"},  // ENC_B
+    {PA_7,   "LCDMOSI"},  // MOSI
+    {PB_10,  "LCDCD"},// SD_DET
 	
   	//SPI
 //    {PE_12,   "PE12"}, // SCK4
@@ -194,13 +189,9 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
   	//I2C
 //    {PF_0,   "PF1"},  // SDA
 //    {PF_1,   "PF0"},  // SCL
-  	
-  	//UART
-    {PA_9,   "PA9"},  // TX1
-    {PA_10,  "PA10"}, // RX1
 
   	// NEOPIXEL
-//    {PD_3,   "PD3"},
+    {PD_3,   "PD3"},
 };
 
 constexpr BoardDefaults fysetc_spider_king407_Defaults = {
@@ -216,10 +207,10 @@ constexpr BoardDefaults fysetc_spider_king407_Defaults = {
     },
 	  10,											// Number of drivers
     {PE_11, PG_10, PG_15, PD_5, PE_6,  PE_2,  PG_9,  PB_2,  PF_2, PG_5,},   //enablePins
-    {PG_7,  PD_10, PG_14, PD_4, PE_5,  PE_3,  PG_13, PE_1,  PF_4, PF_15,},  //stepPins
+    {PG_7,  PD_11, PG_14, PD_4, PE_5,  PE_3,  PG_13, PE_1,  PF_4, PF_15,},  //stepPins
     {PG_6,  PD_10, PG_12, PD_6, PC_13, PE_4,  PG_8,  PE_0,  PF_3, PG_0},   	//dirPins
 #if HAS_SMART_DRIVERS
-    {PD_12, PE_15, PD_8,  PD_7, PC_14, PC_15, PG_3,  PD_9,  PF_5, PG_11},   //uartPins
+    {PD_2, PE_15, PD_8,  PD_7, PC_14, PC_15, PG_3,  PD_9,  PF_5, PG_11},   //uartPins
     10,                                      	// Smart drivers
 #endif
     0,                                       	//digiPot Factor
@@ -228,7 +219,7 @@ constexpr BoardDefaults fysetc_spider_king407_Defaults = {
 #endif
     NoPin,
 #if HAS_SBC_INTERFACE
-    NoPin, NoPin, SSPNONE,
+    PB_11, PB_12, SSP2,
 #endif
 };
 #endif
