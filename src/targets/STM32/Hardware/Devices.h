@@ -3,7 +3,7 @@
 
 #include <AsyncSerial.h>
 typedef AsyncSerial UARTClass;
-
+#define SUPPORT_USB		1		// needed by USBSerial.h
 #include <USBSerial.h>
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;
