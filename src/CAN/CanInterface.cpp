@@ -290,7 +290,6 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 
 void CanInterface::Init() noexcept
 {
-	debugPrintf("Start CAN init\n");
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingMotionBuffers = nullptr;
 
@@ -771,7 +770,6 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 {
 	if (can0dev == nullptr)
 	{
-		debugPrintf("can0dev not valid\n");
 		// Transactions sometimes get requested after we have shut down CAN, e.g. when we destroy filament monitors
 		CanMessageBuffer::Free(buf);
 		return GCodeResult::error;
@@ -846,20 +844,17 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
 				if (buf->id.MsgType() == CanMessageType::standardReply)
 				{
-					debugPrintf("Discard 1\n");
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
-													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp=%u \"%.*s\"\n",
+													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.GetTextLength(buf->dataLength), buf->msg.standardReply.text);
 				}
 				else
 				{
-					debugPrintf("Discard 2\n");
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp=%u\n",
 													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}
 		}
 	}
-debugPrintf("receive timeout\n");
 	CanMessageBuffer::Free(buf);
 	reply.lcatf("Response timeout: CAN addr %u, req type %u, RID=%u", dest, (unsigned int)msgType, (unsigned int)rid);
 	return GCodeResult::error;
@@ -1178,10 +1173,10 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
 	{
 		gb.MustSee('A');
-		msg->param32[0] = gb.GetUIValue();
+		msg->param32[0] = (uint32_t)gb.GetIValue();			// allow negative values so that we can read high memory addresses
 		if (gb.Seen('V'))
 		{
-			msg->param32[1] = gb.GetUIValue();
+			msg->param32[1] = (uint32_t)gb.GetIValue();		// allow negative values so that we set high values
 			msg->param16 = 1;
 		}
 		else
@@ -1189,7 +1184,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 			msg->param16 = 0;
 		}
 	}
-	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
+	return SendRequestAndGetStandardReply(buf, rid, reply);	// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
 GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
