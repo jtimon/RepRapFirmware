@@ -14,8 +14,8 @@
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
 #include <Movement/Move.h>
-#include <Hardware/SharedSpi/SharedSpiDevice.h>
-#include <Hardware/SharedSpi/SharedSpiClient.h>
+#include <Hardware/Spi/SharedSpiDevice.h>
+#include <Hardware/Spi/SharedSpiClient.h>
 #include <Endstops/Endstop.h>
 #include <General/Portability.h>
 #include "TmcDriverState.h"

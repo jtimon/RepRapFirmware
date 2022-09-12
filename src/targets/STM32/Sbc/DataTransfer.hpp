@@ -1,7 +1,7 @@
 //Author: sdavi
 
 //SBC connected to SSP0
-#include "Hardware/SharedSpi/SpiMode.h"
+#include "Hardware/Spi/SpiMode.h"
 #include "HardwareSPI.h"
 static HardwareSPI *spiDevice;
 

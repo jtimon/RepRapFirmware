@@ -84,8 +84,6 @@
 #define SUPPORT_WORKPLACE_COORDINATES    1
 #define SUPPORT_LASER                    1
 
-#define SUPPORT_FTP                      1
-
 #define HAS_ATX_POWER_MONITOR            1
 
 #define SUPPORT_LED_STRIPS               1
@@ -116,6 +114,7 @@
     #define SUPPORT_TELNET               0
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              1
+#define SUPPORT_FTP                      1
 #if STM32H7
     #define SUPPORT_CAN_EXPANSION	     1
     #define DUAL_CAN				     0					// support the second CAN interface as simple CAN (not FD)
@@ -130,7 +129,7 @@
     #define HAS_WIFI_NETWORKING          0
     #define HAS_MASS_STORAGE             1
     #define HAS_SBC_INTERFACE            1
-    #define SUPPORT_TELNET               1
+    #define SUPPORT_TELNET               0
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              0
 

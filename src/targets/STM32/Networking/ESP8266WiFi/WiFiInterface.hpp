@@ -1,5 +1,5 @@
 //Author: sdavi/gloomyandy
-#include "Hardware/SharedSpi/SpiMode.h"
+#include "Hardware/Spi/SpiMode.h"
 #include "HardwareSPI.h"
 
 //ESP connected to SSP0
