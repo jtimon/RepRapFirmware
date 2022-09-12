@@ -1,3 +1,9 @@
+Version 3.4.2rc3+1_102
+======================
+* Duet3d 3.4.2rc3+1 changes
+* Fix bug with returning string name of pins
+* Updated Fysetc Spider King pins
+
 Version 3.4.2rc2_102
 ====================
 * Duet3d 3.4-extruder-only-movement-fix
