@@ -619,7 +619,7 @@ public:
 	bool HasVinPower() const noexcept { return true; }
 #endif
 
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 #endif
 
