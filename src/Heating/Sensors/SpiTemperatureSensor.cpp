@@ -21,8 +21,7 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *n
 #endif
 	 clockFrequency, spiMode, NoPin, false)
 {
-	lastTemperature = 0.0;
-	lastResult = TemperatureError::notInitialised;
+    SetResult(0.0, TemperatureError::notInitialised);
 }
 
 bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen)
@@ -45,7 +44,6 @@ bool SpiTemperatureSensor::ConfigurePort(const CanMessageGenericParser& parser, 
 
 void SpiTemperatureSensor::InitSpi() noexcept
 {
-	lastReadingTime = millis();
 }
 
 // Send and receive 1 to 8 bytes of data and return the result as a single 32-bit word
@@ -74,6 +72,29 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 	{
 		rslt <<= 8;
 		rslt |= rawBytes[i];
+	}
+
+	return TemperatureError::success;
+}
+
+// Send and receive data
+TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], uint8_t dataIn[], size_t nbytes) const noexcept
+{
+	if (!device.Select(10))
+	{
+		return TemperatureError::busBusy;
+	}
+
+	delayMicroseconds(1);
+	const bool ok = device.TransceivePacket(dataOut, dataIn, nbytes);
+	delayMicroseconds(1);
+
+	device.Deselect();
+	delayMicroseconds(1);
+
+	if (!ok)
+	{
+		return TemperatureError::timeout;
 	}
 
 	return TemperatureError::success;

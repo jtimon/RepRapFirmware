@@ -54,7 +54,7 @@ GCodeResult ThermocoupleSensor6675::Configure(GCodeBuffer& gb, const StringRef& 
 	{
 		// Initialise the sensor
 		InitSpi();
-		lastReadingTime = millis();
+		SetResult(0.0, TemperatureError::success);
 	}
 	else
 	{
@@ -76,7 +76,7 @@ void ThermocoupleSensor6675::Poll() noexcept
 		if ((rawVal & 0x00008002) != 0)
 		{
 			// These two bits should always read 0. Likely the entire read was 0xFF 0xFF which is not uncommon when first powering up
-			lastResult = TemperatureError::ioError;
+			SetResult(TemperatureError::ioError);
 		}
 		else if ((rawVal & 0x00000004) != 0)		// check the fault bits
 		{
