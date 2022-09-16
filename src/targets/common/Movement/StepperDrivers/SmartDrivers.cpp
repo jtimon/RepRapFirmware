@@ -238,13 +238,21 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 
 GCodeResult SmartDrivers::GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept
 {
-	reply.copy("Not currently implemented");
+	if (driver < numDrivers)
+	{
+		return driverStates[driver]->GetAnyRegister(reply, regNum);
+	}
+	reply.copy("Invalid smart driver number");
 	return GCodeResult::error;
 }
 
 GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept
 {
-	reply.copy("Not currently implemented");
+	if (driver < numDrivers)
+	{
+		return driverStates[driver]->SetAnyRegister(reply, regNum, regVal);
+	}
+	reply.copy("Invalid smart driver number");
 	return GCodeResult::error;
 }
 

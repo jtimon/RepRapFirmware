@@ -410,6 +410,9 @@ public:
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
 
+	GCodeResult GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept;
+	GCodeResult SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
+
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
@@ -437,7 +440,7 @@ private:
 	}
 #endif
 
-	bool DMASend(uint8_t regnum, uint32_t outVal, uint8_t crc) noexcept __attribute__ ((hot));
+	bool DMASend(uint8_t regnum, uint32_t outVal) noexcept __attribute__ ((hot));
 	bool DMAReceive(uint8_t regnum, uint8_t crc) noexcept __attribute__ ((hot));
 
 #if HAS_STALL_DETECT
@@ -460,6 +463,7 @@ private:
 	static constexpr unsigned int WriteSgthrs = 7;				// stallguard threshold
 	static constexpr unsigned int WriteCoolconf = 8;			// coolstep configuration
 #endif
+	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
 #if HAS_STALL_DETECT
 	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
@@ -479,9 +483,10 @@ private:
 #if HAS_STALL_DETECT
 	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
 #endif
+	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
-	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
-	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
+	volatile uint32_t writeRegisters[NumWriteRegisters+1];	// the values we want the TMC22xx writable registers to have
+	volatile uint32_t readRegisters[NumReadRegisters+1];	// the last values read from the TMC22xx readable registers
 	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
@@ -521,8 +526,9 @@ private:
 	uint8_t regnumBeingUpdated;								// which register we are sending
 	uint8_t lastIfCount;									// the value of the IFCNT register last time we read it
 	uint8_t failedOp;
-	volatile uint8_t writeRegCRCs[NumWriteRegisters];		// CRCs of the messages needed to update the registers
 	static const uint8_t ReadRegCRCs[NumReadRegisters];		// CRCs of the messages needed to read the registers
+	volatile uint8_t specialReadRegisterNumber;				// the special register number we are reading
+	volatile uint8_t specialWriteRegisterNumber;			// the special register number we are writing
 	bool enabled;											// true if driver is enabled
 
 	float senseResistor;
@@ -600,14 +606,35 @@ inline bool Tmc22xxDriverState::UpdatePending() const noexcept
 }
 
 // Set up the PDC or DMAC to send a register
-inline bool Tmc22xxDriverState::DMASend(uint8_t regNum, uint32_t regVal, uint8_t crc) noexcept
+inline bool Tmc22xxDriverState::DMASend(uint8_t regNum, uint32_t regVal) noexcept
 {
-	sendData[2] = regNum | 0x80;
-	sendData[3] = (uint8_t)(regVal >> 24);
-	sendData[4] = (uint8_t)(regVal >> 16);
-	sendData[5] = (uint8_t)(regVal >> 8);
-	sendData[6] = (uint8_t)regVal;
-	sendData[7] = crc;
+	uint8_t crc = InitialSendCRC;
+	{
+		const uint8_t byte =  regNum | 0x80;
+		sendData[2] = byte;
+		crc = CRCAddByte(crc, byte);
+	}
+	{
+		const uint8_t byte = (uint8_t)(regVal >> 24);
+		sendData[3] = byte;
+		crc = CRCAddByte(crc, byte);
+	}
+	{
+		const uint8_t byte = (uint8_t)(regVal >> 16);
+		sendData[4] = byte;
+		crc = CRCAddByte(crc, byte);
+	}
+	{
+		const uint8_t byte = (uint8_t)(regVal >> 8);
+		sendData[5] = byte;
+		crc = CRCAddByte(crc, byte);
+	}
+	{
+		const uint8_t byte = (uint8_t)regVal;
+		sendData[6] = byte;
+		crc = CRCAddByte(crc, byte);
+	}
+	sendData[7] = Reflect(crc);
 	receiveData[12] = 0xAA;
 	receiveData[13] = 0x55;
 	return TMCSoftUARTTransfer(TMC_PINS[driverNumber], sendData, 12, receiveData + 12, 8, TransferTimeout);
@@ -647,16 +674,9 @@ void Tmc22xxDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 // Set a register value and flag it for updating
 void Tmc22xxDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexcept
 {
-	uint8_t crc = InitialSendCRC;
-	crc = CRCAddByte(crc, WriteRegNumbers[regIndex] | 0x80);
-	crc = CRCAddByte(crc, (uint8_t)(regVal >> 24));
-	crc = CRCAddByte(crc, (uint8_t)(regVal >> 16));
-	crc = CRCAddByte(crc, (uint8_t)(regVal >> 8));
-	crc = CRCAddByte(crc, (uint8_t)regVal);
 	{
 		TaskCriticalSectionLocker lock;
 		writeRegisters[regIndex] = regVal;
-		writeRegCRCs[regIndex] = Reflect(crc);
 		registersToUpdate |= (1u << regIndex);								// flag it for sending
 	}
 	if (regIndex == WriteGConf || regIndex == WriteTpwmthrs)
@@ -692,6 +712,7 @@ pre(!driversPowered)
 
 	enabled = false;
 	registersToUpdate = 0;
+	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
 	standstillCurrentFraction = (256 * 3)/4;							// default to 75%
 	maxCurrent = MaximumMotorCurrent;
@@ -865,6 +886,38 @@ uint32_t Tmc22xxDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 		return 0;
 	}
 }
+
+GCodeResult Tmc22xxDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept
+{
+	if (specialReadRegisterNumber == 0xFE)
+	{
+		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
+		specialReadRegisterNumber = 0xFF;
+		return GCodeResult::ok;
+	}
+
+	if (specialReadRegisterNumber == 0xFF)
+	{
+		specialReadRegisterNumber = regNum;
+	}
+	return GCodeResult::notFinished;
+}
+
+GCodeResult Tmc22xxDriverState::SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept
+{
+	for (size_t i = 0; i < NumWriteRegisters; ++i)
+	{
+		if (regNum == WriteRegNumbers[i])
+		{
+			UpdateRegister(i, regVal);
+			return GCodeResult::ok;
+		}
+	}
+	specialWriteRegisterNumber = regNum;
+	UpdateRegister(WriteSpecial, regVal);
+	return GCodeResult::ok;
+}
+
 
 // Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
 bool Tmc22xxDriverState::SetChopConf(uint32_t newVal) noexcept
@@ -1078,7 +1131,7 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 		const uint8_t currentIfCount = receiveData[18];
 		if (regnumBeingUpdated < NumWriteRegisters 
 		    && currentIfCount == (uint8_t)(lastIfCount + 1)
-			&& (sendData[2] & 0x7F) == WriteRegNumbers[regnumBeingUpdated]
+			&& (sendData[2] & 0x7F) == ((regnumBeingUpdated == WriteSpecial) ? specialWriteRegisterNumber : WriteRegNumbers[regnumBeingUpdated])
 			&& receiveData[12] == 0x05
 			&& receiveData[13] == 0xFF
 			&& Reflect(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(InitialReceiveCrc, receiveData[14]), receiveData[15]), receiveData[16]), receiveData[17]), receiveData[18])) == receiveData[19]
@@ -1110,8 +1163,10 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 	}
 	else if (driversState != DriversState::noPower)		// we don't check the CRC, so only accept the result if power is still good
 	{
-		if (sendData[2] == ReadRegNumbers[registerToRead]
-		    && ReadRegNumbers[registerToRead] == receiveData[6]
+		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
+												: ReadRegNumbers[registerToRead];
+		if (sendData[2] == readRegNumber
+		    && readRegNumber == receiveData[6]
 			&& receiveData[4] == 0x05
 			&& receiveData[5] == 0xFF
 			&& Reflect(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(CRCAddByte(InitialReceiveCrc, receiveData[6]), receiveData[7]), receiveData[8]), receiveData[9]), receiveData[10])) == receiveData[11]
@@ -1144,11 +1199,19 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 			}
 #endif
 			readRegisters[registerToRead] = regVal;
-			accumulatedReadRegisters[registerToRead] |= regVal;
-
-			++registerToRead;
-			if (registerToRead >= maxReadCount)			{
+			if (registerToRead == ReadSpecial)
+			{
+				specialReadRegisterNumber = 0xFE;						// set it to 0xFE to indicate that we have read it and to prevent it being read again
 				registerToRead = 0;
+			}
+			else
+			{
+				accumulatedReadRegisters[registerToRead] |= regVal;
+				++registerToRead;
+				if (registerToRead == ReadSpecial && specialReadRegisterNumber >= 0x80)
+				{
+					registerToRead = 0;
+				}
 			}
 			++numReads;
 		}
@@ -1170,21 +1233,28 @@ inline bool Tmc22xxDriverState::StartTransfer() noexcept
 		const size_t regNum = LowestSetBit(registersToUpdate & updateMask);
 
 		// Kick off a transfer for the register to write
-		regnumBeingUpdated = regNum;
-		uint8_t crc;
+		uint8_t regNumber;
 		uint32_t regData;
 		{
 			TaskCriticalSectionLocker lock;
+			regnumBeingUpdated = regNum;
+			regNumber = (regNum < WriteSpecial) ? WriteRegNumbers[regNum] : specialWriteRegisterNumber;
 			regData = writeRegisters[regNum];
-			crc = writeRegCRCs[regNum];
 		}
-		return DMASend(WriteRegNumbers[regNum], regData, crc);	// set up the PDC
+		return DMASend(regNumber, regData);	// set up the PDC
 	}
 	else
 	{
 		// Read a register
 		regnumBeingUpdated = 0xFF;
-		return DMAReceive(ReadRegNumbers[registerToRead], ReadRegCRCs[registerToRead]);	// set up the PDC
+		if (registerToRead >= NumReadRegisters)
+		{
+			return DMAReceive(specialReadRegisterNumber, CRCAddFinalByte(InitialSendCRC, specialReadRegisterNumber));		
+		}
+		else
+		{
+			return DMAReceive(ReadRegNumbers[registerToRead], ReadRegCRCs[registerToRead]);	// set up the PDC
+		}
 	}
 }
 

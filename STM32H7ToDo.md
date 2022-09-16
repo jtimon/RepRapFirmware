@@ -7,7 +7,7 @@
 * ~~DMA memory buffers (re-enable dcache currently disabled)~~
 * ~~TMC2209 interface~~
 * ~~Test TMC5160 interface~~
-* ~~Check neopixel timing (consider using dma)
+* ~~Check neopixel timing (consider using dma)~~
 * ~~Sort out STM32F4 and STM32H7 defines consider having base STM32 define~~
 * ~~WiFi interface~~
 * ~~Check clock timing~~
@@ -29,8 +29,9 @@
 * Allow DMA with SPI1, SPI5, SPI6
 * ~~Replace ST USB library~~
 * Allow use of embeded config
-* Set initial pin state from board.txt
+* ~~Set initial pin state from board.txt~~
 * ~~Add support for humidity sensors~~
 * ~~Allow setting of neopixel pins~~
 * Fix F4 PWM pin timer allocation for pin PD_13 to match H7
-* Allow default thermistor resistor value to be changes on a per board basis (for PT1000 etc.)
+* ~~Allow default thermistor resistor value to be changed on a per board basis (for PT1000 etc.)~~
+* Consider making default thermistor value part of the per board configuration

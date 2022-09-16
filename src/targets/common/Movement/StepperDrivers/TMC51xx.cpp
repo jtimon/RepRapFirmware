@@ -306,6 +306,9 @@ public:
 	bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(SmartDriverRegister reg) const noexcept;
 
+	GCodeResult GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept;
+	GCodeResult SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
+
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
@@ -348,6 +351,7 @@ private:
 #else
 	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
 #endif
+	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
@@ -360,11 +364,12 @@ private:
 	static constexpr unsigned int ReadMsCnt = 2;
 	static constexpr unsigned int ReadPwmScale = 3;
 	static constexpr unsigned int ReadPwmAuto = 4;
+	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
 	static constexpr uint8_t NoRegIndex = 0xFF;				// this means no register updated, or no register requested
 
-	volatile uint32_t writeRegisters[NumWriteRegisters];	// the values we want the TMC22xx writable registers to have
-	volatile uint32_t readRegisters[NumReadRegisters];		// the last values read from the TMC22xx readable registers
+	volatile uint32_t writeRegisters[NumWriteRegisters+1];	// the values we want the TMC22xx writable registers to have
+	volatile uint32_t readRegisters[NumReadRegisters+1];	// the last values read from the TMC22xx readable registers
 	volatile uint32_t lastValidDriveStatus;					// Last validated drive status
 	volatile uint32_t accumulatedDriveStatus;				// the accumulated drive status bits
 
@@ -385,6 +390,8 @@ private:
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
 	uint8_t previousRegIndexRequested;						// the register we asked to read in the previous transaction, or 0xFF
+	volatile uint8_t specialReadRegisterNumber;
+	volatile uint8_t specialWriteRegisterNumber;
 	bool enabled;											// true if driver is enabled
 
 	float maxCurrent;
@@ -433,6 +440,7 @@ pre(!driversPowered)
 	driverBit = DriversBitmap::MakeFromBits(p_driverNumber);
 	enabled = false;
 	registersToUpdate = newRegistersToUpdate = 0;
+	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
 	senseResistor = DefaultSenseResistor;
 	maxCurrent = MaxTmc5160Current;
@@ -603,6 +611,38 @@ uint32_t Tmc51xxDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 		return 0;
 	}
 }
+
+GCodeResult Tmc51xxDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept
+{
+	if (specialReadRegisterNumber == 0xFE)
+	{
+		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
+		specialReadRegisterNumber = 0xFF;
+		return GCodeResult::ok;
+	}
+
+	if (specialReadRegisterNumber == 0xFF)
+	{
+		specialReadRegisterNumber = regNum;
+	}
+	return GCodeResult::notFinished;
+}
+
+GCodeResult Tmc51xxDriverState::SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept
+{
+	for (size_t i = 0; i < NumWriteRegisters; ++i)
+	{
+		if (regNum == WriteRegNumbers[i])
+		{
+			UpdateRegister(i, regVal);
+			return GCodeResult::ok;
+		}
+	}
+	specialWriteRegisterNumber = regNum;
+	UpdateRegister(WriteSpecial, regVal);
+	return GCodeResult::ok;
+}
+
 
 // Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
 bool Tmc51xxDriverState::SetChopConf(uint32_t newVal) noexcept
@@ -879,8 +919,20 @@ void Tmc51xxDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 	{
 		// Read a register
 		regIndexBeingUpdated = NoRegIndex;
-		regIndexRequested = (regIndexRequested >= NumReadRegisters - 1) ? 0 : regIndexRequested + 1;
-		sendDataBlock[0] = ReadRegNumbers[regIndexRequested];
+		if (regIndexRequested >= ReadSpecial)
+		{
+			regIndexRequested = 0;
+		}
+		else
+		{
+			++regIndexRequested;
+			if (regIndexRequested == ReadSpecial && specialReadRegisterNumber >= 0x80)
+			{
+				regIndexRequested = 0;
+			}
+		}
+
+		sendDataBlock[0] = (regIndexRequested == ReadSpecial) ? specialReadRegisterNumber : ReadRegNumbers[regIndexRequested];
 		sendDataBlock[1] = 0;
 		sendDataBlock[2] = 0;
 		sendDataBlock[3] = 0;
@@ -891,7 +943,7 @@ void Tmc51xxDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 		// Write a register
 		const size_t regNum = LowestSetBit(registersToUpdate);
 		regIndexBeingUpdated = regNum;
-		sendDataBlock[0] = WriteRegNumbers[regNum] | 0x80;
+		sendDataBlock[0] = ((regNum == WriteSpecial) ? specialWriteRegisterNumber : WriteRegNumbers[regNum]) | 0x80;
 		StoreBE32(sendDataBlock + 1, writeRegisters[regNum]);
 	}
 }
@@ -909,7 +961,7 @@ void Tmc51xxDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	const uint32_t interval = GetMoveInstance().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
 
 	// If we read a register, update our copy
-	if (previousRegIndexRequested < NumReadRegisters)
+	if (previousRegIndexRequested <= NumReadRegisters)
 	{
 		++numReads;
 		uint32_t regVal = LoadBE32(rcvDataBlock + 1);
@@ -951,13 +1003,17 @@ if (regVal & TMC51xx_RR_S2G)
 		else
 		{
 			readRegisters[previousRegIndexRequested] = regVal;
+			if (previousRegIndexRequested == ReadSpecial)
+			{
+				specialReadRegisterNumber = 0xFE;
+			}
 		}
 	}
 	else if (previousRegIndexRequested != NoRegIndex)
 	{
 		// we have read the result from a previous write, validate it
 		uint32_t regVal = LoadBE32(rcvDataBlock + 1);
-		previousRegIndexRequested -= NumReadRegisters;
+		previousRegIndexRequested -= (NumReadRegisters + 1);
 		if (writeRegisters[previousRegIndexRequested] != regVal)
 		{
 			if (reprap.Debug(moduleDriver))
@@ -987,7 +1043,7 @@ if (regVal & TMC51xx_RR_S2G)
 		EndstopOrZProbe::SetDriversNotStalled(driverBit);
 	}
 
-	previousRegIndexRequested = (regIndexBeingUpdated == NoRegIndex) ? regIndexRequested : regIndexBeingUpdated + NumReadRegisters;
+	previousRegIndexRequested = (regIndexBeingUpdated == NoRegIndex) ? regIndexRequested : regIndexBeingUpdated + NumReadRegisters + 1;
 }
 
 void Tmc51xxDriverState::TransferFailed() noexcept

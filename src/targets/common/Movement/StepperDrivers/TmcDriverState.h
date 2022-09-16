@@ -24,6 +24,9 @@ public:
 	virtual bool SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept = 0;
 	virtual uint32_t GetRegister(SmartDriverRegister reg) const noexcept = 0;
 
+	virtual GCodeResult GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept = 0;
+	virtual GCodeResult SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept = 0;
+
 	virtual float GetStandstillCurrentPercent() const noexcept = 0;
 	virtual void SetStandstillCurrentPercent(float percent) noexcept = 0;
 
