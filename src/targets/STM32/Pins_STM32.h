@@ -110,6 +110,7 @@
     #define HAS_RTOSPLUSTCP_NETWORKING   0
     #define SUPPORT_12864_LCD            1
     #define HAS_WIFI_NETWORKING          1
+    #define WIFI_USES_ESP32_AND_8266     1
     #define HAS_MASS_STORAGE             1
     #define SUPPORT_TELNET               0
     #define SUPPORT_ACCELEROMETERS       1
@@ -337,7 +338,7 @@ constexpr size_t NumSPIPins = 3;
 extern Pin SPIPins[NumSPIDevices][NumSPIPins]; //GPIO pins for softwareSPI (used with SharedSPI)
 
 #define SERIAL_AUX_DEVICE   UART_Slot0
-#define SERIAL_WIFI_DEVICE  UART_Slot1
+#define SerialWiFi  UART_Slot1
 //#define SERIAL_AUX2_DEVICE  UART_Slot2
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB + AUX)
@@ -356,9 +357,10 @@ extern Pin AuxSerialRxTxPins[NumberSerialPins];
     extern Pin EspDataReadyPin;
     extern Pin SamTfrReadyPin;
     extern Pin EspResetPin;
+    extern Pin EspEnablePin;
     extern Pin SamCsPin;
-    extern Pin APIN_Serial1_TXD;
-    extern Pin APIN_Serial1_RXD;
+    extern Pin APIN_SerialWiFi_TXD;
+    extern Pin APIN_SerialWiFi_RXD;
     extern Pin WifiSerialRxTxPins[NumberSerialPins];
     extern SSPChannel WiFiSpiChannel;
     extern uint32_t WiFiClockReg;
