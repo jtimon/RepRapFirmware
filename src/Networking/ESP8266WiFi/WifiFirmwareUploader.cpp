@@ -15,7 +15,7 @@
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
 
-#if WIFI_USES_ESP32 || WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32 || WIFI_USES_ESP32_OR_8266
 constexpr uint32_t Esp32FlashModuleSize = 4 * 1024 * 1024;		// assume at least 4Mbytes flash
 #endif
 
@@ -44,10 +44,14 @@ const size_t EspFlashBlockSize = 0x0400;			// we send 1K byte blocks
 const uint8_t ESP_IMAGE_MAGIC = 0xe9;
 const uint8_t ESP_CHECKSUM_MAGIC = 0xef;
 
-#if WIFI_USES_ESP32_AND_8266
-// Status body lengths
-const size_t ESP_BODY_LENGTHS[] = {0, 2, 4};		// Unknown, ESP8266, ESP32
-const char * const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32"};
+#if WIFI_USES_ESP32_OR_8266
+// Status body lengths, used to initially identify ESP8266 v ESP32 devices
+const size_t ESP_BODY_LENGTHS[] = {0, 2, 4, 4};
+const char * const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32", "ESP32+"};
+// Following address contains unique per device type id used to confirm ESP8266 and identify original ESP32
+const uint32_t CHIP_DETECT_MAGIC_REG_ADDR = 0x40001000;
+// value stored at the above address (values taken from the esptool.py source)
+const uint32_t ESP_IDS[] = {0xffffffff, 0xfff0c101, 0x00f01d83, 0x0000000};
 #endif
 // Messages corresponding to result codes, should make sense when followed by " error"
 const char * const resultMessages[] =
@@ -413,8 +417,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op
 	size_t bodyLen;
 	uint32_t status;
 	EspUploadResult stat = readPacket(op, valp, bodyLen, &status, msTimeout);
-	debugPrintf("opcode %u returned stat %x length %u status 0x%" PRIx32 "\n", op, stat, bodyLen, status);
-#if WIFI_USES_ESP32_AND_8266
+	//debugPrintf("opcode %u returned stat %x length %u status 0x%" PRIx32 "\n", op, stat, bodyLen, status);
+#if WIFI_USES_ESP32_OR_8266
 	if (stat == EspUploadResult::success && espType != ESPType::unknown && bodyLen != ESP_BODY_LENGTHS[espType])
 	{
 		stat = EspUploadResult::badReply;
@@ -451,7 +455,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 	buf[1] = 0x07;
 	buf[2] = 0x12;
 	buf[3] = 0x20;
-#if WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32_OR_8266
 	size_t bodyLen;
 	sendCommand(ESP_SYNC, 0, buf, sizeof(buf));
 	EspUploadResult stat = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, timeout);
@@ -461,7 +465,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 	// If we got a response other than sync, discard it and wait for a sync response. This happens at higher baud rates.
 	for (int i = 0; i < 10 && stat == EspUploadResult::respHeader; ++i)
 	{
-#if !WIFI_USES_ESP32_AND_8266
+#if !WIFI_USES_ESP32_OR_8266
 		size_t bodyLen;
 #endif
 		stat = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, timeout);
@@ -469,8 +473,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 
 	if (stat == EspUploadResult::success)
 	{
-#if WIFI_USES_ESP32_AND_8266
-		// Set the type of ESP based on status reply length
+#if WIFI_USES_ESP32_OR_8266
+		// Set the initial type of ESP based on status reply length
 		if (bodyLen == ESP_BODY_LENGTHS[ESPType::ESP32])
 			espType = ESPType::ESP32;
 		else
@@ -479,12 +483,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 		// Read and discard additional replies
 		for (;;)
 		{
-#if WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32_OR_8266
 			size_t bodyLen;
 #endif
 			EspUploadResult rc = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, defaultTimeout);
 			if (rc != EspUploadResult::success
-#if !WIFI_USES_ESP32_AND_8266
+#if !WIFI_USES_ESP32_OR_8266
 				|| !(bodyLen == 2 || bodyLen == 4)
 #endif
 				)
@@ -502,16 +506,15 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t offset, uint32_t size) noexcept
 {
 	// Determine the number of blocks represented by the size
-	///const uint32_t blkCnt = (size + (EspFlashBlockSize - 1)) / EspFlashBlockSize;
-	uint32_t blkCnt = (size + (EspFlashBlockSize - 1)) / EspFlashBlockSize;
+	const uint32_t blkCnt = (size + (EspFlashBlockSize - 1)) / EspFlashBlockSize;
 
 	// Determine the erase size parameter to pass in the FLASH_BEGIN command
 #if WIFI_USES_ESP32
 	const uint32_t erase_size = size;
 #else
-#if WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32_OR_8266
 	uint32_t erase_size;	
-	if (espType == ESPType::ESP32)
+	if (espType != ESPType::ESP8266)
 	{
 		erase_size = size;
 	}
@@ -542,7 +545,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 	{
 		num_sectors = (num_sectors - head_sectors);
 	}
-#if WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32_OR_8266
 		erase_size = num_sectors * sector_size;
 	}
 #else
@@ -551,19 +554,16 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 #endif
 
 	// begin the Flash process
-#if WIFI_USES_ESP32 || WIFI_USES_ESP32_AND_8266
-erase_size = ((erase_size + 4096 - 1)/4096)*4096;
-blkCnt = (erase_size + (EspFlashBlockSize - 1)) / EspFlashBlockSize;
+#if WIFI_USES_ESP32 || WIFI_USES_ESP32_OR_8266
 	const uint32_t buf[5] = { erase_size, blkCnt, EspFlashBlockSize, offset, 0 };		// last word means not encrypted
 #else
 	const uint32_t buf[4] = { erase_size, blkCnt, EspFlashBlockSize, offset };
 #endif
 
 	const uint32_t timeout = (erase_size != 0) ? eraseTimeout : defaultTimeout;
-#if WIFI_USES_ESP32_AND_8266
-debugPrintf("flash begin erase size %d blkcnt %d blk size %d offset %d\n", erase_size, blkCnt, EspFlashBlockSize, offset);
-	//return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, espType == ESPType::ESP32 ? sizeof(buf) : sizeof(buf) - 1, 0, nullptr, timeout);
-	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, sizeof(buf) - 1, 0, nullptr, timeout);
+#if WIFI_USES_ESP32_OR_8266
+//debugPrintf("flash begin erase size %d blkcnt %d blk size %d offset %d\n", erase_size, blkCnt, EspFlashBlockSize, offset);
+	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, espType == ESPType::ESP32_PLUS ? sizeof(buf) : sizeof(buf) - sizeof(uint32_t), 0, nullptr, timeout);
 #else
 	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, sizeof(buf), 0, nullptr, timeout);
 #endif
@@ -576,7 +576,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reb
 	return doCommand(ESP_FLASH_END, (const uint8_t*)&data, sizeof(data), 0, nullptr, defaultTimeout);
 }
 
-#if WIFI_USES_ESP32 || WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32 || WIFI_USES_ESP32_OR_8266
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiSetParameters(uint32_t size) noexcept
 {
@@ -668,6 +668,38 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t add
 	return flashBegin(address, size);
 }
 
+#if WIFI_USES_ESP32_OR_8266
+void WifiFirmwareUploader::Identify() noexcept
+{
+	if (espType != ESPType::unknown)
+	{
+		// sync will have done basics so we can safely use doCommand
+		const uint32_t addr = CHIP_DETECT_MAGIC_REG_ADDR;
+		uint32_t regVal;
+		EspUploadResult stat;
+
+		if ((stat = doCommand(ESP_READ_REG, (const uint8_t*)&addr, sizeof(addr), 0, &regVal, defaultTimeout)) == EspUploadResult::success)
+		{
+			//debugPrintf("read magic returns %x current type is %s\n", regVal, ESP_NAMES[espType]);
+			if (regVal == ESP_IDS[ESPType::ESP8266])
+			{
+				espType = ESPType::ESP8266;
+			}
+			else if (regVal == ESP_IDS[ESPType::ESP32])
+			{
+				espType = ESPType::ESP32;
+			}
+			else if (espType == ESPType::ESP32)
+			{
+				// we don't recognise it as ESP8266 or ESP32, but we think it is an ESP32 device. Assume a newer ESP32
+				espType = ESPType::ESP32_PLUS;
+			}
+			// if we don't have an explicit match use whatever sync decided
+		}		
+	}
+}
+#endif
+
 void WifiFirmwareUploader::Spin() noexcept
 {
 	switch (state)
@@ -713,13 +745,14 @@ void WifiFirmwareUploader::Spin() noexcept
 			{
 				// Successful connection
 //				MessageF(" success on attempt %d\n", (connectAttemptNumber % retriesPerBaudRate) + 1);
-#if WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32_OR_8266
+				Identify();
 				MessageF(" success, found %s\n", ESP_NAMES[espType]);
 #else
 				MessageF(" success\n");
 #endif
-#if WIFI_USES_ESP32 || WIFI_USES_ESP32_AND_8266
-# if WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32 || WIFI_USES_ESP32_OR_8266
+# if WIFI_USES_ESP32_OR_8266
 				if (espType == ESPType::ESP8266)
 					state = UploadState::erasing1;
 				else
@@ -732,7 +765,7 @@ void WifiFirmwareUploader::Spin() noexcept
 					state = UploadState::resetting;		// try a reset and a lower baud rate
 					break;
 				}
-				//res = flashSpiSetParameters(Esp32FlashModuleSize);
+				res = flashSpiSetParameters(Esp32FlashModuleSize);
 				if (res != EspUploadResult::success)
 				{
 					MessageF("Failed to set SPI parameters\n");
@@ -741,7 +774,7 @@ void WifiFirmwareUploader::Spin() noexcept
 				}
 				MessageF("SPI flash parameters set\n");
 				state = UploadState::erasing2;
-# if WIFI_USES_ESP32_AND_8266
+# if WIFI_USES_ESP32_OR_8266
 				}
 # endif
 #else

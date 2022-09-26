@@ -79,12 +79,17 @@ private:
 		done
 	};
 
+#if WIFI_USES_ESP32_OR_8266
+	// Type of ESP. We need to identify ESP8266, the original ESP32 and ESP3232S2 or later devices. 
+	// These three classes of device need slightly different flash commands.
 	enum ESPType
 	{
 		unknown = 0,
 		ESP8266,
-		ESP32
+		ESP32,
+		ESP32_PLUS
 	};
+#endif
 
 	void MessageF(const char *fmt, ...) noexcept;
 	int ReadByte(uint8_t& data, bool slipDecode) noexcept;
@@ -101,14 +106,16 @@ private:
 	EspUploadResult Sync(uint16_t timeout) noexcept;
 	EspUploadResult flashBegin(uint32_t offset, uint32_t size) noexcept;
 	EspUploadResult flashFinish(bool reboot) noexcept;
-#if WIFI_USES_ESP32 || WIFI_USES_ESP32_AND_8266
+#if WIFI_USES_ESP32 || WIFI_USES_ESP32_OR_8266
 	EspUploadResult flashSpiSetParameters(uint32_t size) noexcept;
 	EspUploadResult flashSpiAttach() noexcept;
 #endif
 	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept;
 	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept;
 	EspUploadResult DoErase(uint32_t address, uint32_t size) noexcept;
-
+#if WIFI_USES_ESP32_OR_8266
+	void Identify() noexcept;
+#endif
 	AsyncSerial& uploadPort;
 	WiFiInterface& interface;
 	FileStore *uploadFile;
