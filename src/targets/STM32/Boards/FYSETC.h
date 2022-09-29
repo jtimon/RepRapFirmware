@@ -137,7 +137,7 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
     //Heaters and Fans (Big and Small Mosfets}
     {PE_10,   "bed,hbed" },
     {PB_4,    "e0heat,he0" },
-    {PB_7,    "e1heat,he1" },
+    {PB_0,    "e1heat,he1" },
     {PD_13,   "e2heat,he2" },
     {PC_8,    "e3heat,he3" },
     {PA_15,   "e4heat,he4" },
@@ -147,7 +147,7 @@ constexpr PinEntry PinTable_FYSETC_SPIDER_KING407[] =
     {PD_12,   "fan3" },
     {PD_14,   "fan4" },
 	{PB_1,    "tacho0" },
-	{PB_0,    "tacho1" },
+	{PB_7,    "tacho1" },
 
     //Servos
     {PA_1,    "servo0" },
