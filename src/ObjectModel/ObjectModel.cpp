@@ -333,6 +333,24 @@ void ExpressionValue::SetDriverId(DriverId did) noexcept
 	uVal = did.localDriver;
 }
 
+bool ExpressionValue::IsHeapStringArrayType() const noexcept
+{
+	if (type != (uint32_t)TypeCode::HeapArray)
+	{
+		return false;
+	}
+
+	const size_t numElems = ahVal.GetNumElements();
+	for (size_t i = 0; i < numElems; ++i)
+	{
+		if (ahVal.GetElementType(i) != TypeCode::HeapString)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string
@@ -590,6 +608,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 			classDescriptor = GetObjectModelClassDescriptor();
 		}
 
+		// Loop doing this object followed by its ancestors
 		while (classDescriptor != nullptr)
 		{
 			const uint8_t * const descriptor = classDescriptor->omd;
@@ -606,6 +625,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 				{
 					if (tbl->Matches(filter, context))
 					{
+						ReadLocker lock(GetObjectLock(tableNumber));
 						if (tbl->ReportAsJson(buf, context, classDescriptor, this, filter, !added))
 						{
 							added = true;
@@ -1174,6 +1194,7 @@ decrease(strlen(idString))	// recursion variant
 		classDescriptor = GetObjectModelClassDescriptor();
 	}
 
+	// Loop through this class and its ancestors
 	while (classDescriptor != nullptr)
 	{
 		const ObjectModelTableEntry * const e = FindObjectModelTableEntry(classDescriptor, tableNumber, idString);
@@ -1186,6 +1207,7 @@ decrease(strlen(idString))	// recursion variant
 			idString = GetNextElement(idString);
 			const ExpressionValue val = e->func(this, context);
 			context.CheckStack(StackUsage::GetObjectValue_noTable);
+			ReadLocker lock(GetObjectLock(tableNumber));
 			return GetObjectValue(context, classDescriptor, val, idString);
 		}
 		if (tableNumber != 0)

@@ -171,16 +171,16 @@ constexpr ObjectModelArrayTableEntry RepRap::objectModelArrayTable[] =
 	// 0. Boards
 	{
 		nullptr,					// no lock needed
-	#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_CAN_EXPANSION
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{	return (context.GetLastIndex() == 0)
 							? ExpressionValue(((const RepRap*)self)->platform, 0)
 								: ExpressionValue(((const RepRap*)self)->expansion, 0); }
-	#else
+#else
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
-	#endif
+#endif
 	},
 	// 1. Fans
 	{
@@ -249,6 +249,7 @@ constexpr ObjectModelArrayTableEntry RepRap::objectModelArrayTable[] =
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(RepRap)
 
+constexpr unsigned int StateSubTableNumber = 3;		// section number of 'state' in the following
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -270,7 +271,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
 #endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
-	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
+	{ "seqs",					OBJECT_MODEL_FUNC(self, 5),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC_ARRAY(4),												ObjectModelEntryFlags::live },
@@ -327,7 +328,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbeProgramBytes",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbeProgramBytes),				ObjectModelEntryFlags::verbose },
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 
-	// 3. MachineModel.state
+	// 3. MachineModel.state (see declaration of StateSubTableNumber above)
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
@@ -347,7 +348,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::important },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mboxList != nullptr, self->mboxList, 0),		ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
@@ -364,15 +365,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
 
-	// 5. MachineModel.state.messageBox (FIXME acquire MutexLocker when accessing the following)
-	{ "axisControls",			OBJECT_MODEL_FUNC((int32_t)self->mbox.controls.GetRaw()),				ObjectModelEntryFlags::important },
-	{ "message",				OBJECT_MODEL_FUNC(self->mbox.message.c_str()),							ObjectModelEntryFlags::important },
-	{ "mode",					OBJECT_MODEL_FUNC((int32_t)self->mbox.mode),							ObjectModelEntryFlags::important },
-	{ "seq",					OBJECT_MODEL_FUNC((int32_t)self->mbox.seq),								ObjectModelEntryFlags::important },
-	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->mbox.timeout),							ObjectModelEntryFlags::important },
-	{ "title",					OBJECT_MODEL_FUNC(self->mbox.title.c_str()),							ObjectModelEntryFlags::important },
-
-	// 6. MachineModel.seqs
+	// 5. MachineModel.seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
@@ -402,9 +395,14 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 };
 
+ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const noexcept /*override*/
+{
+	return (tableNumber == StateSubTableNumber) ? &mboxLock : nullptr;
+}
+
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
-	7,																						// number of sub-tables
+	6,																						// number of sub-tables
 	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),		// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
@@ -414,7 +412,6 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	25,																						// limits
 	20 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	6,																						// state.messageBox
 	12 + HAS_NETWORKING + SUPPORT_SCANNER +
 	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
 };
@@ -504,8 +501,6 @@ void RepRap::Init() noexcept
 #if SUPPORT_DIRECT_LCD
 	messageSequence = 0;
 #endif
-
-	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();
 	network->Init();
@@ -839,15 +834,7 @@ void RepRap::Spin() noexcept
 		StateUpdated();
 	}
 
-	// Check if the message box can be hidden
-	{
-		MutexLocker lock(messageBoxMutex);
-		if (mbox.active && mbox.timer != 0 && now - mbox.timer >= mbox.timeout)
-		{
-			mbox.active = false;
-			StateUpdated();
-		}
-	}
+	CheckMessageBoxTimeout();
 
 	// Keep track of the loop time
 	if (justSentDiagnostics)
@@ -1176,15 +1163,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
 		const bool sendMessage = !message.IsEmpty();
 
-		float timeLeft = 0.0;
-		MutexLocker lock(messageBoxMutex);
-
-		if (mbox.active && mbox.timer != 0)
-		{
-			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
-		}
-
-		if (sendBeep || sendMessage || mbox.active)
+		const ReadLockedPointer<const MessageBox> mbox(GetCurrentMessageBox());
+		const bool mboxActive = mbox.IsNotNull() && mbox->IsLegacyType();
+		if (sendBeep || sendMessage || mboxActive)
 		{
 			response->cat(",\"output\":{");
 
@@ -1192,7 +1173,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			if (sendBeep)
 			{
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage || mbox.active)
+				if (sendMessage || mboxActive)
 				{
 					response->cat(',');
 				}
@@ -1202,17 +1183,17 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			if (sendMessage)
 			{
 				response->catf("\"message\":\"%.s\"", message.c_str());
-				if (mbox.active)
+				if (mboxActive)
 				{
 					response->cat(',');
 				}
 			}
 
 			// Report message box
-			if (mbox.active)
+			if (mboxActive)
 			{
 				response->catf("\"msgBox\":{\"msg\":\"%.s\",\"title\":\"%.s\",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}",
-								mbox.message.c_str(), mbox.title.c_str(), mbox.mode, mbox.seq, (double)timeLeft, (unsigned int)mbox.controls.GetRaw());
+								mbox->GetMessage(), mbox->GetTitle(), mbox->GetMode(), mbox->GetSeq(), (double)mbox->GetTimeLeft(), (unsigned int)mbox->GetControls().GetRaw());
 			}
 			response->cat('}');
 		}
@@ -1833,18 +1814,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
 	if (!gCodes->IsFlashing())
 	{
-		float timeLeft = 0.0;
-		MutexLocker lock(messageBoxMutex);
-
-		if (mbox.active && mbox.timer != 0)
-		{
-			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
-		}
-
-		if (mbox.active)
+		const ReadLockedPointer<const MessageBox> mbox(GetCurrentMessageBox());
+		if (mbox.IsNotNull() && mbox->IsLegacyType())
 		{
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u,\"msgBox.msg\":\"%.s\",\"msgBox.title\":\"%.s\"",
-							mbox.mode, mbox.seq, (double)timeLeft, (unsigned int)mbox.controls.GetRaw(), mbox.message.c_str(), mbox.title.c_str());
+				mbox->GetMode(), mbox->GetSeq(), (double)mbox->GetTimeLeft(), (unsigned int)mbox->GetControls().GetRaw(), mbox->GetMessage(), mbox->GetTitle());
 		}
 		else
 		{
@@ -2412,29 +2386,6 @@ void RepRap::SetMessage(const char *msg) noexcept
 	platform->Message(MessageType::LogInfo, msg);
 }
 
-// Display a message box on the web interface
-void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept
-{
-	MutexLocker lock(messageBoxMutex);
-	mbox.message.copy(msg);
-	mbox.title.copy(title);
-	mbox.mode = mode;
-	mbox.timer = (timeout <= 0.0) ? 0 : millis();
-	mbox.timeout = round(max<float>(timeout, 0.0) * 1000.0);
-	mbox.controls = controls;
-	mbox.active = true;
-	++mbox.seq;
-	StateUpdated();
-}
-
-// Clear pending message box
-void RepRap::ClearAlert() noexcept
-{
-	MutexLocker lock(messageBoxMutex);
-	mbox.active = false;
-	StateUpdated();
-}
-
 // Get the status index
 size_t RepRap::GetStatusIndex() const noexcept
 {
@@ -2831,6 +2782,107 @@ void RepRap::StartIap(const char *filename) noexcept
 void RepRap::ReportInternalError(const char *file, const char *func, int line) const noexcept
 {
 	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
+}
+
+// Message box functions
+
+ReadLockedPointer<const MessageBox> RepRap::GetCurrentMessageBox() const noexcept
+{
+	ReadLockedPointer<const MessageBox> p(mboxLock, mboxList);
+	if (p.IsNull())
+	{
+		p.Release();
+	}
+	return p;
+}
+
+// Send a message box, which may require an acknowledgement
+// sParam = 0 Just display the message box, optional timeout
+// sParam = 1 As for 0 but display a Close button as well
+// sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
+// sParam = 3 As for 2 but also display a Cancel button
+// Returns true if we sent the message box, false if we couldn't because there is already a message box
+bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits) noexcept
+{
+	WriteLocker lock(mboxLock);
+
+	// Currently we only allow a single outstanding message box, but we may change that in future
+	if (mboxList != nullptr)
+	{
+		return false;
+	}
+
+	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
+	{
+		MessageBox *mb = new MessageBox(nullptr);
+		mb->Populate(message, title, sParam, tParam, controls, limits);
+		mboxList = mb;
+		StateUpdated();
+	}
+
+	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);
+
+	mt = (MessageType)(mt & (UsbMessage | TelnetMessage | Aux2Message));
+	if (mt != 0)
+	{
+		if (strlen(title) > 0)
+		{
+			platform->MessageF(mt, "- %s -\n", title);
+		}
+		platform->MessageF(mt, "%s\n", message);
+		if (sParam == 2)
+		{
+			platform->Message(mt, "Send M292 to continue\n");
+		}
+		else if (sParam == 3)
+		{
+			platform->Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
+		}
+	}
+	return true;
+}
+
+bool RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title) noexcept
+{
+	return SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
+}
+
+// If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, then return true
+bool RepRap::AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept
+{
+	WriteLocker lock(mboxLock);
+
+	// Currently we only allow a single outstanding message box, but we may change that in future
+	MessageBox *mb = mboxList;
+	if (mb != nullptr && (seq == 0 || mb->GetSeq() == seq))
+	{
+		wasBlocking = mb->IsBlocking();
+		mboxList = mb->GetNext();
+		delete mb;
+		StateUpdated();
+		return true;
+	}
+
+	return false;
+}
+
+// Check if the current message box should be timed out
+void RepRap::CheckMessageBoxTimeout() noexcept
+{
+	if (mboxList != nullptr)
+	{
+		WriteLocker locker(mboxLock);
+		MessageBox *mb = mboxList;
+		if (mb != nullptr && mb->HasTimedOut())
+		{
+			const ExpressionValue rslt = mb->GetDefaultValue();
+			const bool canCancel = mb->CanCancel();
+			mboxList = mb->GetNext();
+			delete mb;
+			StateUpdated();
+			gCodes->MessageBoxClosed(canCancel, false, rslt);
+		}
+	}
 }
 
 #if SUPPORT_DIRECT_LCD

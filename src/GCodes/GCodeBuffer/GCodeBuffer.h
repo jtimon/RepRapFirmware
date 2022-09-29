@@ -71,6 +71,7 @@ public:
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
+	ExpressionValue GetM291Result() const noexcept { return m291Result; }
 
 	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
 	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
@@ -110,12 +111,14 @@ public:
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
+	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t minValue, int32_t maxValue) THROWS(GCodeException);
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
+	bool TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
 	void TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
 	void TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
@@ -218,7 +221,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled) noexcept;
+	void MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept
@@ -325,6 +328,7 @@ private:
 	StringParser stringParser;
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
+	ExpressionValue m291Result;							// the value entered or choice selected in response to a M291 command
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
@@ -333,6 +337,7 @@ private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeResult lastResult;
+
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 

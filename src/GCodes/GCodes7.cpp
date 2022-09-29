@@ -13,46 +13,86 @@
 // Process M291
 GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
+	// Get the message
 	gb.MustSee('P');
 	String<MaxMessageLength> message;
 	gb.GetQuotedString(message.GetRef());
 
+	// Get the optional message box title
 	bool dummy = false;
-	String<MaxMessageLength> title;
+	String<StringLength100> title;
 	(void)gb.TryGetQuotedString('R', title.GetRef(), dummy);
 
+	// Get the message box mode
 	uint32_t sParam = 1;
-	(void)gb.TryGetLimitedUIValue('S', sParam, dummy, 4);
+	(void)gb.TryGetLimitedUIValue('S', sParam, dummy, 8);
 
-	float tParam;
-	if (sParam <= 1)
-	{
-		tParam = DefaultMessageTimeout;
-		gb.TryGetFValue('T', tParam, dummy);
-	}
-	else
-	{
-		tParam = 0.0;
-	}
+	// Get the optional timeout parameter. The default value depends on the mode (S parameter).
+	float tParam = (sParam <= 1) ? DefaultMessageTimeout : 0.0;
+	gb.TryGetNonNegativeFValue('T', tParam, dummy);
 
-	if (sParam == 0 && tParam <= 0.0)
-	{
-		reply.copy("Attempt to create a message box that cannot be dismissed");
-		return GCodeResult::error;
-	}
+	MessageBoxLimits limits;
+	gb.TryGetBValue('J', limits.canCancel, dummy);
 
 	AxesBitmap axisControls;
-	for (size_t axis = 0; axis < numTotalAxes; axis++)
+
+	switch (sParam)
 	{
-		if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
+	case 0:		// no buttons displayed, non-blocking
+		if (tParam <= 0.0)
 		{
-			axisControls.SetBit(axis);
+			reply.copy("Attempt to create a message box that cannot be dismissed");
+			return GCodeResult::error;
 		}
+		break;
+
+	case 1:		// Close button displayed, non-blocking
+	default:
+		break;
+
+	case 2:		// OK button displayed, blocking
+	case 3:		// OK and Cancel buttons displayed, blocking
+		// Message box modes 2 and 3 can take a list of axes that can be jogged
+		for (size_t axis = 0; axis < numTotalAxes; axis++)
+		{
+			if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
+			{
+				axisControls.SetBit(axis);
+			}
+		}
+		break;
+
+	case 4:		// Multiple choices, blocking
+		gb.MustSee('K');
+		limits.choices = gb.GetExpression();
+		if (limits.choices.IsHeapStringArrayType())
+		{
+			uint32_t defaultChoice = 0;
+			if (gb.TryGetUIValue('F', defaultChoice, dummy))
+			{
+				limits.defaultVal.SetInt((int32_t)defaultChoice);
+			}
+			break;
+		}
+		reply.copy("K parameter must be an array of strings");
+		return GCodeResult::error;
+
+	case 5:		// Integer value required, blocking
+		limits.GetIntegerLimits(gb, false);
+		break;
+
+	case 6:		// Floating point value required, blocking
+		limits.GetFloatLimits(gb);
+		break;
+
+	case 7:		// String value required, blocking
+		limits.GetIntegerLimits(gb, true);
+		break;
 	}
 
-	// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
-	if (sParam >= 2)
+	if (sParam >= 2)			// if it's a blocking message box
 	{
+		// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
@@ -68,25 +108,55 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 
 	// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
 	const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
-	platform.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
+	reprap.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls, &limits);
 	return GCodeResult::ok;
 }
 
 // Process M292
 GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
-	reprap.ClearAlert();
+	uint32_t seq = 0;
+	if (gb.Seen('S'))
+	{
+		seq = gb.GetUIValue();
+	}
 
-	const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
+	bool wasBlocking;
+	if (reprap.AcknowledgeMessageBox(seq, wasBlocking))
+	{
+		if (wasBlocking)
+		{
+			const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
+			ExpressionValue rslt;
+			if (!cancelled && gb.Seen('R'))
+			{
+				rslt = gb.GetExpression();
+			}
+			MessageBoxClosed(cancelled, true, rslt);
+		}
+		return GCodeResult::ok;
+	}
+	else
+	{
+		reply.copy("no active message box");
+		return GCodeResult::error;
+	}
+}
+
+// Deal with processing a M292 or timing out a message box
+void GCodes::MessageBoxClosed(bool cancelled, bool m292, ExpressionValue rslt) noexcept
+{
+	platform.MessageF(MessageType::LogInfo,
+						"%s: cancelled=%s",
+							(m292) ? "M292" : "Message box timed out",
+								(cancelled ? "true" : "false"));
 	for (GCodeBuffer* targetGb : gcodeSources)
 	{
 		if (targetGb != nullptr)
 		{
-			targetGb->MessageAcknowledged(cancelled);
+			targetGb->MessageAcknowledged(cancelled, rslt);
 		}
 	}
-	platform.MessageF(MessageType::LogInfo, "M292: cancelled: %s", (cancelled ? "true" : "false"));
-	return GCodeResult::ok;
 }
 
 // End

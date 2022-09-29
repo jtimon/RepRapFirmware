@@ -26,6 +26,7 @@ Licence: GPL
 #include <RTOSIface/RTOSIface.h>
 #include <General/function_ref.h>
 #include <ObjectModel/GlobalVariables.h>
+#include "MessageBox.h"
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/ExpansionManager.h>
@@ -36,20 +37,6 @@ enum class ResponseSource
 	HTTP,
 	AUX,
 	Generic
-};
-
-// Message box data
-struct MessageBox
-{
-	bool active;
-	String<MaxMessageLength> message;
-	String<MaxTitleLength> title;
-	int mode;
-	uint32_t seq;
-	uint32_t timer, timeout;
-	AxesBitmap controls;
-
-	MessageBox() noexcept : active(false), seq(0) { }
 };
 
 typedef Bitmap<uint32_t> DebugFlags;
@@ -90,13 +77,19 @@ public:
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
+	// Message box functions
+	ReadLockedPointer<const MessageBox> GetCurrentMessageBox() const noexcept;
+	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
+	bool SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
+	bool AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept;
+	void CheckMessageBoxTimeout() noexcept;
+
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
 #if SUPPORT_DIRECT_LCD
  	Display& GetDisplay() const noexcept { return *display; }
  	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
- 	const MessageBox& GetMessageBox() const noexcept { return mbox; }
 #endif
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
@@ -133,8 +126,6 @@ public:
 
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
 	void SetMessage(const char *msg) noexcept;
-	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
-	void ClearAlert() noexcept;
 
 	bool IsProcessingConfig() const noexcept { return processingConfig; }
 
@@ -180,6 +171,8 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
+	ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept override;
+
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
 	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
@@ -219,8 +212,6 @@ private:
  	ExpansionManager *expansion;
 #endif
 
- 	mutable Mutex messageBoxMutex;				// mutable so that we can lock and release it in const functions
-
 	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, moveSeq, globalSeq;
 	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
@@ -250,7 +241,8 @@ private:
 	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
 #endif
 
-	MessageBox mbox;							// message box data
+	MessageBox *_ecv_null mboxList;				// linked list of message boxes
+	mutable ReadWriteLock mboxLock;
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

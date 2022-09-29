@@ -15,44 +15,12 @@
 
 #if SUPPORT_OBJECT_MODEL
 
+#include "TypeCode.h"
 #include <General/IPAddress.h>
 #include <General/Bitmap.h>
 #include <RTOSIface/RTOSIface.h>
 #include <Networking/NetworkDefs.h>
 #include <Platform/OutputMemory.h>
-
-// Type codes to indicate what type of expression we have and how it is represented.
-// The "Special" type is for items that we have to evaluate when we are ready to write them out, in particular strings whose storage might disappear.
-enum class TypeCode : uint8_t
-{
-	None = 0,
-	Bool,
-	Char,
-	Uint32,
-	Int32,
-	Uint64,				// only 56 bits actually available
-	Float,
-	Bitmap16,
-	Bitmap32,
-	Bitmap64,			// only 56 bits actually available
-	Enum32,
-	ObjectModel_tc,		// renamed for eCv to avoid clash with class ObjectModel
-	CString,
-	HeapString,
-	HeapArray,
-	IPAddress_tc,		// renamed for eCv to avoid clash with class IPAddress in RRFLibraries
-	ObjectModelArray,
-	DateTime_tc,		// renamed for eCv to avoid clash with class DateTime
-	DriverId_tc,		// renamed for eCv to avoid clash with class DriverId
-	MacAddress_tc,		// renamed for eCv to avoid clash with class MacAddress
-	Special,
-	Port,
-	UniqueId_tc,
-	Duration,			// a duration represented an unsigned number of seconds (used by the 12864 LCD code)
-#if SUPPORT_CAN_EXPANSION
-	CanExpansionBoardDetails
-#endif
-};
 
 #if SUPPORT_CAN_EXPANSION
 
@@ -163,6 +131,7 @@ struct ExpressionValue
 
 	TypeCode GetType() const noexcept { return (TypeCode)type; }
 	bool IsStringType() const noexcept { return type == (uint32_t)TypeCode::CString || type == (uint32_t)TypeCode::HeapString; }
+	bool IsHeapStringArrayType() const noexcept;
 
 	void SetBool(bool b) noexcept;
 	void SetInt(int32_t i) noexcept;
@@ -342,10 +311,15 @@ protected:
 	// Get the requested entry in the array table
 	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
 
+	// Return the address of the ReadWriteLock (if any) that we need to acquire before querying or reporting on this object
+	// Override this default implementation in classes that need to be locked. If the returned lock belongs to the current object
+	// then it must be declared 'mutable' because this function is const, like the querying and reporting functions
+	virtual ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept { return nullptr; }
+
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	// Report on a single item
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;

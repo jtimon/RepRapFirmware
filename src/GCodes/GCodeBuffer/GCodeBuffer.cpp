@@ -624,6 +624,12 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) T
 	}
 }
 
+// Get a string array after a key letter
+ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
+{
+	return PARSER_OPERATION(GetExpression());
+}
+
 // Get a :-separated list of drivers after a key letter
 void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length)
 {
@@ -657,19 +663,24 @@ bool GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeExc
 // Try to get a signed integer value, throw if outside limits
 bool GCodeBuffer::TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 {
-	const bool b = TryGetIValue(c, val, seen);
-	if (b)
+	if (Seen(c))
 	{
-		if (val < minValue)
-		{
-			throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
-		}
-		if (val > maxValue)
-		{
-			throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
-		}
+		val = GetLimitedUIValue(c, minValue, maxValue);
+		seen = true;
+		return true;
 	}
-	return b;
+	return false;
+}
+
+bool GCodeBuffer::TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS(GCodeException)
+{
+	if (Seen(c))
+	{
+		val = GetNonNegativeFValue();
+		seen = true;
+		return true;
+	}
+	return false;
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
@@ -687,12 +698,13 @@ bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeE
 // Try to get an unsigned integer value, throw if >= limit
 bool GCodeBuffer::TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException)
 {
-	const bool b = TryGetUIValue(c, val, seen);
-	if (b && val >= maxValuePlusOne)
+	if (Seen(c))
 	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
+		val = GetLimitedUIValue(c, maxValuePlusOne);
+		seen = true;
+		return true;
 	}
-	return b;
+	return false;
 }
 
 // If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
@@ -1100,7 +1112,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
 // Allow for the possibility that the source may have started running a macro since it started waiting
-void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
+void GCodeBuffer::MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept
 {
 	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
@@ -1109,6 +1121,11 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
 			ms->messageCancelled = cancelled;
+			m291Result = rslt;
+			if (cancelled)
+			{
+				lastResult = GCodeResult::m291Cancelled;
+			}
 #if HAS_SBC_INTERFACE
 			messageAcknowledged = !cancelled || !ms->DoingFile();
 			reprap.GetSbcInterface().EventOccurred();

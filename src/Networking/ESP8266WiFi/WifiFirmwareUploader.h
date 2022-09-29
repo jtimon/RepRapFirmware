@@ -37,10 +37,8 @@ private:
 	static const uint32_t eraseTimeout = 15000;					// increased from 12 to 15 seconds because Roland's board was timing out
 	static const unsigned int percentToReportIncrement = 5;		// how often we report % complete
 
-#if !WIFI_USES_ESP32
-	static const uint32_t systemParametersAddress = 0x3FE000;	// the address of the system + user parameter area that needs to be cleared when changing SDK version
-	static const uint32_t systemParametersSize = 0x2000;		// the size of the system + user parameter area
-#endif
+	static const uint32_t esp8266systemParametersAddress = 0x3FE000;	// the address of the system + user parameter area that needs to be cleared when changing SDK version
+	static const uint32_t esp8266systemParametersSize = 0x2000;			// the size of the system + user parameter area
 
 	// Return codes
 	// *** This list must be kept in step with the corresponding messages! ***
@@ -79,17 +77,15 @@ private:
 		done
 	};
 
-#if WIFI_USES_ESP32_OR_8266
-	// Type of ESP. We need to identify ESP8266, the original ESP32 and ESP3232S2 or later devices. 
+	// Type of ESP. We need to identify ESP8266, the original ESP32 and ESP3232S2 or later devices.
 	// These three classes of device need slightly different flash commands.
-	enum ESPType
+	enum ESPType : uint8_t
 	{
 		unknown = 0,
 		ESP8266,
 		ESP32,
 		ESP32_PLUS
 	};
-#endif
 
 	void MessageF(const char *fmt, ...) noexcept;
 	int ReadByte(uint8_t& data, bool slipDecode) noexcept;
@@ -106,16 +102,13 @@ private:
 	EspUploadResult Sync(uint16_t timeout) noexcept;
 	EspUploadResult flashBegin(uint32_t offset, uint32_t size) noexcept;
 	EspUploadResult flashFinish(bool reboot) noexcept;
-#if WIFI_USES_ESP32 || WIFI_USES_ESP32_OR_8266
 	EspUploadResult flashSpiSetParameters(uint32_t size) noexcept;
 	EspUploadResult flashSpiAttach() noexcept;
-#endif
 	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept;
 	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept;
 	EspUploadResult DoErase(uint32_t address, uint32_t size) noexcept;
-#if WIFI_USES_ESP32_OR_8266
 	void Identify() noexcept;
-#endif
+
 	AsyncSerial& uploadPort;
 	WiFiInterface& interface;
 	FileStore *uploadFile;
