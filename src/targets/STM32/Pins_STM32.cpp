@@ -354,7 +354,7 @@ const char *GetPinNames(LogicalPin lp) noexcept
     else
     {
         name[2] = '0' + (lp & 0xf);
-        name[4] = '\0';
+        name[3] = '\0';
     }
     // Next is very, very iffy, but ok for current usage!
     return (const char *)name;
