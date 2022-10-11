@@ -15,17 +15,21 @@
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
 
+constexpr uint32_t Esp32FlashModuleSize = 4 * 1024 * 1024;		// assume at least 4Mbytes flash
+
 // ESP8266 command codes
-const uint8_t ESP_FLASH_BEGIN = 0x02;
-const uint8_t ESP_FLASH_DATA = 0x03;
-const uint8_t ESP_FLASH_END = 0x04;
-const uint8_t ESP_MEM_BEGIN = 0x05;
-const uint8_t ESP_MEM_END = 0x06;
-const uint8_t ESP_MEM_DATA = 0x07;
-const uint8_t ESP_SYNC = 0x08;
-const uint8_t ESP_WRITE_REG = 0x09;
-const uint8_t ESP_READ_REG = 0x0a;
-const uint8_t ESP_FLASH_SPI_ATTACH = 0x0d;
+const uint8_t ESP_FLASH_BEGIN = 0x02;		// Four 32-bit words: size to erase, number of data packets, data size in one packet, flash offset.
+const uint8_t ESP_FLASH_DATA = 0x03;		// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
+const uint8_t ESP_FLASH_END = 0x04;			// One 32-bit word: 0 to reboot, 1 “run to user code”. Not necessary to send this command if you wish to stay in the loader
+const uint8_t ESP_MEM_BEGIN = 0x05;			// total size, number of data packets, data size in one packet, memory offset
+const uint8_t ESP_MEM_END = 0x06;			// Two 32-bit words: execute flag, entry point address
+const uint8_t ESP_MEM_DATA = 0x07;			// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
+const uint8_t ESP_SYNC = 0x08;				// 36 bytes: 0x07 0x07 0x12 0x20, followed by 32 x 0x55
+const uint8_t ESP_WRITE_REG = 0x09;			// Four 32-bit words: address, value, mask and delay (in microseconds)
+const uint8_t ESP_READ_REG = 0x0a;			// Address as 32-bit word. Returns read data as 32-bit word in value field.
+// The following two commands are needed by the ESP32 ROM loader
+const uint8_t ESP_SPI_SET_PARAMS = 0x0b;	// Six 32-bit words: id, total size in bytes, block size, sector size, page size, status mask.
+const uint8_t ESP_SPI_ATTACH = 0x0d;		// 32-bit word: Zero for normal SPI flash. A second 32-bit word (should be 0) is passed to ROM loader only.
 
 // MAC address storage locations
 const uint32_t ESP_OTP_MAC0 = 0x3ff00050;
@@ -33,32 +37,36 @@ const uint32_t ESP_OTP_MAC1 = 0x3ff00054;
 const uint32_t ESP_OTP_MAC2	= 0x3ff00058;
 const uint32_t ESP_OTP_MAC3 = 0x3ff0005c;
 
-const size_t EspFlashBlockSize = 0x0400;			// 1K byte blocks
-// sizes and offsets used during a write operation
-const uint32_t blkSize = EspFlashBlockSize;
-const uint16_t hdrOfst = 0;
-const uint16_t dataOfst = 16;
-const uint16_t blkBufSize = dataOfst + blkSize;
+const size_t EspFlashBlockSize = 0x0400;			// we send 1K byte blocks
 
 const uint8_t ESP_IMAGE_MAGIC = 0xe9;
 const uint8_t ESP_CHECKSUM_MAGIC = 0xef;
 
-const uint32_t ESP_ERASE_CHIP_ADDR = 0x40004984;	// &SPIEraseChip
-const uint32_t ESP_SEND_PACKET_ADDR = 0x40003c80;	// &send_packet
-const uint32_t ESP_SPI_READ_ADDR = 0x40004b1c;		// &SPIRead
-const uint32_t ESP_UNKNOWN_ADDR = 0x40001121;		// not used
-const uint32_t ESP_USER_DATA_RAM_ADDR = 0x3ffe8000;	// &user data ram
-const uint32_t ESP_IRAM_ADDR = 0x40100000;			// instruction RAM
-const uint32_t ESP_FLASH_ADDR = 0x40200000;			// address of start of Flash
+// Status body lengths, used to initially identify ESP8266 v ESP32 devices
+const size_t ESP_BODY_LENGTHS[] = {0, 2, 4, 4};
+const char * const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32", "ESP32+"};
 
-// Status body lengths
-const size_t ESP_BODY_LENGTHS[] = {0, 2, 4};		// Unknow, ESP8266, ESP32
-const char * const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32"};
+// Following address contains unique per device type id used to confirm ESP8266 and identify original ESP32
+const uint32_t CHIP_DETECT_MAGIC_REG_ADDR = 0x40001000;
+
+// value stored at the above address (values taken from the esptool.py source)
+const uint32_t ESP_IDS[] = {0xffffffff, 0xfff0c101, 0x00f01d83, 0x0000000};
+
 // Messages corresponding to result codes, should make sense when followed by " error"
 const char * const resultMessages[] =
 {
-	"no",
-	"timeout",
+	"no",											// 0
+	"unknown", "unknown", "unknown", "unknown",		// 0x01 to 0x04
+	"invalidMessage",								// 0x05
+	"failedToAct",									// 0x06
+	"invalidCrc",									// 0x07
+	"flashWriteError",								// 0x08
+	"flashReadError",								// 0x09
+	"unknown",										// 0x0a
+	"deflateError",									// 0x0b
+	"unknown", "unknown", "unknown", "unknown",		// 0x0c to 0x0f
+
+	"timeout",										// 0x10
 	"comm write",
 	"connect",
 	"bad reply",
@@ -101,42 +109,6 @@ void WifiFirmwareUploader::flushInput() noexcept
 	while (uploadPort.available() != 0)
 	{
 		(void)uploadPort.read();
-	}
-}
-
-// Extract 1-4 bytes of a value in little-endian order from a buffer beginning at a specified offset
-uint32_t WifiFirmwareUploader::getData(unsigned byteCnt, const uint8_t *buf, int ofst) noexcept
-{
-	uint32_t val = 0;
-
-	if (buf && byteCnt)
-	{
-		unsigned int shiftCnt = 0;
-		if (byteCnt > 4)
-			byteCnt = 4;
-		do
-		{
-			val |= (uint32_t)buf[ofst++] << shiftCnt;
-			shiftCnt += 8;
-		} while (--byteCnt);
-	}
-	return(val);
-}
-
-// Put 1-4 bytes of a value in little-endian order into a buffer beginning at a specified offset.
-void WifiFirmwareUploader::putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst) noexcept
-{
-	if (buf && byteCnt)
-	{
-		if (byteCnt > 4)
-		{
-			byteCnt = 4;
-		}
-		do
-		{
-			buf[ofst++] = (uint8_t)(val & 0xff);
-			val >>= 8;
-		} while (--byteCnt);
 	}
 }
 
@@ -236,7 +208,7 @@ inline void WifiFirmwareUploader::WriteByteSlip(uint8_t b) noexcept
 //
 // If an error occurs, return a negative value.  Otherwise, return the number
 // of bytes in the response (or zero if the response was not the standard "two bytes of zero").
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t msTimeout) noexcept
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t *status, uint32_t msTimeout) noexcept
 {
 	enum class PacketState
 	{
@@ -250,11 +222,11 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 	const size_t headerLength = 8;
 
 	uint32_t startTime = millis();
-	uint8_t hdr[headerLength];
+	alignas(4) uint8_t hdr[headerLength];
 	uint16_t hdrIdx = 0;
 	bodyLen = 0;
 	uint16_t bodyIdx = 0;
-	uint8_t respBuf[2];
+	alignas(4) uint8_t respBuf[4];
 
 	// wait for the response
 	uint16_t needBytes = 1;
@@ -316,12 +288,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 					if (hdrIdx >= headerLength)
 					{
 						// get the body length, prepare a buffer for it
-						bodyLen = (uint16_t)getData(2, hdr, 2);
+						bodyLen = *(const uint16_t*)(hdr + 2);
 
 						// extract the value, if requested
 						if (valp != nullptr)
 						{
-							*valp = getData(4, hdr, 4);
+							*valp = *(const uint32_t*)(hdr + 4);
 						}
 
 						if (bodyLen != 0)
@@ -362,12 +334,18 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 	}
 
 	// Extract elements from the header
-	const uint8_t resp = (uint8_t)getData(1, hdr, 0);
-	const uint8_t opRet = (uint8_t)getData(1, hdr, 1);
+	const uint8_t resp = hdr[0];
+	const uint8_t opRet = hdr[1];
+
 	// Sync packets often provoke a response with a zero opcode instead of ESP_SYNC
 	if (resp != 0x01 || opRet != op)
 	{
 		return EspUploadResult::respHeader;
+	}
+
+	if (status != nullptr)
+	{
+		*status = (bodyLen == 2) ? *(const uint16_t*)respBuf : *(const uint32_t*)respBuf;
 	}
 
 	return EspUploadResult::success;
@@ -408,22 +386,26 @@ void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, con
 // The data is supplied via a list of one or more segments.
 void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept
 {
+	struct __attribute__((packed)) CommandHeader
+	{
+		uint8_t zero;
+		uint8_t op;
+		uint16_t dataLen;
+		uint32_t checkVal;
+	};
+
 	// populate the header
-	uint8_t hdr[8];
-	putData(0, 1, hdr, 0);
-	putData(op, 1, hdr, 1);
-	putData(dataLen, 2, hdr, 2);
-	putData(checkVal, 4, hdr, 4);
+	CommandHeader cmdHdr = { 0, op, (uint16_t)dataLen, checkVal };
 
 	// send the packet
 	flushInput();
 	if (op == ESP_SYNC)
 	{
-		writePacketRaw(hdr, sizeof(hdr), data, dataLen);
+		writePacketRaw((const uint8_t*)&cmdHdr, sizeof(cmdHdr), data, dataLen);
 	}
 	else
 	{
-		writePacket(hdr, sizeof(hdr), data, dataLen);
+		writePacket((const uint8_t*)&cmdHdr, sizeof(cmdHdr), data, dataLen);
 	}
 }
 
@@ -432,17 +414,29 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op
 {
 	sendCommand(op, checkVal, data, dataLen);
 	size_t bodyLen;
-	EspUploadResult stat = readPacket(op, valp, bodyLen, msTimeout);
-	if (stat == EspUploadResult::success && espType != ESPType::unknown && bodyLen != ESP_BODY_LENGTHS[espType])
+	uint32_t status;
+	EspUploadResult stat = readPacket(op, valp, bodyLen, &status, msTimeout);
+	//debugPrintf("opcode %u returned stat %x length %u status 0x%" PRIx32 "\n", op, stat, bodyLen, status);
+	if (stat == EspUploadResult::success)
 	{
-		stat = EspUploadResult::badReply;
+		if (espType != ESPType::unknown && bodyLen != ESP_BODY_LENGTHS[(unsigned int)espType])
+		{
+			stat = EspUploadResult::badReply;
+		}
+		else if ((status & 0xFF) != 0)
+		{
+			stat = (EspUploadResult)((status >> 8) & 0xFF);
+			if (reprap.Debug(moduleWiFi))
+			{
+				debugPrintf("opcode %u returned length %u status 0x%" PRIx32 "\n", op, bodyLen, status);
+			}
+		}
 	}
 
 	return stat;
 }
 
-// Send a synchronising packet to the serial port in an attempt to induce
-// the ESP8266 to auto-baud lock on the baud rate.
+// Send a synchronising packet to the serial port in an attempt to induce the ESP8266 to auto-baud lock on the baud rate.
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeout) noexcept
 {
 	uint8_t buf[36];
@@ -456,25 +450,23 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 
 	size_t bodyLen;
 	sendCommand(ESP_SYNC, 0, buf, sizeof(buf));
-	EspUploadResult stat = readPacket(ESP_SYNC, nullptr, bodyLen, timeout);
+	EspUploadResult stat = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, timeout);
 
 	// If we got a response other than sync, discard it and wait for a sync response. This happens at higher baud rates.
 	for (int i = 0; i < 10 && stat == EspUploadResult::respHeader; ++i)
 	{
-		stat = readPacket(ESP_SYNC, nullptr, bodyLen, timeout);
+		stat = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, timeout);
 	}
 
 	if (stat == EspUploadResult::success)
 	{
-		// Set the type of ESP based on status reply length
-		if (bodyLen == ESP_BODY_LENGTHS[ESPType::ESP32])
-			espType = ESPType::ESP32;
-		else
-			espType = ESPType::ESP8266;
+		// Set the initial type of ESP based on status reply length
+		espType = (bodyLen == ESP_BODY_LENGTHS[ESPType::ESP32]) ? ESPType::ESP32 : ESPType::ESP8266;
+
 		// Read and discard additional replies
 		for (;;)
 		{
-			EspUploadResult rc = readPacket(ESP_SYNC, nullptr, bodyLen, defaultTimeout);
+			EspUploadResult rc = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, defaultTimeout);
 			if (rc != EspUploadResult::success)
 			{
 				break;
@@ -487,38 +479,70 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 }
 
 // Send a command to the device to begin the Flash process.
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t addr, uint32_t size) noexcept
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t offset, uint32_t size) noexcept
 {
-	// determine the number of blocks represented by the size
-	const uint32_t blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
+	// Determine the number of blocks represented by the size
+	const uint32_t blkCnt = (size + (EspFlashBlockSize - 1)) / EspFlashBlockSize;
 
-	// ensure that the address is on a block boundary
-	addr &= ~(EspFlashBlockSize - 1);
+	// Determine the erase size parameter to pass in the FLASH_BEGIN command
+	uint32_t erase_size;
+	if (espType == ESPType::ESP8266)
+	{
+		// Calculate the number of sectors to erase
+		const uint32_t sector_size = 4 * 1024;
+		uint32_t num_sectors = (size + (sector_size - 1))/sector_size;
+
+		const uint32_t start_sector = offset / sector_size;
+		const uint32_t sectors_per_block = 16;
+
+		uint32_t head_sectors = sectors_per_block - (start_sector % sectors_per_block);
+		if (num_sectors < head_sectors)
+		{
+			head_sectors = num_sectors;
+		}
+
+		// SPI EraseArea function in the esp8266 ROM has a bug which causes extra area to be erased.
+		// If the address range to be erased crosses the block boundary then extra head_sector_count sectors are erased.
+		// If the address range doesn't cross the block boundary, then extra total_sector_count sectors are erased.
+		if (num_sectors < 2 * head_sectors)
+		{
+			num_sectors = ((num_sectors + 1) / 2);
+		}
+		else
+		{
+			num_sectors = (num_sectors - head_sectors);
+		}
+		erase_size = num_sectors * sector_size;
+	}
+	else
+	{
+		erase_size = size;
+	}
 
 	// begin the Flash process
-	uint8_t buf[16];
-	putData(size, 4, buf, 0);
-	putData(blkCnt, 4, buf, 4);
-	putData(EspFlashBlockSize, 4, buf, 8);
-	putData(addr, 4, buf, 12);
-	uint32_t timeout = (size != 0) ? eraseTimeout : defaultTimeout;
-	return doCommand(ESP_FLASH_BEGIN, buf, sizeof(buf), 0, nullptr, timeout);
-}
+	const uint32_t buf[5] = { erase_size, blkCnt, EspFlashBlockSize, offset, 0 };		// last word means not encrypted
 
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSPIAttach() noexcept
-{
-	uint8_t buf[8];
-	putData(0, 4, buf, 0);
-	putData(0, 4, buf, 4);
-	return doCommand(ESP_FLASH_SPI_ATTACH, buf, sizeof(buf), 0, nullptr, defaultTimeout);
+	const uint32_t timeout = (erase_size != 0) ? eraseTimeout : defaultTimeout;
+	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, (espType == ESPType::ESP32_PLUS) ? sizeof(buf) : sizeof(buf) - sizeof(uint32_t), 0, nullptr, timeout);
 }
 
 // Send a command to the device to terminate the Flash process
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reboot) noexcept
 {
-	uint8_t buf[4];
-	putData(reboot ? 0 : 1, 4, buf, 0);
-	return doCommand(ESP_FLASH_END, buf, sizeof(buf), 0, nullptr, defaultTimeout);
+	const uint32_t data = (reboot) ? 0 : 1;
+	return doCommand(ESP_FLASH_END, (const uint8_t*)&data, sizeof(data), 0, nullptr, defaultTimeout);
+}
+
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiSetParameters(uint32_t size) noexcept
+{
+	const uint32_t buf[6] = { 0, size, 64 * 1024, 4 * 1024, 256, 0x0000FFFF };	// id, size, block size, sector size, page size, status mask
+	return doCommand(ESP_SPI_SET_PARAMS, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
+}
+
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiAttach() noexcept
+{
+	const uint32_t buf[2] = { 0, 0 };
+	return doCommand(ESP_SPI_ATTACH, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
 }
 
 // Compute the checksum of a block of data
@@ -536,18 +560,22 @@ uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, u
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept
 {
+	const uint32_t blkSize = EspFlashBlockSize;
+
+	// Allocate a data buffer for the combined header and block data
+	const uint16_t dataOfst = 16;
+	const uint16_t blkBufSize = dataOfst + blkSize;
 #if !STM32
-	// On the STM32F4 our stack is not DMA capable, so we can't use the stack instead we allocate it
-	// when we open the file.
+	// On the STM32F4 our stack is not DMA capable, so we can't use the stack instead we allocate it when we open the file.
 	uint32_t blkBuf32[blkBufSize/4];
 #endif
 	uint8_t * const blkBuf = reinterpret_cast<uint8_t*>(blkBuf32);
 
 	// Prepare the header for the block
-	putData(blkSize, 4, blkBuf, hdrOfst + 0);
-	putData(uploadBlockNumber, 4, blkBuf, hdrOfst + 4);
-	putData(0, 4, blkBuf, hdrOfst + 8);
-	putData(0, 4, blkBuf, hdrOfst + 12);
+	blkBuf32[0] = blkSize;
+	blkBuf32[1] = uploadBlockNumber;
+	blkBuf32[2] = 0;
+	blkBuf32[3] = 0;
 
 	// Get the data for the block
 	size_t cnt = uploadFile->Read(reinterpret_cast<char *>(blkBuf + dataOfst), blkSize);
@@ -568,12 +596,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	if (uploadBlockNumber == 0 && uploadAddress == 0 && blkBuf[dataOfst] == ESP_IMAGE_MAGIC && flashParmMask != 0)
 	{
 		// update the Flash parameters
-		uint32_t flashParm = getData(2, blkBuf + dataOfst + 2, 0) & ~(uint32_t)flashParmMask;
-		putData(flashParm | flashParmVal, 2, blkBuf + dataOfst + 2, 0);
+		const uint32_t flashParm = (blkBuf32[dataOfst/4] >> 16) & ~(uint32_t)flashParmMask;
+		blkBuf32[dataOfst/4] = (blkBuf32[dataOfst/4] & 0x0000FFFF) | ((flashParm | flashParmVal) << 16);
 	}
 
 	// Calculate the block checksum
-	uint16_t cksum = checksum(blkBuf + dataOfst, blkSize, ESP_CHECKSUM_MAGIC);
+	const uint16_t cksum = checksum(blkBuf + dataOfst, blkSize, ESP_CHECKSUM_MAGIC);
 	EspUploadResult stat;
 	for (int i = 0; i < 3; i++)
 	{
@@ -588,29 +616,38 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size) noexcept
 {
-	const uint32_t sectorSize = 4096;
-	uint32_t eraseSize;
-	if (espType == ESPType::ESP8266)
+	MessageF("Erasing %u bytes...\n", size);
+	return flashBegin(address, size);
+}
+
+void WifiFirmwareUploader::Identify() noexcept
+{
+	if (espType != ESPType::unknown)
 	{
-		// work around for bug in ESP8266 ROM
-		const uint32_t sectorsPerBlock = 16;
-		const uint32_t numSectors = (size + sectorSize - 1)/sectorSize;
-		const uint32_t startSector = address/sectorSize;
-		uint32_t headSectors = sectorsPerBlock - (startSector % sectorsPerBlock);
+		// sync will have done basics so we can safely use doCommand
+		const uint32_t addr = CHIP_DETECT_MAGIC_REG_ADDR;
+		uint32_t regVal;
+		EspUploadResult stat;
 
-		if (numSectors < headSectors)
+		if ((stat = doCommand(ESP_READ_REG, (const uint8_t*)&addr, sizeof(addr), 0, &regVal, defaultTimeout)) == EspUploadResult::success)
 		{
-			headSectors = numSectors;
+			//debugPrintf("read magic returns %x current type is %s\n", regVal, ESP_NAMES[espType]);
+			if (regVal == ESP_IDS[ESPType::ESP8266])
+			{
+				espType = ESPType::ESP8266;
+			}
+			else if (regVal == ESP_IDS[ESPType::ESP32])
+			{
+				espType = ESPType::ESP32;
+			}
+			else if (espType == ESPType::ESP32)
+			{
+				// we don't recognise it as ESP8266 or ESP32, but we think it is an ESP32 device. Assume a newer ESP32
+				espType = ESPType::ESP32_PLUS;
+			}
+			// if we don't have an explicit match use whatever sync decided
 		}
-		eraseSize = (numSectors < 2 * headSectors)
-											? (numSectors + 1) / 2 * sectorSize
-											: (numSectors - headSectors) * sectorSize;
 	}
-	else
-		eraseSize = ((size + sectorSize - 1)/sectorSize) * sectorSize;
-
-	MessageF("Erasing %u bytes...\n", eraseSize);
-	return flashBegin(address, eraseSize);
 }
 
 void WifiFirmwareUploader::Spin() noexcept
@@ -634,15 +671,8 @@ void WifiFirmwareUploader::Spin() noexcept
 				// First attempt at this baud rate
 				MessageF("Trying to connect at %u baud: ", baud);
 			}
-#if __LPC17XX__ || STM32
-			// ResetWiFiForUpload calls uploadPort.end() I'm not sure that it makes sense to call uploadPort.begin before this. On 
-			// LPC and STM32 it does not work very well as the port is in effect closed on the first write attempt. So we reverse the order.
 			interface.ResetWiFiForUpload(false);
 			uploadPort.begin(baud);
-#else
-			uploadPort.begin(baud);
-			interface.ResetWiFiForUpload(false);
-#endif
 			lastAttemptTime = lastResetTime = millis();
 			state = UploadState::connecting;
 		}
@@ -657,14 +687,30 @@ void WifiFirmwareUploader::Spin() noexcept
 			if (res == EspUploadResult::success)
 			{
 				// Successful connection
-//				MessageF(" success on attempt %d\n", (connectAttemptNumber % retriesPerBaudRate) + 1);
+				Identify();
 				MessageF(" success, found %s\n", ESP_NAMES[espType]);
 				if (espType == ESPType::ESP8266)
+				{
 					state = UploadState::erasing1;
+				}
 				else
 				{
+					res = flashSpiAttach();
+					if (res != EspUploadResult::success)
+					{
+						MessageF("Failed to attach SPI flash\n");
+						state = UploadState::resetting;		// try a reset and a lower baud rate
+						break;
+					}
+					res = flashSpiSetParameters(Esp32FlashModuleSize);
+					if (res != EspUploadResult::success)
+					{
+						MessageF("Failed to set SPI parameters\n");
+						state = UploadState::resetting;		// try a reset and a lower baud rate
+						break;
+					}
+					MessageF("SPI flash parameters set\n");
 					state = UploadState::erasing2;
-					flashSPIAttach();
 				}
 			}
 			else
@@ -686,7 +732,7 @@ void WifiFirmwareUploader::Spin() noexcept
 	case UploadState::erasing1:
 		if (millis() - lastAttemptTime >= blockWriteInterval)
 		{
-			uploadResult = DoErase(systemParametersAddress, systemParametersSize);
+			uploadResult = DoErase(esp8266systemParametersAddress, esp8266systemParametersSize);
 			if (uploadResult == EspUploadResult::success)
 			{
 				state = UploadState::erasing2;
@@ -752,7 +798,7 @@ void WifiFirmwareUploader::Spin() noexcept
 		uploadFile->Close();
 		uploadPort.end();					// disable the port, it has a high interrupt priority
 #if STM32
-		delete blkBuf32;
+		DeleteObject(blkBuf32);
 #endif
 		if (uploadResult == EspUploadResult::success)
 		{
@@ -805,6 +851,11 @@ void WifiFirmwareUploader::SendUpdateFile(const char *file, uint32_t address) no
 	}
 #if STM32
 	// we need a buffer that is DMA capable
+	const uint32_t blkSize = EspFlashBlockSize;
+
+	// Allocate a data buffer for the combined header and block data
+	const uint16_t dataOfst = 16;
+	const uint16_t blkBufSize = dataOfst + blkSize;
 	blkBuf32 = new uint32_t[blkBufSize/4];
 	if (blkBuf32 == nullptr)
 	{

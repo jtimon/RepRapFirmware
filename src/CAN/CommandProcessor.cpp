@@ -308,7 +308,8 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
 	default:
-		reply.printf("%s version %s (%s%s) running on %s", FIRMWARE_NAME, VERSION, DATE, TIME_SUFFIX, reprap.GetPlatform().GetElectronicsString());
+		// This must be formatted in a specific way for the ATE, starting with the electronics string
+		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DATE, TIME_SUFFIX);
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
@@ -366,14 +367,17 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		extra = LastDiagnosticsPart;
 		{
 			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
-			reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
+			if (driver < NumDirectDrivers)			// we have up to 7 drivers on the Duet 3 Mini but only 6 on the 6HC and 6XD
+			{
+				reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
 #if HAS_SMART_DRIVERS
-				","
+					","
 #endif
-				, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+					, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
 #if HAS_SMART_DRIVERS
-			SmartDrivers::AppendDriverStatus(driver, reply);
+				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif
+			}
 		}
 		break;
 

@@ -84,8 +84,6 @@
 #define SUPPORT_WORKPLACE_COORDINATES    1
 #define SUPPORT_LASER                    1
 
-#define SUPPORT_FTP                      1
-
 #define HAS_ATX_POWER_MONITOR            1
 
 #define SUPPORT_LED_STRIPS               1
@@ -116,6 +114,7 @@
     #define SUPPORT_TELNET               0
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              1
+    #define SUPPORT_FTP                  1
 #if STM32H7
     #define SUPPORT_CAN_EXPANSION	     1
     #define DUAL_CAN				     0					// support the second CAN interface as simple CAN (not FD)
@@ -130,7 +129,7 @@
     #define HAS_WIFI_NETWORKING          0
     #define HAS_MASS_STORAGE             1
     #define HAS_SBC_INTERFACE            1
-    #define SUPPORT_TELNET               1
+    #define SUPPORT_TELNET               0
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              0
 
@@ -338,7 +337,7 @@ constexpr size_t NumSPIPins = 3;
 extern Pin SPIPins[NumSPIDevices][NumSPIPins]; //GPIO pins for softwareSPI (used with SharedSPI)
 
 #define SERIAL_AUX_DEVICE   UART_Slot0
-#define SERIAL_WIFI_DEVICE  UART_Slot1
+#define SerialWiFi  UART_Slot1
 //#define SERIAL_AUX2_DEVICE  UART_Slot2
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB + AUX)
@@ -357,9 +356,10 @@ extern Pin AuxSerialRxTxPins[NumberSerialPins];
     extern Pin EspDataReadyPin;
     extern Pin SamTfrReadyPin;
     extern Pin EspResetPin;
+    extern Pin EspEnablePin;
     extern Pin SamCsPin;
-    extern Pin APIN_Serial1_TXD;
-    extern Pin APIN_Serial1_RXD;
+    extern Pin APIN_SerialWiFi_TXD;
+    extern Pin APIN_SerialWiFi_RXD;
     extern Pin WifiSerialRxTxPins[NumberSerialPins];
     extern SSPChannel WiFiSpiChannel;
     extern uint32_t WiFiClockReg;

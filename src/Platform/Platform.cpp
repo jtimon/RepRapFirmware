@@ -290,6 +290,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_VOLTAGE_MONITOR
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
 #endif
+#if HAS_WIFI_NETWORKING
+	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC_NOSELF(WIFI_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
+#endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. mcuTemp members
 	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
@@ -377,7 +380,8 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	10,																		// number of sections
-	9 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
+	9 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
+	  + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -3979,6 +3983,29 @@ void Platform::ResetChannel(size_t chan) noexcept
 #endif
 }
 
+#if defined(DUET3_MB6HC)
+
+// this is safe to call before Platform has been created
+/*static*/ BoardType Platform::GetMB6HCBoardType() noexcept
+{
+	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
+	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
+	// Driver 2 has a pulldown resistor on v1.02 only
+	pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	delayMicroseconds(20);									// give the pullup resistor time to work
+	if (digitalRead(DIRECTION_PINS[2]))
+	{
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+	}
+	else
+	{
+		return BoardType::Duet3_6HC_v102;
+	}
+}
+
+#endif
+
 // Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
@@ -3992,21 +4019,20 @@ void Platform::SetBoardType(BoardType bt) noexcept
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
-		// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
-		// Driver 2 has a pulldown resistor on v1.02 only
-		pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
-		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-		delayMicroseconds(20);									// give the pullup resistor time to work
-		if (digitalRead(DIRECTION_PINS[2]))
+		board = GetMB6HCBoardType();
+		if (board == BoardType::Duet3_6HC_v102)
 		{
-			board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+			DiagPin = DiagPin102;
+			ActLedPin = ActLedPin102;
+			DiagOnPolarity = DiagOnPolarity102;
 		}
 		else
 		{
-			board = BoardType::Duet3_6HC_v102;
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+			DiagPin = DiagPinPre102;
+			ActLedPin = ActLedPinPre102;
+			DiagOnPolarity = DiagOnPolarityPre102;
 		}
 		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
@@ -4095,9 +4121,9 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
 #elif defined(DUET3_MB6HC)
-	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
+	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
-	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02";
+	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
@@ -4792,19 +4818,26 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 #ifdef DUET3_MB6HC
 	case 64:	// D
 # if HAS_SBC_INTERFACE
-		if (!reprap.UsingSbcInterface())
-# endif
+		if (reprap.UsingSbcInterface())
 		{
-			return MassStorage::ConfigureSdCard(gb, reply);
+			reply.copy("SD card not supported in SBC mode");
+			return GCodeResult::error;
 		}
+#endif
+		return MassStorage::ConfigureSdCard(gb, reply);
 #elif STM32
 	case 64:	// E
 			return LedStripDriver::Configure(gb, reply);
-#endif
-		//no break
+# endif
 
 	default:
+#ifdef DUET3_MB6HC
+		reply.copy("exactly one of FHJPSRD must be given");
+#elif STM32
+		reply.copy("exactly one of FHJPSRE must be given");
+#else
 		reply.copy("exactly one of FHJPSR must be given");
+#endif
 		return GCodeResult::error;
 	}
 }
@@ -4880,6 +4913,20 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 uint32_t Platform::Random() noexcept
 {
 	return StepTimer::GetTimerTicks() ^ uniqueId.GetHash();
+}
+
+#endif
+
+void Platform::SetDiagLed(bool on) const noexcept
+{
+	digitalWrite(DiagPin, XNor(DiagOnPolarity, on));
+}
+
+#if SUPPORT_MULTICAST_DISCOVERY
+
+void Platform::InvertDiagLed() const noexcept
+{
+	digitalWrite(DiagPin, !digitalRead(DiagPin));
 }
 
 #endif
