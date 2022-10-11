@@ -32,9 +32,13 @@
  * Interface documentation refer to malloc.c.
  */
 
+#if 0	// DC we don't want to pull in stdio
 #include <stdio.h>
+#endif
 #include <string.h>
+#if 0	// DC we don't want to pull in errno because it pulls in the reent struct
 #include <errno.h>
+#endif
 #include <malloc.h>
 #if LPC17xx
 #include <FreeRTOS.h>
@@ -59,6 +63,7 @@
 #include <assert.h>
 #else
 #define assert(x) ((void)0)
+#include <stdint.h>
 extern void vAssertCalled(uint32_t line, const char *file) noexcept;
 #endif
 
@@ -118,9 +123,9 @@ extern void ReleaseMallocMutex();
 #else
 #define MALLOC_LOCK
 #define MALLOC_UNLOCK
-#endif
 
 #define RERRNO errno
+#endif
 
 #define nano_malloc		malloc
 #define nano_free		free
@@ -288,7 +293,9 @@ void * nano_malloc(RARG malloc_size_t s)
 
     if (alloc_size >= MAX_ALLOC_SIZE || alloc_size < s)
     {
+#if 0	// DC
         RERRNO = ENOMEM;
+#endif
         return NULL;
     }
 
@@ -337,7 +344,9 @@ void * nano_malloc(RARG malloc_size_t s)
         /* sbrk returns -1 if fail to allocate */
         if (r == (void *)-1)
         {
+#if 0	// DC
             RERRNO = ENOMEM;
+#endif
             MALLOC_UNLOCK;
             return NULL;
         }

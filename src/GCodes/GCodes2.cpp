@@ -288,7 +288,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 17:	// Select XY plane for G2/G3
 		case 18:	// Select XZ plane
 		case 19:	// Select YZ plane
-			if (!LockMovementAndWaitForStandstill(gb))			// do this in case a G2 or G3 command is in progress
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// do this in case a G2 or G3 command is in progress
 			{
 				return false;
 			}
@@ -304,7 +304,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 28: // Home
-			if (!LockMovementAndWaitForStandstill(gb))
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
@@ -313,7 +313,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 29: // Grid-based bed probing
-			if (!LockMovementAndWaitForStandstill(gb))			// do this first to make sure that a new grid isn't being defined
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// do this first to make sure that a new grid isn't being defined
 			{
 				return false;
 			}
@@ -378,7 +378,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 30: // Z probe/manually set at a position and set that as point P
-			if (!LockMovementAndWaitForStandstill(gb))
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
@@ -401,7 +401,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 32: // Probe Z at multiple positions and generate the bed transform
-			if (!LockMovementAndWaitForStandstill(gb))
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
@@ -417,7 +417,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 38: // Straight probe - move until either the probe is triggered or the commanded move ends
-			if (!LockMovementAndWaitForStandstill(gb))
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
@@ -467,12 +467,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 #if SUPPORT_COORDINATE_ROTATION
-		case 68:
+		case 68:	// Coordinate rotation
 			result = HandleG68(gb, reply);
 			break;
 
-		case 69:
-			if (!LockMovementAndWaitForStandstill(gb))
+		case 69:	// Cancel coordinate rotation
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
@@ -560,34 +560,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// These commands are executed by all GCode processors, at least to start with
 			break;
 
-		case 17:
-		case 18:
-		case 81:
-		case 84:
-		case 190:
-		case 191:
-		case 206:
-		case 375:
-		case 451:
-		case 452:
-		case 453:
-		case 561:
-		case 574:
-		case 665:
-		case 666:
-		case 669:
-		case 671:
-		case 918:
-			// These commands cause synchronisation but are then executed by just the primary processor. The code to implement the command also calls LockMovementAndWaitForStandstill.
-			if (!LockMovementAndWaitForStandstill(gb))
-			{
-				return false;
-			}
-			// no break
 		default:
 			// All remaining commands are executed by the primary processor only
 			HandleReply(gb, GCodeResult::ok, "");
-			return true;			// we don't simulate most M codes
+			return true;
 		}
 	}
 #endif
@@ -661,10 +637,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.IsFileChannel())
 				{
 					// Stopping a job because of a command in the file
-					if (!LockMovementAndWaitForStandstill(gb))		// wait until everything has stopped and deferred command queue has caught up
+#if SUPPORT_ASYNC_MOVES
+					if (!DoSync(gb))
 					{
 						return false;
 					}
+#else
+					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait until everything has stopped and deferred command queue has caught up
+					{
+						return false;
+					}
+#endif
 					if (&gb == FileGCode())
 					{
 						isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
@@ -674,7 +657,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				else if (pauseState == PauseState::paused)
 				{
 					// Cancelling a print that has been paused
-					if (!LockMovementAndWaitForStandstill(gb))		// make sure everything has stopped
+					if (!LockAllMovementSystemsAndWaitForStandstill(gb))	// make sure everything has stopped
 					{
 						return false;
 					}
@@ -811,7 +794,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 17: // Motors on
 			case 18: // Motors off
 			case 84:
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -998,7 +981,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 				}
 
-				if (code == 32 && !LockMovementAndWaitForStandstill(gb))
+				if (code == 32 && !LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -1048,7 +1031,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					if (!LockMovementAndWaitForStandstill(gb))
+					if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 					{
 						return false;
 					}
@@ -1445,7 +1428,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 81:	// ATX power off
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -1481,7 +1464,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							if (!LockMovementAndWaitForStandstillNoSync(gb))
+							if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 							{
 								return false;
 							}
@@ -1495,7 +1478,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen(extrudeLetter))
 					{
-						if (!LockMovementAndWaitForStandstillNoSync(gb))
+						if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 						{
 							return false;
 						}
@@ -1672,7 +1655,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						MoveResourceBase
 #endif
 						);
-					if (!LockMovementAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
+					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 					{
 						return false;
 					}
@@ -1741,7 +1724,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (code == 109 && ms.currentTool == nullptr)
 					{
 						// Switch to the tool
-						if (!LockMovementAndWaitForStandstill(gb))
+						if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 						{
 							return false;
 						}
@@ -1896,7 +1879,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 116: // Wait for set temperatures
-				if (!LockMovementAndWaitForStandstillNoSync(gb))	// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 				{
 					return false;
 				}
@@ -2235,7 +2218,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 190: // Set bed temperature and wait
 			case 191: // Set chamber temperature and wait
-				if (!LockMovementAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 				{
 					return false;
 				}
@@ -2738,7 +2721,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool seen = false;
 					if (gb.Seen('P'))
 					{
-						if (!LockMovementAndWaitForStandstillNoSync(gb))
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 						{
 							return false;
 						}
@@ -2747,7 +2730,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('S'))
 					{
-						if (!LockMovementAndWaitForStandstillNoSync(gb))
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 						{
 							return false;
 						}
@@ -2756,7 +2739,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('R'))
 					{
-						if (!LockMovementAndWaitForStandstillNoSync(gb))
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 						{
 							return false;
 						}
@@ -2817,7 +2800,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							if (!LockMovementAndWaitForStandstillNoSync(gb))
+							if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 							{
 								return false;
 							}
@@ -2839,7 +2822,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen(extrudeLetter))
 					{
-						if (!LockMovementAndWaitForStandstillNoSync(gb))
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 						{
 							return false;
 						}
@@ -2892,7 +2875,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 375: // Load grid and height map from file and enable compensation
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -2919,10 +2902,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 400: // Wait for current moves to finish
-				if (!LockMovementAndWaitForStandstill(gb))
+#if SUPPORT_ASYNC_MOVES
+				result = ExecuteM400(gb, reply);
+#else
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 				{
 					return false;
 				}
+#endif
 				break;
 
 			case 401: // Deploy Z probe
@@ -3019,7 +3006,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 451: // Select FFF printer mode
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -3032,7 +3019,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LASER
 			case 452: // Select laser mode
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -3067,7 +3054,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 453: // Select CNC mode
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -3138,7 +3125,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 502: // Revert to default "factory settings" ignoring values in config-override.g
 				if (!gb.LatestMachineState().runningM502)							// avoid recursion
 				{
-					if (!LockMovementAndWaitForStandstillNoSync(gb))
+					if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 					{
 						return false;
 					}
@@ -3203,7 +3190,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					// Lock movement to try to prevent other threads opening system files while we change the system path
-					if (!LockMovementAndWaitForStandstillNoSync(gb))
+					if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 					{
 						return false;
 					}
@@ -3438,7 +3425,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 561: // Set identity transform and disable height map
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -3587,23 +3574,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 570: // Set/report heater monitoring
-				{
-					bool seen = false;
-					if (gb.Seen('S'))
-					{
-						seen = true;
-						heaterFaultTimeout = gb.GetUIValue() * (60 * 1000);
-					}
-					if (gb.Seen('H'))
-					{
-						seen = true;
-						result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
-					}
-					if (!seen)
-					{
-						reply.printf("Print will be terminated if a heater fault is not reset within %" PRIu32 " minutes", heaterFaultTimeout/(60 * 1000));
-					}
-				}
+				gb.MustSee('H');
+				result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
 				break;
 
 			case 571: // Set output on extrude
@@ -3617,11 +3589,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// case 573 was report heater average PWM but is no longer supported because you can use "echo heat/heaters[N].avgPwm" instead
 
 			case 574: // Set endstop configuration
-				// We may be about to delete endstops, so make sure we are not executing a move that uses them
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
 				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);
 				break;
 
@@ -3885,6 +3852,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 597:	// Collision avoidance
 				result = CollisionAvoidance(gb, reply);
 				break;
+
+			case 598:	// Sync
+				result = SyncMovementSystems(gb, reply);
+				break;
 #endif
 			// For cases 600 and 601, see 226
 
@@ -3892,7 +3863,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LINEAR_DELTA
 			case 665: // Set delta configuration
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -3935,7 +3906,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 666: // Set delta endstop adjustments
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -3957,7 +3928,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 669:	// Set kinematics and parameters for non-delta kinematics
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -4015,7 +3986,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 671:	// Set Z leadscrew positions
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -4036,7 +4007,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Insufficient axes configured");
 					result = GCodeResult::error;
 				}
-				else if (!LockMovementAndWaitForStandstillNoSync(gb))
+				else if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					result = GCodeResult::notFinished;
 				}
@@ -4391,7 +4362,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 							   )
 							{
-								if (!LockMovementAndWaitForStandstillNoSync(gb))
+								if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 								{
 									return false;
 								}
@@ -4409,7 +4380,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 						   )
 						{
-							if (!LockMovementAndWaitForStandstillNoSync(gb))
+							if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 							{
 								return false;
 							}
@@ -4582,7 +4553,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 918: // Configure direct-connect display
 # ifdef DUET_NG
 				// On Duet 2 configuring the display may affect the number of supported stepper drivers, so wait until there is no movement
-				if (!LockMovementAndWaitForStandstill(gb))
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 				{
 					return false;
 				}
@@ -4804,11 +4775,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	if (seen)
 	{
-		if (!LockMovementAndWaitForStandstill(gb
-#if SUPPORT_ASYNC_MOVES
-												, false		// the other motion system can run concurrently with the tool change
-#endif
-														))
+		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			return false;
 		}
