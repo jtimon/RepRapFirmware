@@ -2220,7 +2220,6 @@ void WiFiInterface::StartWiFi() noexcept
 #endif
 	debugMessageChars = 0;
 	serialRunning = true;
-	debugMessageChars = 0;
 	debugPrintPending = false;
 }
 

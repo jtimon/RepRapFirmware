@@ -4815,8 +4815,8 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			reply.copy("SD card attached to Duet is not supported in SBC mode");
 			return GCodeResult::error;
 		}
+#endif
 		return MassStorage::ConfigureSdCard(gb, reply);
-# endif
 #elif STM32
 	case 64:	// E
 			return LedStripDriver::Configure(gb, reply);
@@ -4825,6 +4825,8 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 	default:
 #ifdef DUET3_MB6HC
 		reply.copy("exactly one of FHJPSRD must be given");
+#elif STM32
+		reply.copy("exactly one of FHJPSRE must be given");
 #else
 		reply.copy("exactly one of FHJPSR must be given");
 #endif
