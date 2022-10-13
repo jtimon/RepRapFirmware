@@ -654,7 +654,7 @@ void Tmc22xxDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexce
 	crc = CRCAddByte(crc, (uint8_t)(regVal >> 8));
 	crc = CRCAddByte(crc, (uint8_t)regVal);
 	{
-		TaskCriticalSectionLocker lock;
+		AtomicCriticalSectionLocker lock;
 		writeRegisters[regIndex] = regVal;
 		writeRegCRCs[regIndex] = Reflect(crc);
 		registersToUpdate |= (1u << regIndex);								// flag it for sending
@@ -1086,7 +1086,7 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 		{
 			++numWrites;
 			{
-				TaskCriticalSectionLocker lock;
+				AtomicCriticalSectionLocker lock;
 				registersToUpdate &= ~(1u << regnumBeingUpdated);
 				// The value to be written may have changed since we sent it, so check that we wrote the latest data
 				if (LoadBE32(const_cast<const uint8_t *>(sendData + 3)) != writeRegisters[regnumBeingUpdated])
@@ -1099,7 +1099,7 @@ inline void Tmc22xxDriverState::TransferDone() noexcept
 		{
 			// mark this to retry
 			{
-				TaskCriticalSectionLocker lock;
+				AtomicCriticalSectionLocker lock;
 
 				registersToUpdate |= (1u << regnumBeingUpdated);
 			}
@@ -1174,7 +1174,7 @@ inline bool Tmc22xxDriverState::StartTransfer() noexcept
 		uint8_t crc;
 		uint32_t regData;
 		{
-			TaskCriticalSectionLocker lock;
+			AtomicCriticalSectionLocker lock;
 			regData = writeRegisters[regNum];
 			crc = writeRegCRCs[regNum];
 		}
