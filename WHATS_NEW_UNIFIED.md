@@ -1,3 +1,8 @@
+Version 3.4.4_101
+======================
+* Duet3d 3.4.4 changes
+* Fix bug when trying to shutdown TMC22xx drivers if watchdog expires
+
 Version 3.4.2_101
 ======================
 * Duet3d 3.4.2 changes
