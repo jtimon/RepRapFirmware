@@ -1,10 +1,15 @@
 Version 3.4.4_101
-======================
+=================
+* Fix bug. Using hardware driven Neopixels can interrupt TMC UART interface
+* Switch compiler to GNU Arm Embedded Toolchain 10.3-2021.10 to bring into line with Duet3D
+
+Version 3.4.4_101
+=================
 * Duet3d 3.4.4 changes
 * Fix bug when trying to shutdown TMC22xx drivers if watchdog expires
 
 Version 3.4.2_101
-======================
+=================
 * Duet3d 3.4.2 changes
 * Fix bug with returning string name of pins
 * Updated Fysetc Spider King pins
