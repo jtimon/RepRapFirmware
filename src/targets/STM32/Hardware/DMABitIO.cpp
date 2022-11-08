@@ -284,8 +284,7 @@ static void DmaStart()
 bool TMCSoftUARTTransfer(Pin pin, volatile uint8_t *WritePtr, uint32_t WriteCnt, volatile uint8_t *ReadPtr, uint32_t ReadCnt, uint32_t timeout) noexcept
 {
     bool ret = false;
-    SUPin = pin;
-    if (SUPin != NoPin)
+    if (pin != NoPin)
     {
         MutexLocker lock(SUMutex, timeout);
         if (!lock.IsAcquired())
@@ -294,6 +293,7 @@ bool TMCSoftUARTTransfer(Pin pin, volatile uint8_t *WritePtr, uint32_t WriteCnt,
             return ret;
         }
 
+        SUPin = pin;
         SetupPins();
         SUWritePtr = (uint8_t *)WritePtr;
         SUWriteCnt = WriteCnt;
