@@ -1,4 +1,4 @@
-Version 3.4.4_101
+Version 3.4.4_102
 =================
 * Fix bug. Using hardware driven Neopixels can interrupt TMC UART interface
 * Switch compiler to GNU Arm Embedded Toolchain 10.3-2021.10 to bring into line with Duet3D
