@@ -66,11 +66,11 @@ static Mutex SUMutex;
 
 __nocache uint32_t SUDmaBits[SU_BUFFER_SZ];
 
-static constexpr uint32_t NEO_OVERSAMPLE = 6;
+static constexpr uint32_t NEO_OVERSAMPLE = 4;
 static constexpr uint32_t NEO_WORDS_PER_BYTE = (8*NEO_OVERSAMPLE);
 // We use a double buffer, work out how big it can be
 static constexpr uint32_t NEO_BYTES_PER_BUFF = (SU_BUFFER_SZ/2)/NEO_WORDS_PER_BYTE;
-static constexpr uint32_t NEO_BASE_TIME = 400/(NEO_OVERSAMPLE/3);
+static constexpr uint32_t NEO_BASE_TIME = 400/(1);
 
 static uint8_t *NEOWritePtr = nullptr;
 static uint32_t NEOWriteCnt = 0;
@@ -284,8 +284,7 @@ static void DmaStart()
 bool TMCSoftUARTTransfer(Pin pin, volatile uint8_t *WritePtr, uint32_t WriteCnt, volatile uint8_t *ReadPtr, uint32_t ReadCnt, uint32_t timeout) noexcept
 {
     bool ret = false;
-    SUPin = pin;
-    if (SUPin != NoPin)
+    if (pin != NoPin)
     {
         MutexLocker lock(SUMutex, timeout);
         if (!lock.IsAcquired())
@@ -294,6 +293,7 @@ bool TMCSoftUARTTransfer(Pin pin, volatile uint8_t *WritePtr, uint32_t WriteCnt,
             return ret;
         }
 
+        SUPin = pin;
         SetupPins();
         SUWritePtr = (uint8_t *)WritePtr;
         SUWriteCnt = WriteCnt;
@@ -383,8 +383,8 @@ bool NeopixelDMAWrite(Pin pin, uint32_t freq, uint8_t *bits, uint32_t cnt, uint3
         debugPrintf("Neopixel DMA failed to acquire mutex\n");
         return false;
     }
-    // Setup timer frequency, note that we adjust timing from the default Duet 3 times oversample
-    uint32_t period = SUTimer.getTimerClkFreq()/(freq*(NEO_OVERSAMPLE/3));
+    // Setup timer frequency
+    uint32_t period = SUTimer.getTimerClkFreq()/(freq);
     //debugPrintf("SU base freq %d setting period %d\n", static_cast<int>(SUTimer.getTimerClkFreq()), static_cast<int>(period));
     //debugPrintf("SuState %d\n", SUState);
     SUPin = pin;
