@@ -381,7 +381,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 #endif
 
 // The guts of the ISR
-/*static*/ void StepTimer::Interrupt() noexcept
+/*static*/ inline void StepTimer::Interrupt() noexcept
 {
 	StepTimer * tmr = pendingList;
 	if (tmr != nullptr)
@@ -474,7 +474,8 @@ bool StepTimer::ScheduleCallbackFromIsr() noexcept
 	}
 
 	// Optimise the common case i.e. no other timer is pending
-	if (pendingList == nullptr)
+	StepTimer *tmr = pendingList;			// capture volatile variable
+	if (tmr == nullptr)
 	{
 		if (ScheduleTimerInterrupt(whenDue))
 		{
@@ -482,32 +483,33 @@ bool StepTimer::ScheduleCallbackFromIsr() noexcept
 		}
 		next = nullptr;
 		pendingList = this;
-		active = true;
-		return false;
-	}
-
-	// Another timer is already pending
-	const Ticks now = GetTimerTicks();
-	const int32_t howSoon = (int32_t)(whenDue - now);
-	StepTimer** ppst = const_cast<StepTimer**>(&pendingList);
-	if (howSoon < (int32_t)((*ppst)->whenDue - now))
-	{
-		// This one is due earlier than the first existing one
-		if (ScheduleTimerInterrupt(whenDue))
-		{
-			return true;
-		}
 	}
 	else
 	{
-		while (*ppst != nullptr && (int32_t)((*ppst)->whenDue - now) < howSoon)
+		// Another timer is already pending
+		const Ticks now = GetTimerTicks();
+		const int32_t howSoon = (int32_t)(whenDue - now);
+		if (howSoon < (int32_t)(tmr->whenDue - now))
 		{
-			ppst = &((*ppst)->next);
+			// This one is due earlier than the first existing one
+			if (ScheduleTimerInterrupt(whenDue))
+			{
+				return true;
+			}
+			next = tmr;
+			pendingList = this;
+		}
+		else
+		{
+			while (tmr->next != nullptr && (int32_t)(tmr->next->whenDue - now) < howSoon)
+			{
+				tmr = tmr->next;
+			}
+			next = tmr->next;
+			tmr->next = this;
 		}
 	}
 
-	next = *ppst;
-	*ppst = this;
 	active = true;
 	return false;
 }
@@ -547,16 +549,17 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 	return StepTimer::GetTimerTicks();
 }
 
-#if SUPPORT_REMOTE_COMMANDS
-
-// Remote diagnostics
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
 {
-	reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
-	gotJitter = false;
-	numTimeoutResyncs = numJitterResyncs = 0;
-	peakReceiveDelay = 0;
-
+#if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
+	{
+		reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
+		gotJitter = false;
+		numTimeoutResyncs = numJitterResyncs = 0;
+		peakReceiveDelay = 0;
+	}
+#endif
 	StepTimer *pst = pendingList;
 	if (pst == nullptr)
 	{
@@ -568,7 +571,7 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 					pst->whenDue - GetTimerTicks(),
 # if SAME5x
 					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0)
-# elif SAME70
+# elif SAME70 || SAM4E || SAM4S
 					((STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER & TC_IER_CPBS) == 0)
 # elif STM32
 					__HAL_TIM_GET_IT_SOURCE(STHandle, TIM_IT_CC1)
@@ -576,7 +579,9 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 						? "disabled" : "enabled");
 # if SAME5x
 		if (StepTc->CC[0].reg != pst->whenDue)
-# elif SAME70
+# elif SAM4E
+		if (STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB != pst->whenDue)
+# elif SAME70 || SAM4S
 		if (STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB != (uint16_t)pst->whenDue)
 # elif STM32
 		if (__HAL_TIM_GET_COMPARE(STHandle, TIM_CHANNEL_1) != pst->whenDue)
@@ -586,7 +591,5 @@ extern "C" uint32_t StepTimerGetTimerTicks() noexcept
 		}
 	}
 }
-
-#endif
 
 // End
