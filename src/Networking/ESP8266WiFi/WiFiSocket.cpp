@@ -249,14 +249,14 @@ WiFiInterface *WiFiSocket::GetInterface() const noexcept
 }
 
 // Try to receive more incoming data from the socket.
-void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
+void WiFiSocket::ReceiveData(int32_t bytesAvailable) noexcept
 {
-	while (bytesAvailable != 0)
+	while (bytesAvailable > 0)
 	{
 //		debugPrintf("%u available\n", bytesAvailable);
 		// First see if we already have a buffer with enough room
 		NetworkBuffer *const lastBuffer = NetworkBuffer::FindLast(receivedData);
-		if (lastBuffer != nullptr && (bytesAvailable <= lastBuffer->SpaceLeft() || (lastBuffer->SpaceLeft() != 0 && NetworkBuffer::Count(receivedData) >= MaxBuffersPerSocket)))
+		if (lastBuffer != nullptr && ((size_t)bytesAvailable <= lastBuffer->SpaceLeft() || (lastBuffer->SpaceLeft() != 0 && NetworkBuffer::Count(receivedData) >= MaxBuffersPerSocket)))
 		{
 			// Read data into the existing buffer
 			const size_t maxToRead = min<size_t>(lastBuffer->SpaceLeft(), MaxDataLength);
