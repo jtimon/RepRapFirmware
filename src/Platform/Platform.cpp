@@ -1671,8 +1671,10 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(UOTGHS_IRQn, NvicPriorityUSB);
 #elif LPC17xx
 	NVIC_SetPriority(USB_IRQn, NvicPriorityUSB);
-#elif STM32
+#elif STM32F4 || STM32H743xx
 	NVIC_SetPriority(OTG_FS_IRQn, NvicPriorityUSB);
+#elif STM32H723xx
+	NVIC_SetPriority(OTG_HS_IRQn, NvicPriorityUSB);
 #else
 # error Unsupported processor
 #endif

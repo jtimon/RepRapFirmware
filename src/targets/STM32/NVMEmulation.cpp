@@ -32,8 +32,10 @@ static void FlashClearError()
 	__HAL_FLASH_CLEAR_FLAG_BANK1(FLASH_FLAG_WRPERR_BANK1 | FLASH_FLAG_PGSERR_BANK1 | FLASH_FLAG_STRBERR_BANK1 | \
                             		FLASH_FLAG_INCERR_BANK1 | FLASH_FLAG_OPERR_BANK1 | FLASH_FLAG_SNECCERR_BANK1 | \
                                     FLASH_IT_DBECCERR_BANK1);
+#if STM32H743xx
 	__HAL_FLASH_CLEAR_FLAG_BANK2((FLASH_FLAG_WRPERR_BANK2 | FLASH_FLAG_PGSERR_BANK2 | FLASH_FLAG_STRBERR_BANK2 | \
 									FLASH_FLAG_INCERR_BANK2 | FLASH_FLAG_SNECCERR_BANK2 | FLASH_IT_DBECCERR_BANK2) & 0x7FFFFFFFU);
+#endif
 #else
 	__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |\
 							FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR| FLASH_FLAG_PGSERR);
@@ -137,8 +139,10 @@ static bool FlashEraseSector(const uint32_t sector) noexcept
     }
     else
     {
+#if STM32H743xx
 	    eraseInfo.Banks = FLASH_BANK_2;
         eraseInfo.Sector = sector - FLASH_SECTOR_TOTAL;
+#endif
     }
 #else
 	eraseInfo.Sector = sector;

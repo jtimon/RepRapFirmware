@@ -9,6 +9,7 @@
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
 #if STM32H7
+# if STM32H743xx
 constexpr PinEntry PinTable_BIQU_SKR_SE_BX_v2_0[] =
 {
     //Thermistors
@@ -98,7 +99,7 @@ constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
     PH_12, PH_10, SSP4,
 #endif
 };
-
+# endif
 constexpr PinEntry PinTable_BTT_SKR_3[] =
 {
     //Thermistors
@@ -160,7 +161,11 @@ constexpr PinEntry PinTable_BTT_SKR_3[] =
 };
 
 constexpr BoardDefaults btt_skr_3_Defaults = {
-    {0xaa36a0c4},                  // Signatures
+# if STM32H743xx
+    {0xaa36a0c4},                             // Signatures
+# elif STM32H723xx
+    {0x132ea777},                             // Signatures
+# endif
     SD_SDIO,                                  // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
