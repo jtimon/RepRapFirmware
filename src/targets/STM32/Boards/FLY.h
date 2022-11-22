@@ -575,7 +575,7 @@ constexpr BoardDefaults fly_e3_pro_Defaults = {
     {PE_5, PE_1, PB_5, PD_6 ,PC_15},            //enablePins
     {PE_3, PB_9, PB_3, PD_4, PC_13},            //stepPins
     {PE_2, PB_8, PD_7, PD_3, PC_0 },            //dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PE_4, PE_0, PB_4, PD_5, PC_14},            // uartPins 
      5,                                         // Smart drivers
 #endif
@@ -766,7 +766,7 @@ constexpr BoardDefaults fly_e3_prov3_Defaults = {
     {PE_5, PE_1, PC_2, PD_6 ,PC_15},           //enablePins
     {PE_3, PB_9, PA_15, PD_4, PC_13},        //stepPins
     {PE_2, PB_8, PD_7, PD_3, PC_0 },        //dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PE_4, PE_0, PA_8, PD_5, PC_14},           
      5,                                      //uartPins                                              // Smart drivers
 #endif
@@ -846,7 +846,7 @@ constexpr BoardDefaults fly_gemini_Defaults = {
     {PB_2, PB_6, PB_5, PB_4},           //enablePins
     {PC_13, PC_14, PC_15, PC_3},        //stepPins
     {PC_1, PC_4, PC_5, PC_7},           //dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PB_11, PB_9, PB_8, PB_7},
      4,                                      //uartPins                                              // Smart drivers
 #endif
@@ -918,7 +918,7 @@ constexpr BoardDefaults fly_gemini_v1_1_Defaults = {
     {PB_2, PD_2, PC_12, PC_11},                   //enablePins
     {PC_13, PC_14, PC_15, PC_3},                //stepPins
     {PC_1, PC_4, PC_5, PC_8},                   //dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PB_11, PB_9, PB_8, PB_7},
      4,                                         //uartPins                                              // Smart drivers
 #endif
@@ -991,7 +991,7 @@ constexpr BoardDefaults fly_gemini_v2_0_Defaults = {
     {PB_2, PD_2, PC_12, PC_11},                   //enablePins
     {PC_13, PC_14, PC_15, PC_3},                //stepPins
     {PC_1, PC_4, PC_5, PC_8},                   //dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PB_11, PB_9, PB_8, PB_7},
      4,                                         //uartPins                                              // Smart drivers
 #endif
