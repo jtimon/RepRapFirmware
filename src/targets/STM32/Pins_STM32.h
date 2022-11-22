@@ -15,38 +15,56 @@
 #if STM32H7
 #define FIRMWARE_NAME "RepRapFirmware for STM32H7 based Boards"
 #define DEFAULT_BOARD_TYPE BoardType::Stm32H7
-#define ELECTRONICS "STM32H7"
-#define STM_ELECTRONICS_STRING "STM32H7"
-#define STM_BOARD_STRING "STM32H7"
-#define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32h7-wifi.bin"
-#define SBC_IAP_FIRMWARE_FILE   "firmware-stm32h7-sbc.bin"
-#define IAP_UPDATE_FILE         "stm32h7_iap_SD.bin"
-#define IAP_UPDATE_FILE_SBC     "stm32h7_iap_SBC.bin"
-#define IAP_CAN_LOADER_FILE		"stm32h7_iap_CAN.bin"
+# if STM32H743xx
+#  define STM_ELECTRONICS_STRING "STM32H7"
+#  define STM_BOARD_STRING "STM32H7"
+#  define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32h7-wifi.bin"
+#  define SBC_IAP_FIRMWARE_FILE   "firmware-stm32h7-sbc.bin"
+#  define IAP_UPDATE_FILE         "stm32h7_iap_SD.bin"
+#  define IAP_UPDATE_FILE_SBC     "stm32h7_iap_SBC.bin"
+#  define IAP_CAN_LOADER_FILE		"stm32h7_iap_CAN.bin"
 
-#define WIFI_BOARD_NAME         "STM32H7 WiFi"
-#define SBC_BOARD_NAME          "STM32H7 SBC"
-#define WIFI_BOARD_SHORT_NAME   "stm32h7-wifi"
-#define SBC_BOARD_SHORT_NAME    "stm32h7-sbc"
+#  define WIFI_BOARD_NAME         "STM32H7 WiFi"
+#  define SBC_BOARD_NAME          "STM32H7 SBC"
+#  define WIFI_BOARD_SHORT_NAME   "stm32h7-wifi"
+#  define SBC_BOARD_SHORT_NAME    "stm32h7-sbc"
 
-#define IAP_IMAGE_START         0x0                 // FIXME: Needs updating for H7
+#  define IAP_IMAGE_START         0x0                 // FIXME: Needs updating for H7
+# elif STM32H723xx
+  // For now we use the generic stm32h7 name for stm32h743 based systems, this is compatible with released versions
+#  define STM_ELECTRONICS_STRING "STM32H723"
+#  define STM_BOARD_STRING "STM32H723"
+#  define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32h723-wifi.bin"
+#  define SBC_IAP_FIRMWARE_FILE   "firmware-stm32h723-sbc.bin"
+#  define IAP_UPDATE_FILE         "stm32h723_iap_SD.bin"
+#  define IAP_UPDATE_FILE_SBC     "stm32h723_iap_SBC.bin"
+#  define IAP_CAN_LOADER_FILE		"stm32h723_iap_CAN.bin"
+
+#  define WIFI_BOARD_NAME         "STM32H723 WiFi"
+#  define SBC_BOARD_NAME          "STM32H723 SBC"
+#  define WIFI_BOARD_SHORT_NAME   "stm32h723-wifi"
+#  define SBC_BOARD_SHORT_NAME    "stm32h723-sbc"
+
+#  define IAP_IMAGE_START         0x0                 // FIXME: Needs updating for H7
+# else
+#  error "Processor undfined"
+# endif
 #else
-#define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
-#define DEFAULT_BOARD_TYPE BoardType::Stm32F4
-#define ELECTRONICS "STM32F4"
-#define STM_ELECTRONICS_STRING "STM32F4"
-#define STM_BOARD_STRING "STM32F4"
-#define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32f4-wifi.bin"
-#define SBC_IAP_FIRMWARE_FILE   "firmware-stm32f4-sbc.bin"
-#define IAP_UPDATE_FILE         "stm32f4_iap_SD.bin"
-#define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
-#define IAP_CAN_LOADER_FILE		"stm32f4_iap_CAN.bin"
-#define IAP_IMAGE_START         0x20018000
+# define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
+# define DEFAULT_BOARD_TYPE BoardType::Stm32F4
+# define STM_ELECTRONICS_STRING "STM32F4"
+# define STM_BOARD_STRING "STM32F4"
+# define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32f4-wifi.bin"
+# define SBC_IAP_FIRMWARE_FILE   "firmware-stm32f4-sbc.bin"
+# define IAP_UPDATE_FILE         "stm32f4_iap_SD.bin"
+# define IAP_UPDATE_FILE_SBC     "stm32f4_iap_SBC.bin"
+# define IAP_CAN_LOADER_FILE		"stm32f4_iap_CAN.bin"
+# define IAP_IMAGE_START         0x20018000
 
-#define WIFI_BOARD_NAME         "STM32F4 WiFi"
-#define SBC_BOARD_NAME          "STM32F4 SBC"
-#define WIFI_BOARD_SHORT_NAME   "stm32f4-wifi"
-#define SBC_BOARD_SHORT_NAME    "stm32f4-sbc"
+# define WIFI_BOARD_NAME         "STM32F4 WiFi"
+# define SBC_BOARD_NAME          "STM32F4 SBC"
+# define WIFI_BOARD_SHORT_NAME   "stm32f4-wifi"
+# define SBC_BOARD_SHORT_NAME    "stm32f4-sbc"
 
 #endif
 // The name of the file used by the board bootloader, boot file is renamed to this

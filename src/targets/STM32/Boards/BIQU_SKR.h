@@ -9,6 +9,7 @@
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DFueX.
 #if STM32H7
+# if STM32H743xx
 constexpr PinEntry PinTable_BIQU_SKR_SE_BX_v2_0[] =
 {
     //Thermistors
@@ -98,7 +99,7 @@ constexpr BoardDefaults biqu_skr_se_bx_v2_0_Defaults = {
     PH_12, PH_10, SSP4,
 #endif
 };
-
+# endif
 constexpr PinEntry PinTable_BTT_SKR_3[] =
 {
     //Thermistors
@@ -160,7 +161,11 @@ constexpr PinEntry PinTable_BTT_SKR_3[] =
 };
 
 constexpr BoardDefaults btt_skr_3_Defaults = {
-    {0xaa36a0c4},                  // Signatures
+# if STM32H743xx
+    {0xaa36a0c4},                             // Signatures
+# elif STM32H723xx
+    {0x132ea777},                             // Signatures
+# endif
     SD_SDIO,                                  // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
@@ -177,7 +182,7 @@ constexpr BoardDefaults btt_skr_3_Defaults = {
     {PD_6, PD_1, PE_0, PC_7, PD_13}, // enablePins
     {PD_4, PA_15, PE_2, PD_15, PD_11},  // stepPins
     {PD_3, PA_8, PE_3, PD_14, PD_10},    // dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PD_5, PD_0, PE_1, PC_6, PD_12},    // uartpins
     5,                            // Smart drivers
 #endif
@@ -494,7 +499,7 @@ constexpr BoardDefaults btt_rrf_e3_1_1_Defaults = {
     {PD_7, PD_3, PD_14, PD_10, PC_13, PE_15},   // enablePins
     {PD_5, PD_0, PC_6, PD_12, PC_15, PE_13},    // stepPins
     {PD_4, PA_15, PC_7, PD_13, PA_8, PE_12},    // dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PD_6, PD_1, PD_15, PD_11, PC_14, PE_14},   // uartpins
     4,                                          // Smart drivers
 #endif
@@ -604,7 +609,7 @@ constexpr BoardDefaults btt_skr_2_Defaults = {
     {PE_3, PD_6, PD_1, PC_7, PD_13},        // enablePins
     {PE_2, PD_5, PA_15, PD_15, PD_11},      // stepPins
     {PE_1, PD_4, PA_8, PD_14, PD_10},       // dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PE_0, PD_3, PD_0, PC_6, PD_12},        // uartpins
     5,                                      // Smart drivers
 #endif
@@ -730,7 +735,7 @@ constexpr BoardDefaults btt_octopus_Defaults = {
     PA_14
 #endif 
     },	// dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PC_4, PD_11, PC_6, PC_7, PF_2, PE_4, PE_1, PD_3},  // uartpins
     8,                                          // Smart drivers
 #endif
@@ -856,7 +861,7 @@ constexpr BoardDefaults btt_octopuspro_Defaults = {
     PA_14
 #endif 
     },  // dirPins
-#if TMC_SOFT_UART
+#if HAS_SMART_DRIVERS
     {PC_4, PD_11, PC_6, PC_7, PF_2, PE_4, PE_1, PD_3},  // uartpins
     8,                                          // Smart drivers
 #endif
