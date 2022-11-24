@@ -1233,7 +1233,7 @@ void Platform::Spin() noexcept
 				{
 					if (timer.IsRunning())
 					{
-						if (!timer.Check(OpenLoadTimeout))
+						if (!timer.CheckNoStop(OpenLoadTimeout))
 						{
 							stat.ClearOpenLoadBits();
 						}

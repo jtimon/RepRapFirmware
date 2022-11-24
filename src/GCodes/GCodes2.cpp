@@ -407,6 +407,9 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			BREAK_IF_NOT_EXECUTING
 
+#if SUPPORT_ASYNC_MOVES
+			AllocateAxes(gb, GetMovementState(gb), AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+#endif
 			// We need to unlock the movement system here in case there is no Z probe and we are doing manual probing.
 			// Otherwise, even though the bed probing code calls UnlockAll when doing a manual bed probe, the movement system
 			// remains locked because the current MachineState object already held the lock when the macro file was started,
@@ -4743,12 +4746,13 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 
 #if SUPPORT_ASYNC_MOVES
-		if (!gb.Executing())
-		{
-			UnlockAll(gb);
-			HandleReply(gb, GCodeResult::ok, "");
-			return true;
-		}
+	if (!gb.Executing())
+	{
+		// This is not the active MS, so ignore the command
+		UnlockAll(gb);
+		HandleReply(gb, GCodeResult::ok, "");
+		return true;
+	}
 #endif
 
 	bool seen = false;
@@ -4801,15 +4805,15 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		{
 			// Don't do the tool change, just remember which one we are supposed to use in 'newToolNumber'
 		}
-		else if (ms.GetCurrentToolNumber() != toolNum)		// if old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-		{
-			StartToolChange(gb, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
-			return true;									// proceeding with state machine, so don't unlock or send a reply
-		}
-		else
+		else if (ms.GetCurrentToolNumber() == toolNum)		// if old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		{
 			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared. So make sure the tool heaters are on.
 			ms.SelectTool(toolNum, IsSimulating());
+		}
+		else
+		{
+			StartToolChange(gb, ms, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
+			return true;									// proceeding with state machine, so don't unlock or send a reply
 		}
 	}
 	else
