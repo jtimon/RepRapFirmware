@@ -1,4 +1,8 @@
-Version 3.4.4_102
+Version 3.4.4_104
+=================
+* Add pins for FLY_E3_V2
+
+Version 3.4.4_103
 =================
 * Add support for STM32H723 and updated SKR3
 * Fix occasional WiFi disconnect with large uploads
