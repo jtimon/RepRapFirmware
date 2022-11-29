@@ -1004,5 +1004,90 @@ constexpr BoardDefaults fly_gemini_v2_0_Defaults = {
     PB_3, PB_12, SSP2,
 #endif
 };
+
+constexpr PinEntry PinTable_FLY_E3_V2[] =
+{
+
+    //Thermistors
+    {PC_4, "e0temp,t0"},
+    {PC_5, "e1temp,t1"},
+    {PB_1, "bedtemp,tb"},
+ 
+    
+    //Endstops
+    {PE_7, "xmin,xstop"},
+    {PE_8, "ymin,ystop"},
+    {PE_9, "zmin,zstop"},
+
+    
+    // Servo
+    {PE_6,  "servo0" },
+
+    // Porbe
+    {PC_2, "probe"},
+    
+    //Heaters and Fans (Big and Small Mosfets}
+    {PB_0,  "bed,hbed"   },
+    {PC_6,  "e0heat,he0" },
+    {PC_7,  "e1heat,he1" },
+    {PA_0,  "fan0,fan"   },
+    {PA_1,  "fan1"      },
+    {PA_2,  "fan2"      },
+    {PA_3,  "fan3"      },
+
+    //EXP1
+    {PD_10,  "BEEP"  },    {PA_9,   "TX1,BTNENC" },
+    {PA_8,   "LCDEN" },    {PA_10,  "RX1,LCDRS"  },
+    {PE_14,  "LCDD4" },    {PE_15,  "LCDD5"      },
+    {PA_14,  "LCDD6" },    {PA_13,  "LCDD7"      },
+    
+    
+    //EXP2
+    {PA_6,   "LCDMISO"},     {PA_5,  "LCDSCK"  },
+    {PB_11,  "BTNEN2" },     {PA_4,  "LCDSS"   },
+    {PB_10,  "BTNEN1" },     {PA_7,  "LCDMOSI" },
+    {PE_13,  "TFCD"   },
+
+
+    //SD
+    {PC_9, "SDD1"   },
+    {PC_8, "SDD0"   },
+    {PC_12, "SDSCK" },
+    {PD_2, "SDCMD"  },
+    {PC_11, "SDD3"  },
+    {PC_10, "SDD2"  },
+
+
+};
+
+constexpr BoardDefaults fly_e3_v2_Defaults = {
+    {0xd0c680ae},                   // Signatures
+    SD_SDIO,                                    // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0 EXP SD
+        {PB_13, PB_14, PB_15},                  //SPI1 Wifi module
+        {PB_3, PB_4, PB_5},                     //SPI2 MOT
+        {PD_12, PD_13, PD_11},                  //SPI3 MAX31855 MAX31865
+        {NoPin, NoPin, NoPin},                  //SPI4 used for single wire ender displays
+        {NoPin, NoPin, NoPin},                  //SPI5
+    },
+    5,                                            // Number of drivers
+    {PC_1, PC_14, PE_3, PD_6 ,PD_3},           //enablePins
+    {PE_5, PE_4, PE_1, PE_2, PE_0},        //stepPins
+    {PC_0, PC_13, PB_7, PD_5, PD_1 },        //dirPins
+#if HAS_SMART_DRIVERS
+    {PC_15, PB_6, PD_7, PD_4, PD_0},           
+     5,                                      //uartPins                                              // Smart drivers
+#endif
+    0,  
+#if HAS_VOLTAGE_MONITOR
+    PC_3,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
+};
+
 #endif
 #endif
