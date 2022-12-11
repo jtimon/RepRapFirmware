@@ -340,7 +340,7 @@ static void ConfigureGPIOPins() noexcept
 
 static void ConfigureSPIPins(SSPChannel dev, Pin clk, Pin miso, Pin mosi)
 {
-    SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NoPin, NvicPrioritySpi);
+    SPI::getSSPDevice(dev)->initPins(clk, miso, mosi, NvicPrioritySpi);
 }
 
 static void FatalError(const char* fmt, ...)
