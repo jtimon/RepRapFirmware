@@ -110,7 +110,7 @@ void StepTimer::Init() noexcept
 	STEP_TC->TCR = (1 <<SBIT_CNTEN);							    // Start Timer
 #elif STM32
 	uint32_t preScale = STimer.getTimerClkFreq()/StepClockRate;
-	//debugPrintf("ST base freq %d setting presacle %d\n", static_cast<int>(STimer.getTimerClkFreq()), static_cast<int>(preScale));
+	//debugPrintf("ST clock rate %d ST base freq %d setting presacle %d\n", StepClockRate, static_cast<int>(STimer.getTimerClkFreq()), static_cast<int>(preScale));
 	STimer.setPrescaleFactor(preScale);
 	STimer.setOverflow(0, TICK_FORMAT);
 	STimer.setMode(1, TIMER_OUTPUT_COMPARE);
