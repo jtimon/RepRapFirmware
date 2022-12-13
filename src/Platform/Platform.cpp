@@ -467,7 +467,7 @@ Platform::Platform() noexcept :
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
-	deferredPowerDown(false)
+	powerDownWhenFansStop(false), delayedPowerDown(false)
 {
 }
 
@@ -513,7 +513,7 @@ void Platform::Init() noexcept
 	baudRates[0] = MAIN_BAUD_RATE;
 	commsParams[0] = 0;
 	usbMutex.Create("USB");
-#if SAME5x
+#if SAME5x && !CORE_USES_TINYUSB
     SERIAL_MAIN_DEVICE.Start();
 #elif LPC17xx || STM32
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
@@ -1370,9 +1370,16 @@ void Platform::Spin() noexcept
 	{
 		lastFanCheckTime = now;
 
-		if (deferredPowerDown && !thermostaticFanRunning)
+		// Check for a deferred or delayed power down
+		if (delayedPowerDown || powerDownWhenFansStop)
 		{
-			AtxPowerOff();
+			do
+			{
+				if (delayedPowerDown && (int32_t)(now - whenToPowerDown) < 0) break;
+				if (powerDownWhenFansStop && thermostaticFanRunning) break;
+				powerDownWhenFansStop = delayedPowerDown = false;
+				AtxPowerOff();
+			} while (false);
 		}
 
 		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
@@ -1779,6 +1786,10 @@ extern void SPWMDiagnostics();
 #endif
 }
 
+#if CORE_USES_TINYUSB	//debug
+extern uint32_t numUsbInterrupts;
+#endif
+
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype) noexcept
 {
@@ -1930,6 +1941,10 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	MessageF(mtype, "ADC not ready %" PRIu32 " ADC error threshold %" PRIu32 " ADC Init %" PRIu32 "\n", ADCNotReadyCnt, ADCErrorThreshold, ADCInitCnt);
 	ADCNotReadyCnt = 0;
 
+#endif
+
+#if CORE_USES_TINYUSB	//DEBUG
+	MessageF(mtype, "USB interrupts %" PRIu32 "\n", numUsbInterrupts);
 #endif
 
 #if 0
@@ -3829,7 +3844,7 @@ GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	IoPort::WriteDigital(StepperPowerEnablePin, true);
 # endif
 #endif
-	deferredPowerDown = false;				// cancel any pending power down
+	powerDownWhenFansStop = delayedPowerDown = false;				// cancel any pending power down
 
 	GCodeResult rslt;
 	if (gb.Seen('C'))
@@ -3870,8 +3885,14 @@ GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	else if (PsOnPort.IsValid())
 #endif
 	{
-		deferredPowerDown = gb.Seen('S') && gb.GetUIValue() != 0;
-		if (!deferredPowerDown)
+		// This is a power-down command
+		powerDownWhenFansStop = gb.Seen('S') && gb.GetUIValue() != 0;
+		delayedPowerDown = gb.Seen('D');
+		if (delayedPowerDown)
+		{
+			whenToPowerDown = (gb.GetUIValue() * SecondsToMillis) + millis();
+		}
+		if (!powerDownWhenFansStop && !delayedPowerDown)
 		{
 			AtxPowerOff();
 		}
@@ -3961,7 +3982,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 	if (chan == 0)
 	{
 		SERIAL_MAIN_DEVICE.end();
-#if SAME5x
+#if SAME5x && !CORE_USES_TINYUSB
         SERIAL_MAIN_DEVICE.Start();
 #elif LPC17xx || STM32
 		SERIAL_MAIN_DEVICE.begin(baudRates[0]);

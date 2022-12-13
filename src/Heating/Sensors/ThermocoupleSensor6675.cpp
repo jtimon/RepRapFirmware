@@ -54,7 +54,7 @@ GCodeResult ThermocoupleSensor6675::Configure(GCodeBuffer& gb, const StringRef& 
 	{
 		// Initialise the sensor
 		InitSpi();
-		SetResult(0.0, TemperatureError::success);
+		SetResult(0.0, TemperatureError::ok);
 	}
 	else
 	{
@@ -67,7 +67,7 @@ void ThermocoupleSensor6675::Poll() noexcept
 {
 	uint32_t rawVal;
 	TemperatureError sts = DoSpiTransaction(nullptr, 2, rawVal);
-	if (sts != TemperatureError::success)
+	if (sts != TemperatureError::ok)
 	{
 		SetResult(sts);
 	}
@@ -87,7 +87,7 @@ void ThermocoupleSensor6675::Poll() noexcept
 		{
 			rawVal >>= 3;							// shift the 12-bit temperature data to the bottom of the word
 			// And convert to from units of 1/4C to 1C
-			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::success);
+			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::ok);
 		}
 	}
 }

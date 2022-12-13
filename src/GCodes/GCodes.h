@@ -105,7 +105,7 @@ public:
 	void Init() noexcept;														// Set it up
 	void Exit() noexcept;														// Shut it down
 	void Reset() noexcept;														// Reset some parameter to defaults
-	bool ReadMove(unsigned int queueNumber, RawMove& m) noexcept
+	bool ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move class to get a movement set by the last G Code
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
@@ -129,6 +129,7 @@ public:
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
 
 	float GetPrimarySpeedFactor() const noexcept { return moveStates[0].speedFactor; }	// Return the current speed factor as a fraction
+	float GetPrimaryCurrentZHop() const noexcept { return moveStates[0].currentZHop; }
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
 	float GetFilamentDiameter(size_t extruder) const noexcept
 		pre(extruder < MaxExtruders) { return filamentDiameters[extruder]; }
@@ -187,7 +188,7 @@ public:
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
-	bool LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Lock a movement system and wait for pending moves to finish
+	bool LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Lock a movement system and wait for pending moves to finish
 	bool LockCurrentMovementSystemAndWaitForStandstill(GCodeBuffer& gb) noexcept;	// Lock movement and wait for pending moves to finish
 	bool LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcept;	// Lock movement and wait for all motion systems to reach standstill
 	uint16_t GetMotorBrakeOnDelay() const noexcept { return 200; }				// Get the delay between brake on and motors off, in milliseconds TODO make this configurable
@@ -342,15 +343,15 @@ private:
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock the movement system we are using
-	bool LockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Lock a particular movement system
+	bool LockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Lock a particular movement system
 	bool LockAllMovement(const GCodeBuffer& gb) noexcept;						// Lock all movement systems
 	void GrabResource(const GCodeBuffer& gb, Resource r) noexcept;				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab all movement locks even if they are already owned
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
 	void UnlockMovement(const GCodeBuffer& gb) noexcept;						// Unlock the movement system we are using, if we own it
-	void UnlockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Unlock a particular movement system, if we own it
+	void UnlockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Unlock a particular movement system, if we own it
 #if SUPPORT_ASYNC_MOVES
-	void UnlockMovementFrom(const GCodeBuffer& gb, unsigned int firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
+	void UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
 #endif
 
 	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
@@ -764,13 +765,13 @@ inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 }
 
 // Lock a particular movement system
-inline bool GCodes::LockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept
+inline bool GCodes::LockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
 	return LockResource(gb, MoveResourceBase + msNumber);
 }
 
 // Unlock a particular movement system, if we own it
-inline void GCodes::UnlockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept
+inline void GCodes::UnlockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
 	return UnlockResource(gb, MoveResourceBase + msNumber);
 }

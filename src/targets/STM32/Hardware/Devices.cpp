@@ -17,3 +17,10 @@ void StopAnalogTask() noexcept
 {
 }
 
+void StopUsbTask() noexcept
+{
+#if CORE_USES_TINYUSB
+	usbDeviceTask.TerminateAndUnlink();
+#endif
+}
+

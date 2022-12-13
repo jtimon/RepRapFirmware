@@ -718,7 +718,7 @@ void BoardConfig::Init() noexcept
         APIN_SerialWiFi_RXD = WifiSerialRxTxPins[0];
         APIN_SerialWiFi_TXD = WifiSerialRxTxPins[1];
         
-        if(!SerialWiFi.Configure(WifiSerialRxTxPins[0], WifiSerialRxTxPins[1]))
+        if(!serialWiFi.Configure(WifiSerialRxTxPins[0], WifiSerialRxTxPins[1]))
         {
             reprap.GetPlatform().MessageF(UsbMessage, "Failed to set WIFI Serial with pins %c.%d and %c.%d.\n", 'A'+(WifiSerialRxTxPins[0] >> 4), (WifiSerialRxTxPins[0] & 0xF), 'A'+(WifiSerialRxTxPins[1] >> 4), (WifiSerialRxTxPins[1] & 0xF) );
         }
@@ -937,7 +937,7 @@ void BoardConfig::Diagnostics(MessageType mtype) noexcept
         MessageF(mtype, "AUX2 Serial: %s%c\n", ((SERIAL_AUX2_DEVICE.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SERIAL_AUX2_DEVICE.GetUARTPortNumber() == -1)?' ': ('0' + SERIAL_AUX2_DEVICE.GetUARTPortNumber()));
     #endif
     #if HAS_WIFI_NETWORKING
-        MessageF(mtype, "WIFI Serial: %s%c\n", ((SerialWiFi.GetUARTPortNumber() == -1)?"Disabled": "UART "), (SerialWiFi.GetUARTPortNumber() == -1)?' ': ('0' + SerialWiFi.GetUARTPortNumber()));
+        MessageF(mtype, "WIFI Serial: %s%c\n", ((serialWiFi.GetUARTPortNumber() == -1)?"Disabled": "UART "), (serialWiFi.GetUARTPortNumber() == -1)?' ': ('0' + serialWiFi.GetUARTPortNumber()));
     #endif
 #endif
     

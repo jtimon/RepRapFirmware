@@ -237,6 +237,12 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 	{
 		scratchString.cat(", running macro");
 	}
+#if SUPPORT_ASYNC_MOVES
+	if (syncState != SyncState::running)
+	{
+		scratchString.catf(", sync state %u", (unsigned int)syncState);
+	}
+#endif
 	scratchString.cat('\n');
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
@@ -339,7 +345,7 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// Determine whether the other input channel is at a strictly later point than we are
+// Determine whether this input channel is at a strictly later point than the other one
 bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
@@ -357,22 +363,22 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 		--otherDepth;
 	}
 
-	bool otherIsLater = false;
+	bool oursIsLater = false;
 	while (ourState != nullptr)
 	{
-		if (otherState->lineNumber > ourState->lineNumber)
+		if (ourState->lineNumber > otherState->lineNumber)
 		{
-			otherIsLater = true;
+			oursIsLater = true;
 		}
-		else if (otherState->lineNumber < ourState->lineNumber)
+		else if (ourState->lineNumber < otherState->lineNumber)
 		{
-			otherIsLater = false;
+			oursIsLater = false;
 		}
 		otherState = otherState->GetPrevious();
 		ourState = ourState->GetPrevious();
 	}
 
-	return otherIsLater;
+	return oursIsLater;
 }
 
 #endif

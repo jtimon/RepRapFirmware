@@ -127,7 +127,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 	else
 		rawVal &= ~0x00000002;
 #endif
-	if (sts != TemperatureError::success)
+	if (sts != TemperatureError::ok)
 	{
 		SetResult(sts);
 	}
@@ -181,7 +181,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 			rawVal >>= 18;							// shift the 14-bit temperature data to the bottom of the word
 			rawVal |= (0 - (rawVal & 0x2000));		// sign-extend the sign bit
 			// And convert to from units of 1/4C to 1C
-			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::success);
+			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::ok);
 		}
 	}
 }

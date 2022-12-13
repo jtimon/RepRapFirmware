@@ -1095,7 +1095,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Successful probing
 					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
+					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetMsNumber(), false);		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)											// don't accumulate the result of we are doing fast-then-slow probing and this was the fast probe
@@ -1124,7 +1124,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if SUPPORT_ASYNC_MOVES
 					ms.OwnedAxisCoordinateUpdated(Z_AXIS);
 #endif
-					reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
+					reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
@@ -1209,7 +1209,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
+				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
 
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
@@ -1236,18 +1236,23 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
 				// This is useful because it adjusts the XY position to account for the probe offset.
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
+				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
 				ToolOffsetInverseTransform(ms);
 			}
 			else if (g30SValue >= -1)
 			{
-				if (reprap.GetMove().FinishedBedProbing(g30SValue, reply))
+				if (reprap.GetMove().FinishedBedProbing(ms.GetMsNumber(), g30SValue, reply))
 				{
 					stateMachineResult = GCodeResult::error;
 				}
 				else if (reprap.GetMove().GetKinematics().SupportsAutoCalibration())
 				{
 					zDatumSetByProbing = true;			// if we successfully auto calibrated or adjusted leadscrews, we've set the Z datum by probing
+					// Auto calibration may have adjusted the motor positions and the geometry, so the head may now be at a different position
+#if SUPPORT_ASYNC_MOVES
+					ms.SaveOwnAxisCoordinates();
+#endif
+					UpdateUserPositionFromMachinePosition(gb, ms);
 				}
 			}
 			gb.SetState(GCodeState::normal);
@@ -1394,7 +1399,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.filePos = gb.GetJobFilePosition();
@@ -1415,7 +1420,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 				{
 					ms.coords[ExtruderToLogicalDrive(ms.currentTool->GetDrive(i))] = ms.currentTool->GetRetractLength() + ms.currentTool->GetRetractExtra();
@@ -1596,6 +1601,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	if (reportPause)
 	{
 		FileGCode()->Invalidate();
+# if SUPPORT_ASYNC_MOVES
+		File2GCode()->Invalidate();
+# endif
 		reprap.GetSbcInterface().ReportPause();
 	}
 #endif

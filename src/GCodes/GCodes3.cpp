@@ -126,7 +126,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if SUPPORT_ASYNC_MOVES
 		ms.OwnedAxisCoordinatesUpdated(axesIncluded);		// save coordinates of any owned axes we changed
 #endif
-		reprap.GetMove().SetNewPosition(ms.coords, true, gb.GetActiveQueueNumber());
+		reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -570,11 +570,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
 			// So if we have more visible axes than before, then we need to update their positions to get them in sync.
 			//TODO for multiple motion systems, is this correct? Other input channel must wait until we have finished.
-			for (size_t i = 0; i < NumMovementSystems; ++i)
+			for (MovementState& ms : moveStates)
 			{
-				MovementState& ms = moveStates[i];
 				ToolOffsetTransform(ms);										// ensure that the position of any new axes are updated in moveBuffer
-				reprap.GetMove().SetNewPosition(ms.coords, true, i);			// tell the Move system where the axes are
+				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);			// tell the Move system where the axes are
 			}
 		}
 #if SUPPORT_CAN_EXPANSION
