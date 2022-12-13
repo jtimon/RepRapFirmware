@@ -532,10 +532,10 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 
 // The step clock is used for timing step pulses and oyther fine-resolution timer purposes
 
-#if SAME70 || SAME5x || STM32H7
+#if SAME70 || SAME5x || STM32H7 || STM32F4
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
-#elif LPC17xx || STM32F4
+#elif LPC17xx
 constexpr uint32_t StepClockRate = 1000000;									// 1MHz
 #else
 constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
