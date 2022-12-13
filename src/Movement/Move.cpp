@@ -105,6 +105,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::none },
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																		ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
+	{ "currentZHop",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryCurrentZHop(), 3),						ObjectModelEntryFlags::live },
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
@@ -118,7 +119,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),			ObjectModelEntryFlags::live },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),					ObjectModelEntryFlags::obsolete },
 
@@ -181,7 +182,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	17 + SUPPORT_WORKPLACE_COORDINATES,
+	18 + SUPPORT_WORKPLACE_COORDINATES,
 	2,
 	5 + SUPPORT_LASER,
 	3,
@@ -435,9 +436,9 @@ void Move::MoveAvailable() noexcept
 }
 
 // Tell the lookahead ring we are waiting for it to empty and return true if it is
-bool Move::WaitingForAllMovesFinished(size_t queueNumber) noexcept
+bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber) noexcept
 {
-	return rings[queueNumber].SetWaitingToEmpty();
+	return rings[msNumber].SetWaitingToEmpty();
 }
 
 // Return the number of actually probed probe points
@@ -448,11 +449,11 @@ unsigned int Move::GetNumProbedProbePoints() const noexcept
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
 // This is called by the Main task, so we need to lock out the Move task while doing this
-float Move::PushBabyStepping(size_t axis, float amount) noexcept
+float Move::PushBabyStepping(MovementSystemNumber msNumber,size_t axis, float amount) noexcept
 {
 	TaskCriticalSectionLocker lock;						// lock out the Move task
 
-	return rings[0].PushBabyStepping(axis, amount);
+	return rings[msNumber].PushBabyStepping(axis, amount);
 }
 
 // Change the kinematics to the specified type if it isn't already
@@ -562,12 +563,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], MovementSystemNumber msNumber, bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(queueNumber).currentTool, doBedCompensation);
-	rings[queueNumber].SetPositions(newPos);
+	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(msNumber).currentTool, doBedCompensation);
+	rings[msNumber].SetPositions(newPos);
 }
 
 // Convert distance to steps for a particular drive
@@ -879,7 +880,7 @@ void Move::SetXYCompensation(bool xyCompensation)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
+bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const StringRef& reply) noexcept
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -913,7 +914,7 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 		}
 		else if (kinematics->SupportsAutoCalibration())
 		{
-			error = kinematics->DoAutoCalibration(sParam, probePoints, reply);
+			error = kinematics->DoAutoCalibration(msNumber, sParam, probePoints, reply);
 		}
 		else
 		{
@@ -934,9 +935,9 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept
+void Move::GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept
 {
-	GetCurrentMachinePosition(m, IsRawMotorMove(moveType));
+	GetCurrentMachinePosition(m, msNumber, IsRawMotorMove(moveType));
 	if (moveType == 0)
 	{
 		InverseAxisAndBedTransform(m, tool);

@@ -353,7 +353,7 @@ constexpr size_t NumSPIPins = 3;
 extern Pin SPIPins[NumSPIDevices][NumSPIPins]; //GPIO pins for softwareSPI (used with SharedSPI)
 
 #define SERIAL_AUX_DEVICE   UART_Slot0
-#define SerialWiFi  UART_Slot1
+#define serialWiFi  UART_Slot1
 //#define SERIAL_AUX2_DEVICE  UART_Slot2
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB + AUX)
@@ -364,7 +364,7 @@ extern Pin AuxSerialRxTxPins[NumberSerialPins];
     extern Pin Aux2SerialRxTxPins[NumberSerialPins];
 #endif
 
-#define SERIAL_MAIN_DEVICE  SerialUSB  //USB
+#define SERIAL_MAIN_DEVICE  serialUSB  //USB
 
 
 

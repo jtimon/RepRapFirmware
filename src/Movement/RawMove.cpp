@@ -60,7 +60,7 @@ float MovementState::GetProportionDone() const noexcept
 }
 
 // Initialise this MovementState. If SUPPORT_ASYNC_MOVES is set then must call MovementState::GlobalInit before calling this to initialise lastKnownMachinePositions.
-void MovementState::Init(unsigned int p_msNumber) noexcept
+void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 {
 	msNumber = p_msNumber;
 	ClearMove();
@@ -129,20 +129,20 @@ void MovementState::ClearMove() noexcept
 	moveFractionToSkip = 0.0;
 }
 
-void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept
+void MovementState::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
 #if SUPPORT_ASYNC_MOVES
 											", axes/extruders owned 0x%07x"
 #endif
-												"\n",
-													moveSystemNumber,
+											"\n",
+													GetMsNumber(),
 													segmentsLeft
 #if SUPPORT_ASYNC_MOVES
 													, (unsigned int)axesAndExtrudersOwned.GetRaw()
 #endif
 									);
-	codeQueue->Diagnostics(mtype, moveSystemNumber);
+	codeQueue->Diagnostics(mtype, GetMsNumber());
 }
 
 void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
@@ -287,10 +287,15 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 void MovementState::SaveOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
-	move.GetPartialMachinePosition(lastKnownMachinePositions, axesAndExtrudersOwned, msNumber);
-	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
-	move.SetRawPosition(lastKnownMachinePositions, msNumber);
-	move.InverseAxisAndBedTransform(coords, currentTool);
+	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
+
+	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
+	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
+	{
+		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+		move.SetRawPosition(lastKnownMachinePositions, msNumber);
+		move.InverseAxisAndBedTransform(coords, currentTool);
+	}
 }
 
 // Update changed coordinates of some owned axes - called after G92

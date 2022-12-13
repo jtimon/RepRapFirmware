@@ -100,6 +100,9 @@ GCodes::GCodes(Platform& p) noexcept :
 	moveStates[1].codeQueue = new GCodeQueue();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
+#else
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = nullptr;
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = nullptr;
 #endif
 #if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();
@@ -262,7 +265,7 @@ void GCodes::Reset() noexcept
 	MovementState::GlobalInit(numVisibleAxes);
 #endif
 
-	for (unsigned int i = 0; i < NumMovementSystems; ++i)
+	for (MovementSystemNumber i = 0; i < NumMovementSystems; ++i)
 	{
 		MovementState& ms = moveStates[i];
 		ms.Init(i);
@@ -617,11 +620,14 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		if (gb.IsFileFinished())
 		{
-			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
+			const bool printFileFinished = (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr);
 # if SUPPORT_ASYNC_MOVES
 			if (printFileFinished)
 			{
-				DoSync(gb);														// wait until the other input stream has caught up
+				if (!DoSync(gb))												// wait until the other input stream has caught up
+				{
+					return false;
+				}
 			}
 			else
 # endif
@@ -737,6 +743,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
 			if (gb.FileEnded())										// append a newline if necessary and deal with any pending file write
 			{
+				// If we get here then the file didn't end in newline and there is a command waiting to be processed
 				bool done;
 				try
 				{
@@ -753,10 +760,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				if (done)
 				{
+					// Send the reply to the meta command
 					HandleReply(gb, GCodeResult::ok, reply.c_str());
 				}
 				else
 				{
+					// There wasn't a meta command so parse it as a regular command
 					gb.DecodeCommand();
 					if (gb.IsReady())
 					{
@@ -768,11 +777,14 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			gb.Init();															// mark buffer as empty
 
-			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
+			const bool printFileFinished = (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr);
 # if SUPPORT_ASYNC_MOVES
 			if (printFileFinished)
 			{
-				DoSync(gb);														// wait until the other input stream has caught up
+				if (!DoSync(gb))												// wait until the other input stream has caught up
+				{
+					return false;
+				}
 			}
 			else
 # endif
@@ -834,12 +846,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 {
 	// Ending a simulation, so restore the position
-	const unsigned int queueNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
-	MovementState& ms = moveStates[queueNumber];
+	const MovementSystemNumber msNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
+	MovementState& ms = moveStates[msNumber];
 	RestorePosition(ms.simulationRestorePoint, gb);
 	ms.SelectTool(ms.simulationRestorePoint.toolNumber, true);
 	ToolOffsetTransform(ms);
-	reprap.GetMove().SetNewPosition(ms.coords, true, queueNumber);
+	reprap.GetMove().SetNewPosition(ms.coords, msNumber, true);
 	axesVirtuallyHomed = axesHomed;
 	reprap.MoveUpdated();
 }
@@ -904,7 +916,7 @@ void GCodes::DoEmergencyStop() noexcept
 bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
 {
 	// Pausing because of a command in the file itself
-	if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
 		return false;
 	}
@@ -963,13 +975,12 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		return false;
 	}
 
-	for (size_t moveSystemNumber = 0; moveSystemNumber < ARRAY_SIZE(moveStates); ++moveSystemNumber)
+	for (MovementState& ms : moveStates)
 	{
-		MovementState& ms = moveStates[moveSystemNumber];
 		ms.pausedInMacro = false;
 		ms.pauseRestorePoint.feedRate = ms.feedRate;
 
-		const bool movesSkipped = reprap.GetMove().PausePrint(moveSystemNumber, ms.pauseRestorePoint);	// tell Move we wish to pause this queue
+		const bool movesSkipped = reprap.GetMove().PausePrint(ms.GetMsNumber(), ms.pauseRestorePoint);	// tell Move we wish to pause this queue
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
@@ -1017,8 +1028,13 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
-			FileGCode()->Init();															// clear the next move
-			UnlockAll(*FileGCode());														// release any locks it had
+# if SUPPORT_ASYNC_MOVES
+			GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
+# else
+			GCodeBuffer& fgb = *FileGCode();
+# endif
+			fgb.Init();															// clear the next move
+			UnlockAll(fgb);														// release any locks it had
 		}
 		else
 #endif
@@ -1028,11 +1044,16 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// The following could be delayed until we resume the print
 			if (ms.pauseRestorePoint.filePos != noFilePosition)
 			{
-				FileData& fdata = FileGCode()->LatestMachineState().fileState;
+# if SUPPORT_ASYNC_MOVES
+				GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
+# else
+			GCodeBuffer& fgb = *FileGCode();
+# endif
+				FileData& fdata = fgb.LatestMachineState().fileState;
 				if (fdata.IsLive())
 				{
-					FileGCode()->RestartFrom(ms.pauseRestorePoint.filePos);					// TODO we ought to restore the line number too, but currently we don't save it
-					UnlockAll(*FileGCode());												// release any locks it had
+					fgb.RestartFrom(ms.pauseRestorePoint.filePos);				// TODO we ought to restore the line number too, but currently we don't save it
+					UnlockAll(fgb);												// release any locks it had
 				}
 			}
 #endif
@@ -1137,14 +1158,13 @@ bool GCodes::DoEmergencyPause() noexcept
 	// Save the resume info, stop movement immediately and run the low voltage pause script to lift the nozzle etc.
 	GrabMovement(*AutoPauseGCode());
 
-	for (size_t moveSystemNumber = 0; moveSystemNumber < ARRAY_SIZE(moveStates); ++moveSystemNumber)
+	for (MovementState& ms : moveStates)
 	{
-		MovementState& ms = moveStates[moveSystemNumber];
 		// When we use RTOS there is a possible race condition in the following, because we might try to pause when a waiting move has just been added
 		// but before the gcode buffer has been re-initialised ready for the next command. So start a critical section.
 		TaskCriticalSectionLocker lock;
 
-		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(moveSystemNumber, ms.pauseRestorePoint);
+		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(ms.GetMsNumber(), ms.pauseRestorePoint);
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
@@ -1539,9 +1559,9 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 		}
 	}
 
-	for (size_t i = 0; i < ARRAY_SIZE(moveStates); ++i)
+	for (MovementState& ms : moveStates)
 	{
-		moveStates[i].Diagnostics(mtype, i);
+		ms.Diagnostics(mtype);
 	}
 }
 
@@ -1576,7 +1596,7 @@ bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcep
 // Lock movement and wait for pending moves to finish.
 // Return true if successful, false if we need to try again later.
 // As a side-effect it updates the user coordinates from the machine coordinates.
-bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned int msNumber) noexcept
+bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
 	// Lock movement to stop another source adding moves to the queue
 	if (!LockResource(gb, MoveResourceBase + msNumber))
@@ -1608,7 +1628,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 #else
 				QueuedGCode()
 #endif
-							->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
+							->IsIdle() && ms.codeQueue->IsIdle()))
 		{
 			return false;
 		}
@@ -1996,7 +2016,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// This may be a raw motor move, in which case we need the current raw motor positions in moveBuffer.coords.
 		// If it isn't a raw motor move, it will still be applied without axis or bed transform applied,
 		// so make sure the initial coordinates don't have those either to avoid unwanted Z movement.
-		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.moveType, ms.currentTool);
+		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), ms.moveType, ms.currentTool);
 	}
 
 	// Set up the initial coordinates
@@ -2752,7 +2772,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 
 // The Move class calls this function to find what to do next. It takes its own copy of the move because it adjusts the coordinates.
 // Returns true if a new move was copied to 'm'.
-bool GCodes::ReadMove(unsigned int queueNumber, RawMove& m) noexcept
+bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 {
 	MovementState& ms = moveStates[queueNumber];
 	if (ms.segmentsLeft == 0)
@@ -3115,6 +3135,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 
 // Return the current coordinates as a printable string. Used only to implement M114.
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
+// We only report the coordinates of the current movement system.
 void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 {
 	const MovementState& ms = GetConstMovementState(gb);
@@ -3140,7 +3161,7 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 	// Don't bother with the extruder endpoints, they are zero after any non-extruding move.
 	s.cat("Count");
 	int32_t positions[MaxAxesPlusExtruders];
-	reprap.GetMove().GetLivePositions(positions);
+	reprap.GetMove().GetLivePositions(positions, gb.GetActiveQueueNumber());
 	for (size_t i = 0; i < numVisibleAxes; ++i)
 	{
 		s.catf(" %" PRIi32, positions[i]);
@@ -3149,7 +3170,7 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 	// Add the machine coordinates because they may be different from the user coordinates under some conditions
 	s.cat(" Machine");
 	float machineCoordinates[MaxAxes];
-	ToolOffsetTransform(moveStates[0], ms.currentUserPosition, machineCoordinates);
+	ToolOffsetTransform(ms, ms.currentUserPosition, machineCoordinates);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		s.catf(" %.3f", (double)HideNan(machineCoordinates[axis]));
@@ -3941,7 +3962,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
 			ms.movementTool = ms.currentTool;
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.movementTool);
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.movementTool);
 			ms.filePos = gb.GetJobFilePosition();
 
 			if (retract)
@@ -3991,14 +4012,15 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 			else if (ms.currentZHop > 0.0)
 			{
 				// Set up the reverse Z hop move
+#if SUPPORT_ASYNC_MOVES
+				// Allocating the axes fetches the current coordinates, so we must do this before setting up the Z move
+				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+#endif
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.coords[Z_AXIS] -= ms.currentZHop;
 				ms.currentZHop = 0.0;
 				ms.canPauseAfter = false;			// don't pause in the middle of a command
 				ms.linearAxesMentioned = true;
-#if SUPPORT_ASYNC_MOVES
-				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
-#endif
 				NewSingleSegmentMoveAvailable(ms);
 				gb.SetState(GCodeState::doingFirmwareUnRetraction);
 			}
@@ -4275,7 +4297,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
-	reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+	reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 	UpdateUserPositionFromMachinePosition(gb, ms);
 }
 
@@ -4824,7 +4846,7 @@ bool GCodes::LockAllMovement(const GCodeBuffer& gb) noexcept
 }
 
 // Release movement locks greater than the specified one
-void GCodes::UnlockMovementFrom(const GCodeBuffer& gb, unsigned int msNumber) noexcept
+void GCodes::UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
 	while (msNumber < NumMovementSystems)
 	{
@@ -4935,7 +4957,7 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		// Update the current position to allow for any bed compensation at the current XY coordinates
 		for (MovementState& ms : moveStates)
 		{
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 			ToolOffsetInverseTransform(ms);							// update user coordinates to reflect any height map offset at the current position
 		}
 	}
@@ -5001,7 +5023,7 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 	{
 		if (reprap.Debug(moduleMove))
 		{
-			debugPrintf("Failed to allocate axes %07" PRIx32 " to MS %u letters %08" PRIx32 "\n", badAxes.GetRaw(), ms.GetMsNumber(), axLetters.GetRaw());
+			debugPrintf("Failed to allocate axes %07" PRIx32 " to MS %u letters %08" PRIx32 "\n", (int32_t)badAxes.GetRaw(), ms.GetMsNumber(), axLetters.GetRaw());
 		}
 		gb.ThrowGCodeException("Axis %c is already used by a different motion system", (unsigned int)axisLetters[badAxes.LowestSetBit()]);
 	}
@@ -5071,15 +5093,17 @@ void GCodes::AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState&
 // Return true if synced, false if we need to wait longer.
 bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 {
-	if (!LockCurrentMovementSystemAndWaitForStandstill(thisGb))
+	if (!LockMovementSystemAndWaitForStandstill(thisGb, thisGb.GetOwnQueueNumber()))
 	{
 		return false;
 	}
 
+	bool synced = false;		// assume failure
 	switch (thisGb.syncState)
 	{
 	case GCodeBuffer::SyncState::running:
 		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
+		//debugPrintf("Channel %u changed state to syncing, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 		// no break
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
@@ -5090,44 +5114,68 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 				// Other input channel has skipped this sync point
 				UpdateAllCoordinates(thisGb);
 				thisGb.syncState = GCodeBuffer::SyncState::running;
-				return true;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+				synced = true;
 			}
-			// Other input channel has not caught up with us yet, so wait for it
-			return false;
+			// Else other input channel has not caught up with us yet, so wait for it
 		}
+		else
+		{
+			// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
+			UpdateAllCoordinates(thisGb);
 
-		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
-		UpdateAllCoordinates(thisGb);
-
-		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
-		thisGb.syncState = GCodeBuffer::SyncState::synced;
-		return false;
+			// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
+			thisGb.syncState = GCodeBuffer::SyncState::synced;
+			//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+		}
+		break;
 
 	case GCodeBuffer::SyncState::synced:
 		switch (otherGb.syncState)
 		{
 		case GCodeBuffer::SyncState::running:
 			// Other input channel has carried on. If we are not the primary, wait until it has completed the command
-			return thisGb.IsExecuting() || otherGb.IsLaterThan(thisGb);
+			if (thisGb.LatestMachineState().Executing() || otherGb.IsLaterThan(thisGb))
+			{
+				thisGb.syncState = GCodeBuffer::SyncState::running;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+				synced = true;
+			}
+			break;
 
 		case GCodeBuffer::SyncState::syncing:
 			// Other input channel hasn't noticed that we are fully synced yet
-			return false;
+			break;
 
 		case GCodeBuffer::SyncState::synced:
 			// We are fully synchronised now, so we can finish syncing
-			if (thisGb.IsExecuting())
+			if (thisGb.LatestMachineState().Executing())
 			{
 				// We are the executing input stream, so we can carry on
 				thisGb.syncState = GCodeBuffer::SyncState::running;
-				return true;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+				synced = true;
+				break;
 			}
+
 			// We are not the primary, so wait for the other output channel to complete the current command
-			return otherGb.IsLaterThan(thisGb);
+			if (otherGb.IsLaterThan(thisGb))
+			{
+				thisGb.syncState = GCodeBuffer::SyncState::running;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+				synced = true;
+			}
+			break;
 		}
+		break;
 	}
 
-	return false;			// unreachable code, to keep Eclipse happy
+	if (!synced)
+	{
+		// We must release the movement lock if syncing failed, so that if an input wants to pause the print it can get the lock
+		UnlockMovement(thisGb, thisGb.GetOwnQueueNumber());
+	}
+	return synced;
 }
 
 // Synchronise the other motion system with this one. Return true if done, false if we need to wait for it to catch up.
@@ -5142,10 +5190,10 @@ bool GCodes::DoSync(GCodeBuffer& gb) noexcept
 // Update our machine coordinates from the set of last stored coordinates. If we have moved any axes then we must call ms.SaveOwnAxisPositions before calling this.
 void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 {
-	const unsigned int msNumber = gb.GetOwnQueueNumber();
-	memcpyf(moveStates[msNumber].coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
-	UpdateUserPositionFromMachinePosition(gb, moveStates[msNumber]);
-	reprap.GetMove().SetNewPosition(moveStates[msNumber].coords, true, msNumber);
+	MovementState& ms = GetMovementState(gb);
+	memcpyf(ms.coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
+	UpdateUserPositionFromMachinePosition(gb, ms);
+	reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 }
 
 #endif

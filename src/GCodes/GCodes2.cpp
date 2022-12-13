@@ -515,6 +515,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		default:
+#if HAS_SBC_INTERFACE
+			// Send unknown non-binary codes to DSF so potential plugins can interpret them
+			if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary())
+			{
+				gb.SendToSbc();
+				return false;
+			}
+#endif
 			result = TryMacroFile(gb);
 			break;
 		}
@@ -1512,7 +1520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
 						for (size_t i = 0; i < NumMovementSystems; ++i)
 						{
-							reprap.GetMove().SetNewPosition(moveStates[i].coords, true, i);
+							reprap.GetMove().SetNewPosition(moveStates[i].coords, i, true);
 						}
 #if SUPPORT_CAN_EXPANSION
 						result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
@@ -2665,7 +2673,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reprap.MoveUpdated();
 							if (IsAxisHomed(axis))
 							{
-								const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+								//TODO find which movement system owns the axis concerned and push the babystepping through that one
+								const float amountPushed = reprap.GetMove().PushBabyStepping(0, axis, differences[axis]);
 								ms.initialCoords[axis] += amountPushed;
 
 								// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
@@ -3598,6 +3607,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 575: // Set communications parameters
 				{
 					const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
+					GCodeBuffer * const gbp = (chan == 0) ? UsbGCode() : (chan == 1) ? AuxGCode() : Aux2GCode();
 					bool seen = false;
 					if (gb.Seen('B'))
 					{
@@ -3609,17 +3619,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						const uint32_t val = gb.GetUIValue();
 						platform.SetCommsProperties(chan, val);
-						if (chan == 0)
+						if (gbp != nullptr)
 						{
-							UsbGCode()->SetCommsProperties(val);
-						}
+							gbp->SetCommsProperties(val);
 #if HAS_AUX_DEVICES
-						else if (chan < NumSerialChannels)
-						{
-							GCodeBuffer * gbp = (chan == 1) ? AuxGCode() : Aux2GCode();
-							if (gbp != nullptr)
+							if (chan != 0)
 							{
-								gbp->SetCommsProperties(val);
 								const bool rawMode = (val & 2u) != 0;
 								platform.SetAuxRaw(chan - 1, rawMode);
 								if (rawMode && !platform.IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
@@ -3627,8 +3632,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									gbp->LatestMachineState().compatibility = Compatibility::Marlin;
 								}
 							}
-						}
 #endif
+						}
 						seen = true;
 					}
 
@@ -3652,7 +3657,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						const uint32_t cp = platform.GetCommsProperties(chan);
-						reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
+						reply.printf("Channel %d: baud rate %" PRIu32 ", %s%s", chan, platform.GetBaudRate(chan),
+										(chan != 0 && platform.IsAuxRaw(chan - 1)) ? "raw mode, " : "",
+										(cp & 4) ? "requires CRC"
+											: (cp & 1) ? "requires checksum or CRC"
+												: "does not require checksum or CRC"
+									);
 						if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
 						{
 							reply.cat(", connected");
@@ -3892,14 +3902,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (changed || changedMode)
 					{
-						for (size_t i = 0; i < NumMovementSystems; ++i)
+						for (MovementState& ms : moveStates)
 						{
-							MovementState& ms = moveStates[i];
 							if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 							{
 								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, true, i);
+							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -3961,9 +3970,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// We changed something significant, so reset the positions and set all axes not homed
-						for (size_t i = 0; i < NumMovementSystems; ++i)
+						for (MovementState& ms : moveStates)
 						{
-							MovementState& ms = moveStates[i];
 							if (move.GetKinematics().GetKinematicsType() != oldK)
 							{
 								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, ms.coords);
@@ -3973,7 +3981,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, true, i);
+							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -4700,6 +4708,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			default:
+#if HAS_SBC_INTERFACE
+				// Send unknown non-binary codes to DSF so potential plugins can interpret them
+				if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary())
+				{
+					gb.SendToSbc();
+					return false;
+				}
+#endif
 				result = TryMacroFile(gb);
 				break;
 			}

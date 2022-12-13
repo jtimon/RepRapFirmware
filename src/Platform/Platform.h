@@ -28,7 +28,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <Fans/FansManager.h>
-#include <Heating/TemperatureError.h>
+#include <TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
 #include <Storage/FileStore.h>
@@ -341,7 +341,7 @@ public:
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
-	bool IsDeferredPowerDown() const noexcept { return deferredPowerDown; }
+	bool IsDeferredPowerDown() const noexcept { return powerDownWhenFansStop || delayedPowerDown; }
 	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
@@ -969,7 +969,9 @@ private:
 
 	// Power on/off
 	IoPort PsOnPort;
-	bool deferredPowerDown;
+	uint32_t whenToPowerDown;							// power down delay in milliseconds
+	bool powerDownWhenFansStop;							// true if power down scheduled when all thermostatic fans stop
+	bool delayedPowerDown;								// true if power down scheduled after the delay time
 
 	// Misc
 	static bool deliberateError;						// true if we deliberately caused an exception for testing purposes. Must be static in case of exception during startup.
