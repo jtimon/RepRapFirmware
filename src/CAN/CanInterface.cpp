@@ -183,13 +183,13 @@ constexpr auto RxBufferIndexResponse = CanDevice::RxBufferNumber::fifo1;
 constexpr uint32_t CanClockIntervalMillis = 200;
 
 // CanSender management task
-constexpr size_t CanSenderTaskStackWords = 400;
+constexpr size_t CanSenderTaskStackWords = 1000;
 static Task<CanSenderTaskStackWords> canSenderTask;
 
 constexpr size_t CanReceiverTaskStackWords = 1000;
 static Task<CanReceiverTaskStackWords> canReceiverTask;
 
-constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
+constexpr size_t CanClockTaskStackWords = 1000;			// used to be 300 but RD had a stack overflow
 static Task<CanSenderTaskStackWords> canClockTask;
 
 static CanMessageBuffer * volatile pendingMotionBuffers = nullptr;
@@ -276,7 +276,11 @@ static void InitReceiveFilters() noexcept
 // This is the function called by the transmit event handler when the message marker is nonzero
 void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 {
+#if STM32F4
+	if (marker == (currentTimeSyncMarker & 0x7f))
+#else
 	if (marker == currentTimeSyncMarker)
+#endif
 	{
 		timeSyncTxTimeStamp = timeStamp;
 		gotTimeSyncTxTimeStamp = true;
@@ -552,6 +556,11 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 	}
 }
 
+uint32_t sendDelta = 0;
+uint32_t peakTimeSyncTxDelay2 = 0;
+uint32_t minDelta = 0xffffffff;
+uint32_t maxDelta = 0;
+uint32_t tsRetry = 0;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 {
 	CanMessageBuffer buf(nullptr);
@@ -567,7 +576,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		currentTimeSyncMarker = ((currentTimeSyncMarker + 1) & 0x0F) | 0xA0;
 		buf.marker = currentTimeSyncMarker;
 		buf.reportInFifo = 1;
-
+uint32_t prevDelay = 0;
 		if (gotTimeSyncTxTimeStamp)
 		{
 # if SAME70
@@ -580,13 +589,22 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 			if (timeSyncTxDelay > peakTimeSyncTxDelay)
 			{
 				peakTimeSyncTxDelay = timeSyncTxDelay;
+				//debugPrintf("time %d peak sync %d end %d(%d) start %d(%d)\n", millis(), timeSyncTxDelay, timeSyncTxTimeStamp, timeSyncTxTimeStamp & 0xffff, lastTimeSyncTxPreparedStamp, lastTimeSyncTxPreparedStamp & 0xffff);
 			}
 
 			// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
-			if (timeSyncTxDelay < MaxTimeSyncDelay)
+			//if (timeSyncTxDelay < MaxTimeSyncDelay)
+			if (timeSyncTxDelay < 500U)
 			{
+			if (timeSyncTxDelay > peakTimeSyncTxDelay2)
+			{
+				peakTimeSyncTxDelay2 = timeSyncTxDelay;
+				//debugPrintf("time %d peak sync %d end %d(%d) start %d(%d)\n", millis(), timeSyncTxDelay, timeSyncTxTimeStamp, timeSyncTxTimeStamp & 0xffff, lastTimeSyncTxPreparedStamp, lastTimeSyncTxPreparedStamp & 0xffff);
+			}
 				msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
 			}
+			prevDelay = timeSyncTxDelay;
+			//debugPrintf("Prev delay %u ", timeSyncTxDelay);
 			gotTimeSyncTxTimeStamp = false;
 		}
 
@@ -603,18 +621,43 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		{
 			buf.dataLength = CanMessageTimeSync::SizeWithoutRealTime;		// send a short message to save CAN bandwidth
 		}
-
+		uint32_t delta;
+uint32_t msStart = millis();
+		uint32_t tsCheck;
 #if SAME70
 		lastTimeSent = StepTimer::GetTimerTicks();
 #else
 		{
-			AtomicCriticalSectionLocker lock;
-			lastTimeSent = StepTimer::GetTimerTicks();
+			//AtomicCriticalSectionLocker lock;
+			do {
+			uint32_t startTime = StepTimer::GetTimerTicks();
 			lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
+			lastTimeSent = StepTimer::GetTimerTicks();
+			tsCheck = CanInterface::GetTimeStampCounter();
+			delta = lastTimeSent - startTime;
+			if (delta > 50) tsRetry++;
+			} while (delta > 50);
 		}
 #endif
 		msg->timeSent = lastTimeSent;
 		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
+		uint32_t afterSend = CanInterface::GetTimeStampCounter();
+		uint32_t afterSend2 = StepTimer::GetTimerTicks();
+		uint32_t msEnd = millis();
+		uint32_t tsDelta = (afterSend - lastTimeSyncTxPreparedStamp) & 0xffff;
+		if (tsDelta > 10000 || ((tsCheck - lastTimeSyncTxPreparedStamp) & 0xffff) > 5000)
+		{
+			uint32_t ts3 = CanInterface::GetTimeStampCounter();
+			debugPrintf("Bad time stamp %u %u %u %u\n", lastTimeSyncTxPreparedStamp, tsCheck, afterSend, ts3);
+		}
+		if (tsDelta > sendDelta)
+		{
+			sendDelta = tsDelta;
+			debugPrintf("time %d send delta %d delta2 %d\n", millis(), sendDelta, afterSend2 - lastTimeSent);
+		}
+		if (delta > maxDelta) maxDelta = delta;
+		if (delta < minDelta) minDelta = delta;
+		//debugPrintf("prev %u ts delta %u min %u max %u send %u (%u %u)  %u ms %u\n", prevDelay, delta, minDelta, maxDelta, tsDelta, afterSend, lastTimeSyncTxPreparedStamp, afterSend2-lastTimeSent, msEnd - msStart);
 		++timeSyncMessagesSent;
 
 		UpdateLed(lastTimeSent);
@@ -1316,6 +1359,8 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 #include <HardwareTimer.h>
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
+	debugPrintf("ts delta min %u max %u send %u\n", minDelta, maxDelta, sendDelta);
+
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== CAN ===\n");
 	// If the user runs M122 after an emergency stop, can0dev will be null
@@ -1332,12 +1377,12 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 
 	p.MessageF(mtype,
 				"Longest wait %" PRIu32 "ms for reply type %u, peak Tx sync delay %" PRIu32
-				", free buffers %u (min %u)"
+				"(%" PRIu32 " %" PRIu32 "), free buffers %u (min %u)"
 	//debug
 				", ts %u/%u/%u"
 	//end debug
 				"\n",
-					longestWaitTime, longestWaitMessageType, peakTimeSyncTxDelay,
+					longestWaitTime, longestWaitMessageType, peakTimeSyncTxDelay, peakTimeSyncTxDelay2, tsRetry,
 					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers()
 	//debug
 					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
@@ -1366,6 +1411,11 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	longestWaitMessageType = 0;
 	peakTimeSyncTxDelay = 0;
 	timeSyncMessagesSent = goodTimeStamps = badTimeStamps = 0;
+	sendDelta = 0;
+	minDelta = 0xffffffff;
+	maxDelta = 0;
+	peakTimeSyncTxDelay2 = 0;
+	tsRetry = 0;
 }
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept
