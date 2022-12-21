@@ -105,7 +105,6 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::none },
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																		ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
-	{ "currentZHop",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryCurrentZHop(), 3),						ObjectModelEntryFlags::live },
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
@@ -182,7 +181,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	18 + SUPPORT_WORKPLACE_COORDINATES,
+	17 + SUPPORT_WORKPLACE_COORDINATES,
 	2,
 	5 + SUPPORT_LASER,
 	3,
@@ -568,7 +567,7 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], Movemen
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(msNumber).currentTool, doBedCompensation);
-	rings[msNumber].SetPositions(newPos);
+	SetRawPosition(newPos, msNumber);
 }
 
 // Convert distance to steps for a particular drive
