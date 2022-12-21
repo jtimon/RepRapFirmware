@@ -96,6 +96,8 @@ void HangprinterKinematics::Init() noexcept
 	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_AXES] = { 25, 25, 25, 25, 25, 25, 25, 25, 25};
 	ARRAY_INIT(anchors, DefaultAnchors);
 	numAnchors = DefaultNumAnchors;
+	anchorsSetup = LastTopRestDown;
+	maxPrintZ = DefaultAnchors[DefaultNumAnchors - 1][Z_AXIS] - DefaultAnchors[0][Z_AXIS]; // TODO Validate and use
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
 	ARRAY_INIT(spoolRadii, DefaultSpoolRadii);
@@ -360,7 +362,9 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 }
 
 // For each triangle side in a pyramid, check if the point is inside the pyramid. Plus check the base too.
-bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
+// The last axe must be the one on the top
+// TODO Validate this in HangprinterKinematics::Configure
+bool HangprinterKinematics::IsReachablePyramid(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
 
@@ -380,6 +384,23 @@ bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap ax
 	}
 
 	return reachable;
+}
+
+bool HangprinterKinematics::IsReachablePrism(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
+{
+	// TODO Implement. We will need some sort of max height parameter since it's not implicit here.
+	return true;
+}
+
+bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
+{
+	switch (anchorsSetup) {
+		case LastTopRestDown:
+		default:
+			return IsReachablePyramid(axesCoords, axes);
+		case AllTop:
+			return IsReachablePrism(axesCoords, axes);
+	}
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
