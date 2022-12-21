@@ -491,12 +491,12 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	return nullptr;
 }
 
-#if SUPPORT_ASYNC_MOVES
+# if SUPPORT_ASYNC_MOVES
 
 // Duplicate a file handle, with the duplicate having its own position in the file. Use only with files opened in read-only mode.
 FileStore *MassStorage::DuplicateOpenHandle(const FileStore *f) noexcept
 {
-	if (f == nullptr)
+	if (f == nullptr || !f->IsOpen())
 	{
 		return nullptr;
 	}
@@ -514,22 +514,22 @@ FileStore *MassStorage::DuplicateOpenHandle(const FileStore *f) noexcept
 	return nullptr;
 }
 
-#endif
+# endif
 
-// Close all files
+// Close all files. Called only from Platform::Exit.
 void MassStorage::CloseAllFiles() noexcept
 {
 	MutexLocker lock(fsMutex);
 	for (FileStore& f : files)
 	{
-		while (!f.IsFree())
+		while (!f.IsFree())			// a file may have a use count greater then one, so need to loop here
 		{
 			f.Close();
 		}
 	}
 }
 
-#endif
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
@@ -602,7 +602,7 @@ bool MassStorage::AnyFileOpen() noexcept
 	MutexLocker lock(fsMutex);
 	for (const FileStore & fil : files)
 	{
-		if (!fil.IsFree())
+		if (fil.IsOpen())
 		{
 			return true;
 		}
@@ -616,7 +616,7 @@ void MassStorage::InvalidateAllFiles() noexcept
 	MutexLocker lock(fsMutex);
 	for (FileStore& f : files)
 	{
-		while (!f.IsFree())
+		if (f.IsOpen())
 		{
 			f.Invalidate();
 		}

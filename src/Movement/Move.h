@@ -61,9 +61,9 @@ public:
 #if SUPPORT_ASYNC_MOVES
 	void GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
 			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
+#endif
 	void SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
-#endif
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	void GetLivePositions(int32_t pos[MaxAxesPlusExtruders], MovementSystemNumber msNumber) const noexcept;
@@ -339,13 +339,13 @@ inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumb
 	rings[msNumber].GetPartialMachinePosition(m, whichAxes);
 }
 
+#endif
+
 // Set the current position to be this without transforming them first
 inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
 {
 	rings[msNumber].SetPositions(positions);
 }
-
-#endif
 
 inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders], MovementSystemNumber msNumber) const noexcept
 {
@@ -360,7 +360,10 @@ inline void Move::AdjustMotorPositions(MovementSystemNumber msNumber, const floa
 
 inline void Move::ResetExtruderPositions() noexcept
 {
-	rings[0].ResetExtruderPositions();
+	for (DDARing& r : rings)
+	{
+		r.ResetExtruderPositions();
+	}
 }
 
 inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
