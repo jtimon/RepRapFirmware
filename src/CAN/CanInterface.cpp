@@ -561,6 +561,7 @@ uint32_t peakTimeSyncTxDelay2 = 0;
 uint32_t minDelta = 0xffffffff;
 uint32_t maxDelta = 0;
 uint32_t tsRetry = 0;
+uint32_t tsBad = 0;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 {
 	CanMessageBuffer buf(nullptr);
@@ -594,7 +595,7 @@ uint32_t prevDelay = 0;
 
 			// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
 			//if (timeSyncTxDelay < MaxTimeSyncDelay)
-			if (timeSyncTxDelay < 500U)
+			if (timeSyncTxDelay < 2000U)
 			{
 			if (timeSyncTxDelay > peakTimeSyncTxDelay2)
 			{
@@ -636,7 +637,15 @@ uint32_t msStart = millis();
 			tsCheck = CanInterface::GetTimeStampCounter();
 			delta = lastTimeSent - startTime;
 			if (delta > 50) tsRetry++;
-			} while (delta > 50);
+			if (delta > maxDelta) maxDelta = delta;
+			if (delta < minDelta) minDelta = delta;
+			if ((int16_t)(tsCheck - lastTimeSyncTxPreparedStamp) < 0)
+			{
+				uint32_t ts3 = CanInterface::GetTimeStampCounter();
+				debugPrintf("Bad time stamp %u %u %u\n", lastTimeSyncTxPreparedStamp, tsCheck, ts3);
+				tsBad++;
+			}
+			} while (delta > 50 || (int16_t)(tsCheck - lastTimeSyncTxPreparedStamp) < 0);
 		}
 #endif
 		msg->timeSent = lastTimeSent;
@@ -645,18 +654,11 @@ uint32_t msStart = millis();
 		uint32_t afterSend2 = StepTimer::GetTimerTicks();
 		uint32_t msEnd = millis();
 		uint32_t tsDelta = (afterSend - lastTimeSyncTxPreparedStamp) & 0xffff;
-		if (tsDelta > 10000 || ((tsCheck - lastTimeSyncTxPreparedStamp) & 0xffff) > 5000)
-		{
-			uint32_t ts3 = CanInterface::GetTimeStampCounter();
-			debugPrintf("Bad time stamp %u %u %u %u\n", lastTimeSyncTxPreparedStamp, tsCheck, afterSend, ts3);
-		}
 		if (tsDelta > sendDelta)
 		{
 			sendDelta = tsDelta;
-			debugPrintf("time %d send delta %d delta2 %d\n", millis(), sendDelta, afterSend2 - lastTimeSent);
+			//debugPrintf("time %d send delta %d delta2 %d\n", millis(), sendDelta, afterSend2 - lastTimeSent);
 		}
-		if (delta > maxDelta) maxDelta = delta;
-		if (delta < minDelta) minDelta = delta;
 		//debugPrintf("prev %u ts delta %u min %u max %u send %u (%u %u)  %u ms %u\n", prevDelay, delta, minDelta, maxDelta, tsDelta, afterSend, lastTimeSyncTxPreparedStamp, afterSend2-lastTimeSent, msEnd - msStart);
 		++timeSyncMessagesSent;
 
@@ -1382,7 +1384,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 				", ts %u/%u/%u"
 	//end debug
 				"\n",
-					longestWaitTime, longestWaitMessageType, peakTimeSyncTxDelay, peakTimeSyncTxDelay2, tsRetry,
+					longestWaitTime, longestWaitMessageType, peakTimeSyncTxDelay, tsBad, tsRetry,
 					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers()
 	//debug
 					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
@@ -1415,7 +1417,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	minDelta = 0xffffffff;
 	maxDelta = 0;
 	peakTimeSyncTxDelay2 = 0;
-	tsRetry = 0;
+	tsRetry = tsBad = 0;
 }
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept
