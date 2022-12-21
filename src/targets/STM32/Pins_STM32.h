@@ -13,8 +13,13 @@
 
 // Default board type
 #if STM32H7
-#define FIRMWARE_NAME "RepRapFirmware for STM32H7 based Boards"
-#define DEFAULT_BOARD_TYPE BoardType::Stm32H7
+# define FIRMWARE_NAME "RepRapFirmware for STM32H7 based Boards"
+# define DEFAULT_BOARD_TYPE BoardType::Stm32H7
+# define SUPPORT_CAN_EXPANSION	     1
+# define DUAL_CAN				     0
+# define SUPPORT_SPICAN              0
+# define FLASH_DATA_LENGTH (128*1024) //size of the Software Reset Data in Flash
+
 # if STM32H743xx
 #  define STM_ELECTRONICS_STRING "STM32H7"
 #  define STM_BOARD_STRING "STM32H7"
@@ -52,6 +57,11 @@
 #else
 # define FIRMWARE_NAME "RepRapFirmware for STM32F4 based Boards"
 # define DEFAULT_BOARD_TYPE BoardType::Stm32F4
+# define SUPPORT_CAN_EXPANSION	     1
+# define DUAL_CAN				     0
+# define SUPPORT_SPICAN              1
+# define FLASH_DATA_LENGTH (16*1024) //size of the Software Reset Data in Flash
+
 # define STM_ELECTRONICS_STRING "STM32F4"
 # define STM_BOARD_STRING "STM32F4"
 # define WIFI_IAP_FIRMWARE_FILE  "firmware-stm32f4-wifi.bin"
@@ -72,12 +82,6 @@
 
 // Firmware to be loaded onto the ESP board
 #define WIFI_FIRMWARE_FILE  "DuetWiFiServer.bin"
-
-#if STM32H7
-#define FLASH_DATA_LENGTH (128*1024) //size of the Software Reset Data in Flash
-#else
-#define FLASH_DATA_LENGTH (16*1024) //size of the Software Reset Data in Flash
-#endif
 
 
 #if defined(ESP8266WIFI)
@@ -112,19 +116,7 @@
 #define TRACK_OBJECT_NAMES		         1
 #define HAS_DEFAULT_PSON_PIN             0
 
-#if defined(LPC_NETWORKING)
-    //LPC Ethernet
-    #define HAS_RTOSPLUSTCP_NETWORKING   1
-    #define SUPPORT_12864_LCD            0
-    #define HAS_WIFI_NETWORKING          0
-    #define HAS_MASS_STORAGE             1
-    #define SUPPORT_TELNET               0
-    #define SUPPORT_ACCELEROMETERS       0
-
-    #define BOARD_NAME          "STM32F4 Ethernet"
-    #define BOARD_SHORT_NAME    "STMEth"
-
-#elif defined(ESP8266WIFI)
+#if defined(ESP8266WIFI)
     #define HAS_RTOSPLUSTCP_NETWORKING   0
     #define SUPPORT_12864_LCD            1
     #define HAS_WIFI_NETWORKING          1
@@ -133,8 +125,6 @@
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              1
     #define SUPPORT_FTP                  1
-    #define SUPPORT_CAN_EXPANSION	     1
-    #define DUAL_CAN				     0					// support the second CAN interface as simple CAN (not FD)
     #define BOARD_NAME                   WIFI_BOARD_NAME
     #define BOARD_SHORT_NAME             WIFI_BOARD_SHORT_NAME
     #define IAP_FIRMWARE_FILE            WIFI_IAP_FIRMWARE_FILE
@@ -154,16 +144,7 @@
     #define IAP_FIRMWARE_FILE            SBC_IAP_FIRMWARE_FILE
 
 #else
-    #define HAS_RTOSPLUSTCP_NETWORKING   0
-    #define SUPPORT_12864_LCD            1
-    #define HAS_WIFI_NETWORKING          0
-    #define HAS_MASS_STORAGE             1
-    #define SUPPORT_TELNET               0
-    #define SUPPORT_ACCELEROMETERS       0
-
-    #define BOARD_NAME          "STM32F4"
-    #define BOARD_SHORT_NAME    "STM32"
-
+    #error "Undfined build configuration"
 #endif
 
 
@@ -315,6 +296,11 @@ extern SSPChannel TempSensorSSPChannel;
     extern bool SbcLoadConfig;
 #endif
 
+#if SUPPORT_SPICAN
+    extern Pin CanCsPin;
+    extern SSPChannel CanSpiChannel;
+#endif
+
 // Power control
 extern Pin ATX_POWER_PIN;// Digital pin number that controls the ATX power on/off
 extern bool ATX_POWER_INVERTED;
@@ -346,8 +332,6 @@ extern Pin DiagPin;
 extern bool DiagOnPolarity;
 extern Pin ActLedPin;
 extern bool ActOnPolarity;
-
-extern bool ADCEnablePreFilter;
 
 constexpr size_t NumSPIPins = 3;
 extern Pin SPIPins[NumSPIDevices][NumSPIPins]; //GPIO pins for softwareSPI (used with SharedSPI)

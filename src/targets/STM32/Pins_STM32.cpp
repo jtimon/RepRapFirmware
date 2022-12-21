@@ -142,7 +142,10 @@ Pin SPIPins[NumSPIDevices][NumSPIPins];                 //GPIO pins for hardware
     bool SbcLoadConfig = false;
 #endif
 
-bool ADCEnablePreFilter = true;
+#if SUPPORT_SPICAN
+    Pin CanCsPin = NoPin;
+    SSPChannel CanSpiChannel;
+#endif
 
 #if SUPPORT_LED_STRIPS
 Pin NeopixelOutPin = NoPin;

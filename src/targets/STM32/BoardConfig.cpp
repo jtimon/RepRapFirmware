@@ -105,7 +105,6 @@ static const boardConfigEntry_t boardConfigs[]=
     {"lcd.spiChannel", &LcdSpiChannel, nullptr, cvUint8Type},
 #endif
     
-//    {"softwareSPI.pins", SPIPins[3], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI0.pins", SPIPins[0], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI1.pins", SPIPins[1], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
     {"SPI2.pins", SPIPins[2], &NumSPIPins, cvPinType}, //SCK, MISO, MOSI
@@ -144,8 +143,6 @@ static const boardConfigEntry_t boardConfigs[]=
     {"serial.aux2.rxTxPins", &Aux2SerialRxTxPins, &NumberSerialPins, cvPinType},
 #endif
     
-//    {"adc.prefilter.enable", &ADCEnablePreFilter, nullptr, cvBoolType},
-
 #if SUPPORT_LED_STRIPS
     {"led.neopixelPin", &NeopixelOutPin, nullptr, cvPinType},
 #endif
@@ -157,7 +154,10 @@ static const boardConfigEntry_t boardConfigs[]=
 #if SUPPORT_ACCELEROMETERS
     {"accelerometer.spiChannel", &AccelerometerSpiChannel, nullptr, cvUint8Type},
 #endif
-
+#if SUPPORT_SPICAN
+    {"can.spiChannel", &CanSpiChannel, nullptr, cvUint8Type},
+    {"can.csPin", &CanCsPin, nullptr, cvPinType},
+#endif
 };
 
 uint32_t crc32_for_byte(uint32_t r) 

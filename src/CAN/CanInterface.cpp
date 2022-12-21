@@ -49,7 +49,11 @@ constexpr uint32_t MaxUrgentSendWait = 20;									// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 2;									// milliseconds
 constexpr uint32_t MaxResponseSendWait = CanInterface::UsualSendTimeout;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = CanInterface::UsualSendTimeout;		// milliseconds
+#if SUPPORT_SPICAN
+constexpr uint16_t MaxTimeSyncDelay = 2000;									// the maximum normal delay before a CAN time sync message is sent
+#else
 constexpr uint16_t MaxTimeSyncDelay = 300;									// the maximum normal delay before a CAN time sync message is sent
+#endif
 
 #define USE_BIT_RATE_SWITCH		0
 #define USE_TX_FIFO				1
@@ -182,15 +186,27 @@ constexpr auto RxBufferIndexResponse = CanDevice::RxBufferNumber::fifo1;
 
 constexpr uint32_t CanClockIntervalMillis = 200;
 
+#if SUPPORT_SPICAN
 // CanSender management task
-constexpr size_t CanSenderTaskStackWords = 1000;
+constexpr size_t CanSenderTaskStackWords = 600;
 static Task<CanSenderTaskStackWords> canSenderTask;
 
-constexpr size_t CanReceiverTaskStackWords = 1000;
+constexpr size_t CanReceiverTaskStackWords = 600;
 static Task<CanReceiverTaskStackWords> canReceiverTask;
 
-constexpr size_t CanClockTaskStackWords = 1000;			// used to be 300 but RD had a stack overflow
+constexpr size_t CanClockTaskStackWords = 600;			// used to be 300 but RD had a stack overflow
 static Task<CanSenderTaskStackWords> canClockTask;
+#else
+// CanSender management task
+constexpr size_t CanSenderTaskStackWords = 400;
+static Task<CanSenderTaskStackWords> canSenderTask;
+
+constexpr size_t CanReceiverTaskStackWords = 400;
+static Task<CanReceiverTaskStackWords> canReceiverTask;
+
+constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
+static Task<CanSenderTaskStackWords> canClockTask;
+#endif
 
 static CanMessageBuffer * volatile pendingMotionBuffers = nullptr;
 static CanMessageBuffer * volatile lastMotionBuffer;			// only valid when pendingBuffers != nullptr
@@ -276,7 +292,7 @@ static void InitReceiveFilters() noexcept
 // This is the function called by the transmit event handler when the message marker is nonzero
 void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 {
-#if STM32F4
+#if SUPPORT_SPICAN
 	if (marker == (currentTimeSyncMarker & 0x7f))
 #else
 	if (marker == currentTimeSyncMarker)
@@ -319,6 +335,9 @@ void CanInterface::Init() noexcept
 	CanTiming timing;
 	timing.SetDefaults_1Mb();
 	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
+#if SUPPORT_SPICAN
+	if (can0dev == nullptr) return;
+#endif
 	InitReceiveFilters();
 	can0dev->Enable();
 
@@ -340,6 +359,9 @@ void CanInterface::Init() noexcept
 
 void CanInterface::Shutdown() noexcept
 {
+#if SUPPORT_SPICAN
+	if (can0dev == nullptr) return;
+#endif
 	canClockTask.TerminateAndUnlink();
 	canSenderTask.TerminateAndUnlink();
 	canReceiverTask.TerminateAndUnlink();
@@ -577,7 +599,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		currentTimeSyncMarker = ((currentTimeSyncMarker + 1) & 0x0F) | 0xA0;
 		buf.marker = currentTimeSyncMarker;
 		buf.reportInFifo = 1;
-uint32_t prevDelay = 0;
+		//uint32_t prevDelay = 0;
 		if (gotTimeSyncTxTimeStamp)
 		{
 # if SAME70
@@ -594,8 +616,7 @@ uint32_t prevDelay = 0;
 			}
 
 			// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
-			//if (timeSyncTxDelay < MaxTimeSyncDelay)
-			if (timeSyncTxDelay < 2000U)
+			if (timeSyncTxDelay < MaxTimeSyncDelay)
 			{
 			if (timeSyncTxDelay > peakTimeSyncTxDelay2)
 			{
@@ -604,7 +625,7 @@ uint32_t prevDelay = 0;
 			}
 				msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
 			}
-			prevDelay = timeSyncTxDelay;
+			//prevDelay = timeSyncTxDelay;
 			//debugPrintf("Prev delay %u ", timeSyncTxDelay);
 			gotTimeSyncTxTimeStamp = false;
 		}
@@ -623,29 +644,35 @@ uint32_t prevDelay = 0;
 			buf.dataLength = CanMessageTimeSync::SizeWithoutRealTime;		// send a short message to save CAN bandwidth
 		}
 		uint32_t delta;
-uint32_t msStart = millis();
+		uint32_t msStart = millis();
 		uint32_t tsCheck;
 #if SAME70
 		lastTimeSent = StepTimer::GetTimerTicks();
-#else
+#elif SUPPORT_SPICAN
 		{
 			//AtomicCriticalSectionLocker lock;
 			do {
-			uint32_t startTime = StepTimer::GetTimerTicks();
-			lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
-			lastTimeSent = StepTimer::GetTimerTicks();
-			tsCheck = CanInterface::GetTimeStampCounter();
-			delta = lastTimeSent - startTime;
-			if (delta > 50) tsRetry++;
-			if (delta > maxDelta) maxDelta = delta;
-			if (delta < minDelta) minDelta = delta;
-			if ((int16_t)(tsCheck - lastTimeSyncTxPreparedStamp) < 0)
-			{
-				uint32_t ts3 = CanInterface::GetTimeStampCounter();
-				debugPrintf("Bad time stamp %u %u %u\n", lastTimeSyncTxPreparedStamp, tsCheck, ts3);
-				tsBad++;
-			}
+				uint32_t startTime = StepTimer::GetTimerTicks();
+				lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
+				lastTimeSent = StepTimer::GetTimerTicks();
+				tsCheck = CanInterface::GetTimeStampCounter();
+				delta = lastTimeSent - startTime;
+				if (delta > 50) tsRetry++;
+				if (delta > maxDelta) maxDelta = delta;
+				if (delta < minDelta) minDelta = delta;
+				if ((int16_t)(tsCheck - lastTimeSyncTxPreparedStamp) < 0)
+				{
+					uint32_t ts3 = CanInterface::GetTimeStampCounter();
+					debugPrintf("Bad time stamp %u %u %u\n", lastTimeSyncTxPreparedStamp, tsCheck, ts3);
+					tsBad++;
+				}
 			} while (delta > 50 || (int16_t)(tsCheck - lastTimeSyncTxPreparedStamp) < 0);
+		}
+#else
+		{
+			AtomicCriticalSectionLocker lock;
+			lastTimeSent = StepTimer::GetTimerTicks();
+			lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
 		}
 #endif
 		msg->timeSent = lastTimeSent;
