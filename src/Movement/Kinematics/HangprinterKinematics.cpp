@@ -361,9 +361,12 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 	return dot0*dot1 > 0.0F;
 }
 
-// For each triangle side in a pyramid, check if the point is inside the pyramid. Plus check the base too.
-// The last axe must be the one on the top
-// TODO Validate this in HangprinterKinematics::Configure
+// This assumes all anchors in order forming a polygon in the same plane, except for the last one which is the top of the pyramid on a superior plane in Z
+// TODO Validate these requisites in HangprinterKinematics::Configure
+// prerequsites that the current hangprinter doesn't need:
+// 1) all the bottom anchors don't need to be on the same height in Z
+// 2) the bottom anchors don't need to be below the printing bed
+// 3) all the bottom anchors don't need to be in the same plane (in the canonical hangprinter, they always are by definition because 3 points define a plane)
 bool HangprinterKinematics::IsReachablePyramid(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
@@ -386,7 +389,29 @@ bool HangprinterKinematics::IsReachablePyramid(float axesCoords[MaxAxes], AxesBi
 	return reachable;
 }
 
-bool HangprinterKinematics::IsReachablePrism(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
+// Pyramid + prism
+// If the bottom anchors are bellow the printing bed, the printing volume is really a pyramid plus a prism, not just a prism
+bool HangprinterKinematics::IsReachablePyramidPrism(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
+{
+	bool reachable = IsReachablePyramid(axesCoords, axes);
+	// TODO Accept prism cases:
+	if (reachable)
+	{
+		reachable = IsReachableBellowPyramid(axesCoords, axes);
+	}
+	return reachable;
+}
+
+// TODO we need a configured height/plane for this
+bool HangprinterKinematics::IsReachableBellowPyramid(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
+{
+	return false;
+}
+
+// All anchors are on the same plane on top.
+// TODO: Do they really need to be on the same plane? No. But it may simplify things
+// The anchor plane doesn't have to be perpendicular to the initial printing plane (aka the printing bed)
+bool HangprinterKinematics::IsReachablePrismTopAnchors(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
 	// TODO Implement. We will need some sort of max height parameter since it's not implicit here.
 	return true;
