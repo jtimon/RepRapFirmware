@@ -408,6 +408,10 @@ bool HangprinterKinematics::IsReachableBellowPyramid(float axesCoords[MaxAxes], 
 	return false;
 }
 
+// bool AreBottomAnchorsBellowLast
+// for anchors a
+// if a.z < anchors[anchors.length-1]
+
 // All anchors are on the same plane on top.
 // TODO: Do they really need to be on the same plane? No. But it may simplify things
 // The anchor plane doesn't have to be perpendicular to the initial printing plane (aka the printing bed)
