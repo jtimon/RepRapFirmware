@@ -48,7 +48,7 @@ using LegacyAnalogIn::AdcBits;
 # include "STM32/BoardConfig.h"
 # include <sd_mmc.h>
 # include "ResetCause.h"
-# include "common/Fans/LedStripDriver.h"
+# include "Hardware/STM32/Fans/LedStripDriver.h"
 #else
 #if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>

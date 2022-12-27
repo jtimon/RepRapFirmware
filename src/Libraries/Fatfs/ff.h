@@ -19,7 +19,7 @@
 /----------------------------------------------------------------------------*/
 
 #if STM32
-#include "targets/common/FatFS/ff.h"
+#include "Hardware/STM32/Libraries/Fatfs/ff.h"
 #else
 
 #ifndef FF_DEFINED

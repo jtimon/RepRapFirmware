@@ -1,7 +1,6 @@
 #ifndef PINS_STM32_H__
 #define PINS_STM32_H__
 #include "Core.h"
-#include "Microstepping.h"
 #include "sd_mmc.h"
 //#include "RepRapFirmware.h"
 #include "NVMEmulation.h"
