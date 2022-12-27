@@ -17,18 +17,11 @@
 const size_t MaxNetworkInterfaces = 0;
 #elif defined(DUET3_MB6HC) && HAS_WIFI_NETWORKING
 const size_t MaxNetworkInterfaces = 2;
-#elif defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET_NG) || defined(DUET_M) || LPC17xx || STM32 || defined(PCCB) || defined(DUET3MINI)
+#elif defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET_NG) || defined(DUET_M) || STM32 || defined(PCCB) || defined(DUET3MINI)
 const size_t MaxNetworkInterfaces = 1;
 #else
 # error Wrong Network.h file included
 #endif
-
-#if LPC17xx
-// Only 2 http responders as we are tight on memory.
-const size_t NumHttpResponders = 2;		// the number of concurrent HTTP requests we can process
-const size_t NumFtpResponders = 0;		// the number of concurrent FTP sessions we support
-const size_t NumTelnetResponders = 0;	// the number of concurrent Telnet sessions we support
-#else
 
 # if SAME70
 const size_t NumHttpResponders = 6;		// the number of concurrent HTTP requests we can process
@@ -40,7 +33,6 @@ const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet session
 # endif // not SAME70
 
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
-#endif // not LPC17xx
 
 #define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET)
 

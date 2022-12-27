@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-// Ugly hack to make sure we use the LPC version
-#if LPC17xx || STM32
+// Ugly hack to make sure we use the STM32 version
+#if STM32
 #include "common/Movement/StepperDrivers/TMC22xx.h"
 #else
 // NB - must #include some file that includes Pins.h before including this one, so that SUPPORT_TMC22xx is defined
@@ -62,4 +62,4 @@ namespace SmartDrivers
 #endif
 
 #endif /* TMC22xx_H_ */
-#endif /* LPC17xx */
+#endif /* STM32 */

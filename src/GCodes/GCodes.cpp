@@ -110,14 +110,14 @@ GCodes::GCodes(Platform& p) noexcept :
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)] = nullptr;
 #endif // SUPPORT_HTTP || HAS_SBC_INTERFACE
-# if SUPPORT_TELNET || (HAS_SBC_INTERFACE && !LPC17xx)
+# if SUPPORT_TELNET || HAS_SBC_INTERFACE
 	telnetInput = new NetworkGCodeInput();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = nullptr;
 #endif // SUPPORT_TELNET || HAS_SBC_INTERFACE
 #if defined(SERIAL_MAIN_DEVICE)
-# if SAME5x || LPC17xx
+# if SAME5x
 	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 # else
@@ -211,8 +211,8 @@ void GCodes::Init() noexcept
 	LedStripDriver::Init();
 #endif
 
-#if HAS_AUX_DEVICES && !LPC17xx && !STM32
-	// FIXME why don't we have this?
+#if HAS_AUX_DEVICES && !STM32
+	// FIXME why don't we have this on STM32?
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
 }

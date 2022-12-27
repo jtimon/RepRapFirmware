@@ -26,8 +26,6 @@
 # elif defined(FMDC_V02) || defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
-# elif defined(__LPC17xx__)
-#  define PLATFORM LPC
 # elif defined(__STM32F4__) || defined(__STM32H7__)
 // We have a clash with STM32 if we use the normal method, so just define the filename!
 #  define P_INCLUDE_FILE "Pins_STM32.h"

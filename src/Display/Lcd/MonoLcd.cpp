@@ -12,7 +12,7 @@
 
 MonoLcd::MonoLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept
 	: Lcd(nr, nc, fnts, nFonts),
-#if LPC17xx || STM32
+#if STM32
  	device(SharedSpiDevice::GetSharedSpiDevice(LcdSpiChannel), LcdSpiClockFrequency, mode, NoPin, true)
 #else
  	device(SharedSpiDevice::GetMainSharedSpiDevice(), LcdSpiClockFrequency, mode, NoPin, true)
@@ -42,9 +42,6 @@ void MonoLcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uin
 	device.SetCsPin(csPin);
 	device.SetCsPolarity(csPolarity);		// normally active high chip select for ST7920, active low for ST7567
 	pinMode(csPin, (csPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
-#ifdef __LPC17xx__
-    device.sspChannel = LcdSpiChannel;
-#endif
 
 	startRow = numRows;
 	startCol = numCols;

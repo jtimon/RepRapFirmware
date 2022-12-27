@@ -17,13 +17,8 @@
 #include <atomic>
 
 #define CHECK_HANDLES	(1)							// set nonzero to check that handles are valid before dereferencing them
-#if LPC17xx
-constexpr size_t IndexBlockSlots = 49;				// number of 4-byte handles per index block, plus one for link to next index block
-constexpr size_t HeapBlockSize = 1024;				// the size of each heap block
-#else
 constexpr size_t IndexBlockSlots = 99;				// number of 4-byte handles per index block, plus one for link to next index block
 constexpr size_t HeapBlockSize = 2048;				// the size of each heap block
-#endif
 
 namespace Heap
 {

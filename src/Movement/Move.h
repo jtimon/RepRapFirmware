@@ -256,11 +256,7 @@ private:
 	// Move task stack size
 	// 250 is not enough when Move and DDA debug are enabled
 	// deckingman's system (MB6HC with CAN expansion) needs at least 365 in 3.3beta3
-#if LPC17xx
-	static constexpr unsigned int MoveTaskStackWords = 375;
-#else
 	static constexpr unsigned int MoveTaskStackWords = 450;
-#endif	
 	static TASKMEM Task<MoveTaskStackWords> moveTask;
 
 	DDARing rings[NumMovementSystems];

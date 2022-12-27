@@ -45,8 +45,6 @@ Licence: GPL
 
 #if defined(DUET_NG)
 # include "DueXn.h"
-#elif LPC17xx
-# include "MCP4461/MCP4461.h"
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -143,8 +141,6 @@ enum class BoardType : uint8_t
 	DuetM_10 = 1,
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
-#elif defined(__LPC17xx__)
-	Lpc = 1
 #elif defined (__STM32F4__)
 	Stm32F4 = 1
 #elif defined(__STM32H7__)
@@ -185,7 +181,7 @@ enum class DiagnosticTestType : unsigned int
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
 
-#if LPC17xx || STM32
+#if STM32
 	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
 #endif
 
@@ -835,10 +831,6 @@ private:
 
 #if HAS_STALL_DETECT
 	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
-#endif
-
-#if LPC17xx
-	MCP4461 mcp4451;// works for 5561 (only volatile setting commands)
 #endif
 
 	// Endstops

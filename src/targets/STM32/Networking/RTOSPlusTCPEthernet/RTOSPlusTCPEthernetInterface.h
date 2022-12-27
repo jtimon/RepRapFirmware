@@ -18,11 +18,7 @@ class TelnetResponder;
 class RTOSPlusTCPEthernetSocket;
 
 
-#if LPC17xx
-const size_t NumHttpSockets = 2;				// sockets 0-3 are for HTTP
-#else
 const size_t NumHttpSockets = 4;                // sockets 0-3 are for HTTP
-#endif
 const SocketNumber FtpSocketNumber = 4;
 const SocketNumber FtpDataSocketNumber = 5;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
 const SocketNumber TelnetSocketNumber = 6;

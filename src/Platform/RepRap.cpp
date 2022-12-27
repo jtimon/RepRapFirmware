@@ -534,8 +534,6 @@ void RepRap::Init() noexcept
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);								// set priority for watchdog interrupts
 	NVIC_ClearPendingIRQ(WDT_IRQn);
 	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
-#elif LPC17xx
-	WatchdogInit();															// set wdt to 1 second. reset the processor on a watchdog fault
 #elif STM32
 	NVIC_SetPriority(WWDG_IRQn, NvicPriorityWatchdog);								// set priority for watchdog interrupts
 	WatchdogInit();
@@ -647,8 +645,8 @@ void RepRap::Init() noexcept
 				platform->MessageF(UsbMessage, "Waiting for SBC connect\n");
 				start = millis();
 			}
-#if STM32 || LPC17xx
-			// At this point we may only have very limit hardware configuration loaded so avoid
+#if STM32
+			// At this point we may only have very limited hardware configuration loaded so avoid
 			// using the main Spin loop.
 			sbcInterface->Spin();
 			platform->FlushMessages();
@@ -885,15 +883,12 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype,
 		// Format string
 		"%s"											// firmware name
-#if LPC17xx || STM32
+#if STM32
 		" (%s)"											// lpcBoardName
 #endif
 		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
 #ifdef DUET_NG
 		"%s%s"											// optional DueX expansion board
-#endif
-#ifdef __LPC17xx__
-		" at %uMhz"										// clock speed
 #endif
 #if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		" (%s mode)"									// standalone, SBC or expansion mode
@@ -902,16 +897,13 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 		// Parameters to match format string
 		FIRMWARE_NAME,
-#if LPC17xx || STM32
+#if STM32
 		lpcBoardName,
 #endif
 		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
 #ifdef DUET_NG
 		, ((expansionName == nullptr) ? "" : " + ")
 		, ((expansionName == nullptr) ? "" : expansionName)
-#endif
-#ifdef __LPC17xx__
-		, (unsigned int)(SystemCoreClock/1000000)
 #endif
 #if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		,
@@ -2586,7 +2578,6 @@ void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexc
 
 #endif
 
-#if !LPC17xx
 void RepRap::PrepareToLoadIap() noexcept
 {
 #if SUPPORT_DIRECT_LCD
@@ -2744,7 +2735,6 @@ void RepRap::StartIap(const char *filename) noexcept
 	for (;;) { }							// to keep gcc happy
 }
 
-#endif
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
@@ -2763,9 +2753,6 @@ void RepRap::StartIap(const char *filename) noexcept
 	(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
 	(void)*(reinterpret_cast<const volatile char*>(0x20200000));
-#elif LPC17xx
-	// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
-	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
 #elif STM32
 	// FIXME need to test this probably not the correct address
 	(void)*(reinterpret_cast<const volatile char*>(0x00080000));

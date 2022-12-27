@@ -23,19 +23,11 @@ constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any othe
 
 constexpr uint16_t SbcProtocolVersion = 6;
 
-#if !LPC17xx
 constexpr size_t SbcTransferBufferSize = 8192;	// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
-#else
-constexpr size_t SbcTransferBufferSize = 3072;    // maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
-#endif
 
 static_assert(SbcTransferBufferSize % sizeof(uint32_t) == 0, "SbcTransferBufferSize must be a whole number of dwords");
 
-#if !LPC17xx
 constexpr size_t MaxCodeBufferSize = 256;			// maximum length of a G/M/T-code in binary encoding
-#else
-constexpr size_t MaxCodeBufferSize = 256;           // maximum length of a G/M/T-code in binary encoding
-#endif
 
 static_assert(MaxCodeBufferSize % sizeof(uint32_t) == 0, "MaxCodeBufferSize must be a whole number of dwords");
 
@@ -48,11 +40,7 @@ constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between d
 constexpr uint32_t SpiMaxTransferTime = 50;			// maximum allowed time for a single SPI transfer
 constexpr uint32_t SpiConnectionTimeout = 4000;		// maximum time to wait for the next transfer (in ms)
 
-#if !LPC17xx
 constexpr uint16_t SpiCodeBufferSize = 4096;		// number of bytes available for G-code caching
-#else
-constexpr uint16_t SpiCodeBufferSize = 2048;        // number of bytes available for G-code caching
-#endif
 
 // Shared structures
 enum class DataType : uint8_t
