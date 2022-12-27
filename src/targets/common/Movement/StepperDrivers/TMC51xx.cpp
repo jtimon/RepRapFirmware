@@ -259,6 +259,9 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 // Common data
 static size_t numTmc51xxDrivers = 0;
 
+static constexpr uint32_t MaxValidSgLoadRegister = 1023;
+static constexpr uint32_t InvalidSgLoadRegister = 1024;
+
 enum class DriversState : uint8_t
 {
 	shutDown = 0,
@@ -330,7 +333,7 @@ private:
 
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
+		minSgLoadRegister = InvalidSgLoadRegister;			// value InvalidSgLoadRegister indicates that it hasn't been read
 	}
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
@@ -843,7 +846,7 @@ void Tmc51xxDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 		return;
 	}
 	reply.catf(" 5160");
-	if (minSgLoadRegister <= 1023)
+	if (minSgLoadRegister <= MaxValidSgLoadRegister)
 	{
 		reply.catf(", SG min %u", (unsigned)minSgLoadRegister);
 	}

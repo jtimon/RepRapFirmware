@@ -115,6 +115,7 @@
 #define ALLOCATE_DEFAULT_PORTS           0
 #define TRACK_OBJECT_NAMES		         1
 #define HAS_DEFAULT_PSON_PIN             0
+#define SUPPORT_BME280                   1
 
 #if defined(ESP8266WIFI)
     #define HAS_RTOSPLUSTCP_NETWORKING   0

@@ -255,17 +255,16 @@ void MovementState::InitObjectCancellation() noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// When releasing axes we must also release the corresponding axis letters, because they serve as a cache
-void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
+// Release all owned axes and extruders
+void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
 {
-	axesAndExtrudersMoved.ClearBits(axesAndExtrudersOwned);
-	axesAndExtrudersOwned.Clear();
-	ownedAxisLetters.Clear();
+	ReleaseAxesAndExtruders(axesAndExtrudersOwned);
 }
 
 // Release some of the axes that we own. We must also clear the cache of owned axis letters.
 void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
+	SaveOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
 	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
 	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
@@ -274,8 +273,16 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 // Allocate additional axes
 AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
-	SaveOwnAxisCoordinates();										// we must do this before we allocate new axis to ourselves
-	const AxesBitmap unAvailable = axes & ~axesAndExtrudersOwned & axesAndExtrudersMoved;
+	// Sometimes we ask to allocate aces that we already own, e.g. when doing firmware retraction. Optimise this case.
+	const AxesBitmap axesNeeded = axes & ~axesAndExtrudersOwned;
+	if (axesNeeded.IsEmpty())
+	{
+		ownedAxisLetters |= axisLetters;
+		return axesNeeded;											// return empty bitmap
+	}
+
+	SaveOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
+	const AxesBitmap unAvailable = axesNeeded & axesAndExtrudersMoved;
 	if (unAvailable.IsEmpty())
 	{
 		axesAndExtrudersMoved |= axes;
@@ -292,9 +299,19 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
 
 	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
-	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	if (!memeqf(coords, lastKnownMachinePositions, totalAxes))
 	{
-		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+#if 0	//DEBUG
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			if (coords[i] != lastKnownMachinePositions[i])
+			{
+				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetMsNumber());
+			}
+		}
+#endif	//END DEBUGB
+		memcpyf(coords, lastKnownMachinePositions, totalAxes);
 		move.SetRawPosition(coords, msNumber);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}

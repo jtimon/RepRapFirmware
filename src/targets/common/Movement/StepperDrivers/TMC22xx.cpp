@@ -285,6 +285,9 @@ constexpr uint32_t DefaultPwmConfReg = 0xC10D0024;			// this is the reset defaul
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 
+static constexpr uint32_t MaxValidSgLoadRegister = 1023;
+static constexpr uint32_t InvalidSgLoadRegister = 1024;
+
 // Send/receive data and CRC stuff
 
 // Data format to write a driver register:
@@ -436,7 +439,7 @@ private:
 	bool IsTmc2209() const noexcept { return (readRegisters[ReadIoIn] & IOIN_VERSION_MASK) == (IOIN_VERSION_2209 << IOIN_VERSION_SHIFT); }
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
+		minSgLoadRegister = InvalidSgLoadRegister;		// value InvalidSgLoadRegister indicates that it hasn't been read
 	}
 #endif
 
@@ -1099,7 +1102,7 @@ void Tmc22xxDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 #if HAS_STALL_DETECT
 	if (IsTmc2209())
 	{
-		if (minSgLoadRegister <= 1023)
+		if (minSgLoadRegister <= MaxValidSgLoadRegister)
 		{
 			reply.catf(", SG min %u", minSgLoadRegister);
 		}
