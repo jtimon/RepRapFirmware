@@ -11,12 +11,12 @@ Summary:
 Description:
 	SPI Wrapper for MCP2517FD purposes.
  *******************************************************************************/
+#include "Platform/RepRap.h"
 #if SUPPORT_SPICAN
 // Include files
 #include "CanSpi.h"
 #include "CoreImp.h"
 #include "HardwareSPI.h"
-#include "Platform/RepRap.h"
 
 static HardwareSPI *spiDev;
 extern "C" bool DRV_SPI_Initialize()
