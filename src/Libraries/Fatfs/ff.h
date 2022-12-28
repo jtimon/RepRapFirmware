@@ -18,8 +18,8 @@
 /
 /----------------------------------------------------------------------------*/
 
-#if STM32 || LPC17xx
-#include "targets/common/FatFS/ff.h"
+#if STM32
+#include "Hardware/STM32/Libraries/Fatfs/ff.h"
 #else
 
 #ifndef FF_DEFINED

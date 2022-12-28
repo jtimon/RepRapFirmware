@@ -67,7 +67,7 @@ constexpr Pin APIN_ESP_SPI_MISO = EspMisoPin;
 constexpr Pin APIN_ESP_SPI_SCK = EspSclkPin;
 constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 
-#elif LPC17xx || STM32
+#elif STM32
 # if STM32H7
   static __nocache MessageBufferOut messageBufferOut;
   static __nocache MessageBufferIn messageBufferIn;
@@ -94,7 +94,7 @@ constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 # include "xdmac/xdmac.h"
 #endif
 
-#if !SAME5x && !LPC17xx && !STM32
+#if !SAME5x && !STM32
 # include "matrix/matrix.h"
 #endif
 
@@ -106,7 +106,7 @@ const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
 
-#if !LPC17xx && !STM32
+#if !STM32
 // Forward declarations of static functions
 #if SAME5x
 
@@ -229,7 +229,7 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength) noex
 }
 #endif
 
-#if LPC17xx || STM32
+#if STM32
 # include "WiFiInterface.hpp"
 #endif
 
@@ -1560,7 +1560,7 @@ void WiFiInterface::TerminateDataPort() noexcept
 	}
 }
 
-#if !LPC17xx && !STM32
+#if !STM32
 
 #if USE_PDC
 static Pdc *spi_pdc;
@@ -1895,7 +1895,7 @@ void WiFiInterface::SetupSpi() noexcept
 	NVIC_EnableIRQ(ESP_SPI_IRQn);
 }
 
-#endif //end ifndef LPC17xx
+#endif //end ifndef STM32
 
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
@@ -1960,7 +1960,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
 	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt
 	EnableSpi();
-#elif LPC17xx || STM32
+#elif STM32
     spi_slave_dma_setup(dataOutLength, dataInLength);
 #else
     // DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
@@ -2132,7 +2132,7 @@ void WiFiInterface::GetNewStatus() noexcept
 	}
 }
 
-#if !LPC17xx && !STM32
+#if !STM32
 
 # ifndef ESP_SPI_HANDLER
 #  error ESP_SPI_HANDLER not defined
@@ -2189,13 +2189,13 @@ void WiFiInterface::SpiInterrupt() noexcept
 	}
 }
 
-#endif //ifndef LPC17xx
+#endif //ifndef STM32
 
 // Start the ESP
 void WiFiInterface::StartWiFi() noexcept
 {
 #if !WIFI_USES_ESP32
-#if STM32 || LPC17xx
+#if STM32
 	pinMode(EspResetPin, INPUT_PULLUP);
 #else
 	digitalWrite(EspResetPin, true);
@@ -2204,7 +2204,7 @@ void WiFiInterface::StartWiFi() noexcept
 #endif
 
 	digitalWrite(EspEnablePin, true);
-#if LPC17xx || STM32
+#if STM32
     SERIAL_WIFI_DEVICE.Configure(WifiSerialRxTxPins[0], WifiSerialRxTxPins[1]);
 #else
 #if !SAME5x
@@ -2293,7 +2293,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	}
 	else
 	{
-#if LPC17xx || STM32
+#if STM32
         SERIAL_WIFI_DEVICE.Configure(WifiSerialRxTxPins[0], WifiSerialRxTxPins[1]);
 #elif !SAME5x
 		SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
@@ -2303,7 +2303,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 #if !WIFI_USES_ESP32
 	// Release the reset on the ESP8266
-#if STM32 || LPC17xx
+#if STM32
 	pinMode(EspResetPin, INPUT_PULLUP);
 #else
 	digitalWrite(EspResetPin, true);

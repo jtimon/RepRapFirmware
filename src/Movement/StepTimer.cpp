@@ -16,12 +16,7 @@
 # include <CAN/CanInterface.h>
 #endif
 
-#if LPC17xx
-#include "timer.h"
-# ifdef LPC_DEBUG
-int lateTimers = 0;
-# endif
-#elif STM32
+#if STM32
 #include <HardwareTimer.h>
 HardwareTimer STimer(STEP_TC);
 TIM_HandleTypeDef *STHandle;
@@ -93,21 +88,6 @@ void StepTimer::Init() noexcept
 	NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);			    // Set the priority for this IRQ
 	NVIC_ClearPendingIRQ(StepTcIRQn);
 	NVIC_EnableIRQ(StepTcIRQn);
-#elif LPC17xx
-	//LPC has 32bit timers with 32bit prescalers
-	//Start a free running Timer using Match Registers to generate interrupts
-
-	// Setup the Prescaler such that every TC increment is equal to 1/StepClockRate
-	// The Prescale counter is incremented every Timer PCLK. When the Prescale counter reaches the value in PR+1, TC is then incremented
-	// Timer PCLK defaults to SystemCoreClock/4 on boot.
-	// Using a StepClockRate of 1MHz gives PR values of exactly 29 and 24 for the 1769 and 1786 respectively
-	Chip_Clock_EnablePeriphClock(SYSCTL_CLOCK_TIMER0);              // Enable power and clocking
-	STEP_TC->MCR = 0;											    // Disable all MRx interrupts
-	STEP_TC->PR = (getPclk(PCLK_TIMER0) / StepClockRate) - 1;	    // Set the Prescaler
-	STEP_TC->TC = 0x00;  										    // Restart the Timer Count
-	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);			    // Set the priority for this IRQ
-	NVIC_EnableIRQ(STEP_TC_IRQN);
-	STEP_TC->TCR = (1 <<SBIT_CNTEN);							    // Start Timer
 #elif STM32
 	uint32_t preScale = STimer.getTimerClkFreq()/StepClockRate;
 	//debugPrintf("ST clock rate %d ST base freq %d setting presacle %d\n", StepClockRate, static_cast<int>(STimer.getTimerClkFreq()), static_cast<int>(preScale));
@@ -241,13 +221,6 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	while (StepTc->SYNCBUSY.reg & TC_SYNCBUSY_CC0) { }
 	StepTc->INTFLAG.reg = TC_INTFLAG_MC0;							// clear any existing compare match
 	StepTc->INTENSET.reg = TC_INTFLAG_MC0;
-#elif LPC17xx
-	STEP_TC->MR[0] = tim;											// set MR0 compare register
-	STEP_TC->MCR |= (1u<<SBIT_MR0I);									// enable interrupt on MR0 match
-# ifdef LPC_DEBUG
-	if ((int)(STEP_TC->MR[0] - GetTimerTicks()) <= 0)
-		lateTimers++;
-# endif
 #elif STM32
 	__HAL_TIM_SET_COMPARE(STHandle, TIM_CHANNEL_1, tim);
 	__HAL_TIM_ENABLE_IT(STHandle, TIM_IT_CC1);
@@ -264,8 +237,6 @@ void StepTimer::DisableTimerInterrupt() noexcept
 {
 #if SAME5x
 	StepTc->INTENCLR.reg = TC_INTFLAG_MC0;
-#elif LPC17xx
-	STEP_TC->MCR &= ~(1u<<SBIT_MR0I);								 // disable Int on MR1
 #elif STM32
 	__HAL_TIM_DISABLE_IT(STHandle, TIM_IT_CC1);
 #else
@@ -420,13 +391,6 @@ void STEP_TC_HANDLER() noexcept
 	if ((tcsr & TC_INTFLAG_MC0) != 0)								// the step interrupt uses MC0 compare
 	{
 		StepTc->INTENCLR.reg = TC_INTFLAG_MC0;						// disable the interrupt (no need to clear it, we do that before we re-enable it)
-#elif LPC17xx
-	uint32_t regval = STEP_TC->IR;
-	//find which Match Register triggered the interrupt
-	if (regval & (1u << SBIT_MRI0_IFM))								// Interrupt flag for match channel 1.
-	{
-		STEP_TC->IR |= (1u<<SBIT_MRI0_IFM);							// clear interrupt
-		STEP_TC->MCR  &= ~(1u<<SBIT_MR0I);							// Disable Int on MR0
 #elif STM32
 	__HAL_TIM_CLEAR_IT(STHandle, TIM_IT_CC1);
 	__HAL_TIM_DISABLE_IT(STHandle, TIM_IT_CC1);

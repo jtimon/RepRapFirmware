@@ -33,7 +33,7 @@
 # define USE_XDMAC			0		// use XDMA controller
 # define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
 constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
-#elif LPC17xx || STM32
+#elif STM32
 # define USE_DMAC           0
 # define USE_XDMAC          0
 uint32_t HeaderCRCErrors, DataCRCErrors;
@@ -78,7 +78,7 @@ extern void ESP_SPI_HANDLER() noexcept;
 
 static TaskHandle sbcTaskHandle = nullptr;
 
-#if !LPC17xx && !STM32
+#if !STM32
 
 #if USE_DMAC
 
@@ -397,9 +397,7 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 }
 
 #else
-#if LPC17xx
-# include "LPC/Sbc/DataTransfer.hpp"
-#elif STM32
+#if STM32
 # include "STM32/Sbc/DataTransfer.hpp"
 #endif
 #endif
@@ -454,7 +452,7 @@ void DataTransfer::Init() noexcept
 	}
 #endif
 
-#if LPC17xx || STM32
+#if STM32
     InitSpi();
 #elif SAME5x
 	// Initialize SPI
@@ -529,7 +527,7 @@ void DataTransfer::Diagnostics(MessageType mtype) noexcept
 	reprap.GetPlatform().MessageF(mtype, "Transfer state: %d, failed transfers: %u, checksum errors: %u\n", (int)state, failedTransfers, checksumErrors);
 	reprap.GetPlatform().MessageF(mtype, "RX/TX seq numbers: %d/%d\n", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
 	reprap.GetPlatform().MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
-#if LPC17xx || STM32
+#if STM32
 	reprap.GetPlatform().MessageF(mtype, "CRC errors header %u, data %u\n", (unsigned)HeaderCRCErrors, (unsigned)DataCRCErrors);
 #endif
 }
@@ -824,7 +822,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			const uint32_t checksum = CalcCRC32(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint32_t));
 			if (rxHeader.crcHeader != checksum)
 			{
-#if LPC17xx || STM32
+#if STM32
 				HeaderCRCErrors++;
 #endif
 				if (reprap.Debug(moduleSbcInterface))
@@ -900,7 +898,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			const uint32_t checksum = CalcCRC32(rxBuffer, rxHeader.dataLength);
 			if (rxHeader.crcData != checksum)
 			{
-#if LPC17xx || STM32
+#if STM32
 				DataCRCErrors++;
 #endif
 				if (reprap.Debug(moduleSbcInterface))
@@ -1762,55 +1760,4 @@ uint32_t DataTransfer::CalcCRC32(const char *buffer, size_t length) const noexce
 	return crc.Get();
 }
 
-
-#if LPC17xx
-
-// Additional methods to emulate the Duet3 IAP. This allows us to
-// use the standard firmware update routines from the DSF for updating
-// LPC firmware.
-bool DataTransfer::IapDataExchange(size_t len)
-{
-	uint32_t lastTransferTime = millis();
-	dataReceived = false;
-	setup_spi(rxBuffer, txBuffer, len);
-	while (!dataReceived && millis() - lastTransferTime < SpiTransferTimeout) {}
-	// end of data is indicated by a timeout.
-	//if (!dataReceived)
-		//debugPrintf("Timeout with length %d\n", (int)len);
-	return dataReceived;
-}
-
-void DataTransfer::EmulateIap()
-{
-	uint32_t offset = 0;
-	//debugPrintf("Emulate IAP\n");
-	transferReadyHigh = false;
-	digitalWrite(SbcTfrReadyPin, false);
-	// Setup default response to match IAP
-	for(int i = 0; i < 2048; i++)
-		txBuffer[i] = 0x1a;
-
-	delay(3000);
-	// Discard the firmware data transfer. This is terminated
-	// by a deliberate timeout on the exchange.
-	while(true)
-	{
-		if (!IapDataExchange(2048)) break;
-		offset += 2048;
-		//debugPrintf("Data packet offset %d\n", (int)offset);
-	}
-	// re-init the spi to clear errors after timeout
-	disable_spi();
-	InitSpi();
-	// read the CRC packet
-	if (!IapDataExchange(8))
-		debugPrintf("Unexpected timeout on CRC\n");
-	//debugPrintf("Got CRC len %d\n", *reinterpret_cast<int*>(rxBuffer));
-	// Send Ok response
-	*reinterpret_cast<char*>(txBuffer) = 0xC;
-	if (!IapDataExchange(1))
-		debugPrintf("Unexpected timeout on CRC Ack\n");
-	//debugPrintf("Iap complete\n");
-}
-#endif
 #endif

@@ -122,9 +122,7 @@ extern TIM_HandleTypeDef *STHandle;
 
 inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
-# if LPC17xx
-	return STEP_TC->TC;
-# elif STM32
+# if STM32
 	return __HAL_TIM_GET_COUNTER(STHandle);
 # else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
@@ -137,8 +135,6 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 {
 #if SAME5x
 	return (uint16_t)GetTimerTicks();
-#elif LPC17xx
-	return (uint16_t)STEP_TC->TC;
 #elif STM32
 	return (uint16_t)__HAL_TIM_GET_COUNTER(STHandle);
 	return 0;

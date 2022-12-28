@@ -155,17 +155,7 @@ void IoPort::Release() noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
-#if LPC17xx
-		// Release PWM/Servo from pin if needed
-		if (logicalPinModes[logicalPin] == OUTPUT_SERVO_HIGH || logicalPinModes[logicalPin] == OUTPUT_SERVO_LOW)
-		{
-			ReleaseServoPin(GetPinNoCheck());
-		}
-		if (logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
-		{
-			AnalogOut::ReleasePWMPin(GetPinNoCheck());
-		}
-#elif STM32
+#if STM32
 		if (logicalPinModes[logicalPin] == OUTPUT_PWM_HIGH || logicalPinModes[logicalPin] == OUTPUT_PWM_LOW)
 		{
 			AnalogOut::ReleasePWMPin(GetPinNoCheck());
@@ -312,19 +302,10 @@ bool IoPort::SetMode(PinAccess access) noexcept
 	case PinAccess::write1:
 		desiredMode = (totalInvert) ? OUTPUT_LOW : OUTPUT_HIGH;
 		break;
-#if LPC17xx
-	case PinAccess::pwm:
-		desiredMode = (totalInvert) ? OUTPUT_PWM_HIGH : OUTPUT_PWM_LOW;
-		break;
-	case PinAccess::servo:
-		desiredMode = (totalInvert) ? OUTPUT_SERVO_HIGH : OUTPUT_SERVO_LOW;
-		break;
-#else
 	case PinAccess::pwm:
 	case PinAccess::servo:
 		desiredMode = (totalInvert) ? OUTPUT_PWM_HIGH : OUTPUT_PWM_LOW;
 		break;
-#endif
 	case PinAccess::readAnalog:
 		desiredMode = AIN;
 		break;
@@ -358,22 +339,6 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		{
 			return false;
 		}
-#if LPC17xx
-		if (access == PinAccess::servo)
-		{
-			if (!IsServoCapable(GetPinNoCheck())) //check that we have slots free to provide Servo
-			{
-				return false;
-			}
-		}
-		else if (access == PinAccess::pwm)
-		{
-			if (!IsPwmCapable(GetPinNoCheck())) //Check if there is enough slots free for PWM
-			{
-				return false;
-			}
-		}
-#endif
 		IoPort::SetPinMode(GetPinNoCheck(), desiredMode);
 		logicalPinModes[logicalPin] = (int8_t)desiredMode;
 	}
@@ -435,7 +400,7 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 			str.cat('!');
 		}
 		const size_t insertPoint = str.strlen();
-#if LPC17xx || STM32
+#if STM32
 		const char *pn = GetPinNames(logicalPin);
 #else
 		const char *pn = PinTable[logicalPin].GetNames();

@@ -79,9 +79,7 @@
         mem->EnsureWritten();
 	}
 
-#if LPC17xx
-    LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#elif STM32
+#if STM32
 	// FIXME add any STM specific code here
 #elif !SAME5x
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
@@ -152,12 +150,7 @@ extern "C" [[noreturn]] __attribute__((externally_visible)) void wdtFaultDispatc
 }
 
 
-#if LPC17xx
-extern "C" void WDT_IRQHandler() noexcept __attribute__((naked));
-void WDT_IRQHandler() noexcept
-{
-	LPC_WWDT->MOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
-#elif STM32
+#if STM32
 extern "C" void WWDG_IRQHandler() noexcept __attribute__((naked));
 void WWDG_IRQHandler() noexcept
 {
@@ -260,27 +253,6 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 		" handler_asrt_address_const: .word assertCalledDispatcher  \n"
 	);
 }
-
-#if LPC17xx
-extern "C" [[noreturn]] void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
-{
-	SoftwareReset(SoftwareResetReason::outOfMemory, pulFaultStackAddress);
-}
-
-extern "C" [[noreturn]] void vApplicationMallocFailedHook() noexcept __attribute((naked));
-void vApplicationMallocFailedHook() noexcept
-{
-	 __asm volatile
-	(
-		" push {r0, r1, lr}											\n"        /* save parameters and call address */
-		" mov r0, sp												\n"
-		" ldr r2, handler_amf_address_const							\n"
-		" bx r2														\n"
-		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
-		" handler_amf_address_const: .word applicationMallocFailedCalledDispatcher  \n"
-	 );
-}
-#endif
 
 namespace std
 {

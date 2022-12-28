@@ -23,7 +23,7 @@
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Platform/TaskPriorities.h>
-#if LPC17xx || STM32
+#if STM32
 #include "BoardConfig.h"
 #endif
 
@@ -35,13 +35,7 @@ Mutex SbcInterface::gcodeReplyMutex;
 // The SBC task's stack size needs to be enough to support rr_model and expression evaluation
 // In RRF 3.3beta3, 744 is only just enough for simple expression evaluation in a release build when using globals
 // In 3.3beta3.1 we have saved ~151 bytes (37 words) of stack compared to 3.3beta3
-#if LPC17xx
-constexpr size_t SBCTaskStackWords = 820;
-#elif defined(DEBUG)
-constexpr size_t SBCTaskStackWords = 1200;			// debug builds use more stack
-#else
 constexpr size_t SBCTaskStackWords = 1000;			// increased from 820 so that we can evaluate "abs(move.calibration.initial.deviation - move.calibration.final.deviation) < 0.000"
-#endif
 
 constexpr uint32_t SbcYieldTimeout = 10;
 
@@ -993,7 +987,7 @@ void SbcInterface::ExchangeData() noexcept
 	{
 		const GCodeChannel channel(i);
 		GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-#if LPC17xx || STM32
+#if STM32
 		if (gb == nullptr)
 		{
 			debugPrintf("Unable to get requested channel buffer %d\n", i);
@@ -1110,29 +1104,17 @@ void SbcInterface::ExchangeData() noexcept
 
 [[noreturn]] void SbcInterface::ReceiveAndStartIap(const char *iapChunk, size_t length) noexcept
 {
-#if LPC17xx
-	// On the LPC we repurpose the IAP code to download the firmware update data.
-	// on the Duet this is a two stage process (IAP followed by firmware), but we
-	// do not need the IAP and can instead use the error checked IAP download for
-	// the firmware data.
-	BoardConfig::BeginFirmwareUpdate();
-#endif
 	char *iapWritePointer = reinterpret_cast<char *>(IAP_IMAGE_START);
 	for(;;)
 	{
 		// Write the next IAP chunk
 		if (iapChunk != nullptr)
 		{
-#if LPC17xx
-			BoardConfig::WriteFirmwareData(iapChunk, length);
-			iapWritePointer += length;
-#else
 			uint32_t *dst = reinterpret_cast<uint32_t *>(iapWritePointer);
 			const uint32_t *src = reinterpret_cast<const uint32_t *>(iapChunk);
 			memcpyu32(dst, src, length / sizeof(uint32_t));
 			iapWritePointer += length;
 			iapChunk = nullptr;
-#endif
 		}
 
 		// Get the next IAP chunk
@@ -1172,12 +1154,7 @@ void SbcInterface::ExchangeData() noexcept
 				break;
 			}
 			case SbcRequest::StartIap:	// Start the IAP binary
-#if LPC17xx
-				transfer.EmulateIap();
-				BoardConfig::EndFirmwareUpdate(); // This reboots the board.
-#else
 				reprap.StartIap(nullptr);
-#endif
 				break;
 			default:						// Other packet types are not supported while IAP is being written
 				// do nothing

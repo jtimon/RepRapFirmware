@@ -51,13 +51,6 @@ bool SoftwareResetData::IsVacant() const noexcept
 	return true;
 }
 
-#if LPC17xx
-    extern "C"
-    {
-        volatile StackType_t *CheckSPCurrentTaskStack(const uint32_t *stackPointer); //defined in freertos_tasks_c_additions.h
-    }
-#endif
-
 void SoftwareResetData::Clear() noexcept
 {
 	memset(this, 0xFF, sizeof(*this));
@@ -102,29 +95,10 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 		stackOffset = ((const char*)stk - stackLimit) >> 2;
 		stackMarkerValid = stackLimit[0] == 0xA5 && stackLimit[3] == 0xA5;
 		spare = 0;
-#if LPC17xx
-	    //Find the highest address of the stack currently in use.
-    	volatile uint32_t *stackEnd = &_estack; //default to the exception stack
-    	if(currentTask != nullptr)
-    	{
-        	//Each task has its own stack which is currently statically assigned somewhere in RAM or AHB RAM
-        	//If the stack pointer is in the address range of the current task stack, stop at the high address of the task stack
-        	volatile uint32_t* taskStackHighAddress = CheckSPCurrentTaskStack(stk); //returns null if sp is not within the current task stack space
-        	if(taskStackHighAddress != nullptr)
-        	{
-            	stackEnd = taskStackHighAddress;
-        	}
-    	}
-		for (uint32_t& stval : stack)
-		{
-			stval = (stk < stackEnd) ? *stk++ : 0xFFFFFFFF;
-		}
-#else
 		for (uint32_t& stval : stack)
 		{
 			stval = (stk < &_estack) ? *stk++ : 0xFFFFFFFF;
 		}
-#endif
 	}
 }
 

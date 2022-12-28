@@ -537,8 +537,6 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 #if SAME70 || SAME5x || STM32H7 || STM32F4
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
-#elif LPC17xx
-constexpr uint32_t StepClockRate = 1000000;									// 1MHz
 #else
 constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
@@ -658,20 +656,7 @@ const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers 
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
-# if LPC17xx
-const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
-const NvicPriority NvicPriorityDriversSerialTMC = 1;// LPC uses a software UART, make this a very high priority
-const NvicPriority NvicPriorityTimerPWM = 2;		// Run PWM timing as high as we can to avoid jitter
-const NvicPriority NvicPriorityAuxUart = 3;			// UART is next we have a 16 byte FIFO so less critical than the Duet
-const NvicPriority NvicPriorityADC = 4;
-const NvicPriority NvicPriorityTimerServo = 5;
-// decide what priority to run DMA operations at
-#  if TMC_SOFT_UART
-    const NvicPriority NvicPriorityDMA = NvicPriorityDriversSerialTMC;
-#  else
-    const NvicPriority NvicPriorityDMA = NvicPriorityADC;
-#  endif
-#elif STM32
+#if STM32
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 const NvicPriority NvicPriorityTimerPWM = 1;		// Run PWM timing as high as we can to avoid jitter
 const NvicPriority NvicPriorityDriversSerialTMC = 5;// STM uses a software UART, make this a very high priority

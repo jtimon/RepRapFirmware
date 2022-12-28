@@ -7,7 +7,7 @@
 
 #include "LedStripDriver.h"
 
-#if SUPPORT_LED_STRIPS && !LPC17xx && !STM32
+#if SUPPORT_LED_STRIPS && !STM32
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>

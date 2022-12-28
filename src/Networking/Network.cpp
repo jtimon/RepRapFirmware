@@ -49,13 +49,7 @@
 # include "MulticastDiscovery/MulticastResponder.h"
 #endif
 
-#if LPC17xx
-constexpr size_t NetworkStackWords = 575;
-#elif defined(DEBUG)
-constexpr size_t NetworkStackWords = 1000;				// needs to be enough to support rr_model
-#else
 constexpr size_t NetworkStackWords = 600;				// needs to be enough to support rr_model
-#endif
 
 static TASKMEM Task<NetworkStackWords> networkTask;
 
@@ -94,7 +88,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 	interfaces[0] = new WiFiInterface(p);
 # elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
-# elif LPC17xx || STM32
+# elif STM32
 #  if HAS_WIFI_NETWORKING
 	interfaces[0] = new WiFiInterface(p);
 #  else

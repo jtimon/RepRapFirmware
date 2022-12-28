@@ -5,8 +5,8 @@
  *      Author: David
  */
 #include "TMC22xx.h"
-// On the LPC17xx platform we have a replacement for this
-#if !LPC17xx && !STM32
+// On the STM32 platform we have a replacement for this
+#if !STM32
 
 #if SUPPORT_TMC22xx
 

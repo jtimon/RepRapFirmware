@@ -17,16 +17,6 @@
 const size_t NumFileWriteBuffers = 2;					// Number of write buffers
 const size_t FileWriteBufLen = 8192;					// Size of each write buffer
 constexpr size_t SbcFileWriteBufLen = 4192;				// Available size of each write buffer in SBC mode
-#elif LPC17xx
-# if HAS_WIFI_NETWORKING
-const size_t NumFileWriteBuffers = 1;
-const size_t FileWriteBufLen = 2*1024;
-constexpr size_t SbcFileWriteBufLen = 768;
-# else
-constexpr size_t NumFileWriteBuffers = 1;
-constexpr size_t FileWriteBufLen = 512;
-constexpr size_t SbcFileWriteBufLen = 468;
-# endif
 #else
 constexpr size_t NumFileWriteBuffers = 1;
 constexpr size_t FileWriteBufLen = 4096;

@@ -40,9 +40,6 @@
 #include <errno.h>
 #endif
 #include <malloc.h>
-#if LPC17xx
-#include <FreeRTOS.h>
-#endif
 #if 1	// DC
 # define DEFINE_MALLOC
 # define DEFINE_FREE
@@ -229,12 +226,6 @@ static inline chunk * get_chunk_from_ptr(void * ptr)
     return c;
 }
 
-#if LPC17xx
-void * nano_malloc(RARG malloc_size_t s)
-{
-    return pvPortMalloc(s);
-}
-#else
 
 #ifdef DEFINE_MALLOC
 /* List list header of free blocks */
@@ -381,14 +372,7 @@ void * nano_malloc(RARG malloc_size_t s)
     return align_ptr;
 }
 #endif /* DEFINE_MALLOC */
-#endif
 
-#if LPC17xx
-void nano_free (RARG void * free_p)
-{
-    vPortFree(free_p);
-}
-#else
 #ifdef DEFINE_FREE
 #define MALLOC_CHECK_DOUBLE_FREE
 
@@ -494,7 +478,6 @@ void nano_free (RARG void * free_p)
     MALLOC_UNLOCK;
 }
 #endif /* DEFINE_FREE */
-#endif
 
 #ifdef DEFINE_CFREE
 void nano_cfree(RARG void * ptr)

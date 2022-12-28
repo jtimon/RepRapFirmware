@@ -89,9 +89,6 @@ public:
 	bool WriteSeekFile(FileHandle handle, FilePosition offset) noexcept;
 	bool WriteTruncateFile(FileHandle handle) noexcept;
 	bool WriteCloseFile(FileHandle handle) noexcept;
-#if LPC17xx || STM32
-	void EmulateIap();
-#endif
 
 private:
 	enum class InternalTransferState
@@ -156,10 +153,6 @@ private:
 	template<typename T> T *WriteDataHeader() noexcept;
 
 	size_t AddPadding(size_t length) const noexcept;
-
-#if LPC17xx || STM32
-	bool IapDataExchange(size_t len);
-#endif
 };
 
 inline bool DataTransfer::IsConnectionReset() const noexcept

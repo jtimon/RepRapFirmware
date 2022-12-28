@@ -4,9 +4,9 @@
  *  Created on: 26 Aug 2018
  *      Author: David
  */
-// Ugly hack to make sure we use the LPC version
-#if LPC17xx || STM32
-#include "common/Movement/StepperDrivers/TMC51xx.h"
+// Ugly hack to make sure we use the STM32 version
+#if STM32
+#include "Hardware/STM32/Movement/StepperDrivers/TMC51xx.h"
 #else
 #ifndef SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
 #define SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_
