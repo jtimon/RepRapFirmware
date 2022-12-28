@@ -3070,15 +3070,9 @@ void RepRap::PrepareToLoadIap() noexcept
 
 #if 0	// this code doesn't work, it causes a watchdog reset
 	// Debug
-<<<<<<< HEAD
-	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 30 * 1024);
-	delay(2000);
-	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (30 * 1024)); ++p)
-=======
 	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 20 * 1024);
 	delay(2000);
 	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (20 * 1024)); ++p)
->>>>>>> upstream/3.4-dev
 	{
 		if (*p != 0x7E)
 		{

@@ -1,3 +1,7 @@
+Version 3.4.5_101
+=================
+* Duet3d V3.4.5
+
 Version 3.4.4_104
 =================
 * Add pins for FLY_E3_V2
