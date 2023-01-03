@@ -70,4 +70,15 @@ bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_
 	}
 }
 
+bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len, Pin csPin) const noexcept
+{
+	if (hardware != nullptr)
+		return hardware->transceivePacket(tx_data, rx_data, len, csPin) == SPI_OK;
+	else
+	{
+		debugPrintf("Warning: Attempt to use an undefined shared SPI device\n");
+		return false;
+	}
+}
+
 // End

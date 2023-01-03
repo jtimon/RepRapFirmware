@@ -43,6 +43,9 @@ public:
 	// Either way, caller must already have asserted CS for the selected SPI slave.
 	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept;
 
+#if STM32
+	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len, Pin csPin) const noexcept;
+#endif
 #if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
 	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept;
 
