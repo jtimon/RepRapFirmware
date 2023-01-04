@@ -6,6 +6,7 @@ Version 3.5beta1_102
 Version 3.4.5_101
 =================
 * Duet3d V3.4.5
+* Added new SKR pro signature
 
 Version 3.4.4_104
 =================
