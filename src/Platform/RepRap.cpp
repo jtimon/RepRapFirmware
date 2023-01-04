@@ -1011,7 +1011,7 @@ void RepRap::EmergencyStop() noexcept
 # if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
-		CanInterface::Shutdown();
+		// We can't shut down CAN here because this gets called by the CAN Receive task
 	}
 	else
 # endif
@@ -1142,11 +1142,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	// Machine coordinates
 	const MovementState& ms = gCodes->GetPrimaryMovementState();				// we only report the primary in this response
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return move->LiveCoordinate(axis, ms.currentTool); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
 
 	// Actual extruder positions since power up, last G92 or last M23
 	response->cat(',');
-	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), ms.currentTool); }, 1);
+	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return ms.LiveCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
 
 	// Current speeds
 	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
@@ -1750,11 +1750,12 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 	// User coordinates
 	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
-	AppendFloatArray(response, "pos", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(gCodes->GetPrimaryMovementState(), axis); }, 3);
+	const MovementState& ms = gCodes->GetPrimaryMovementState();
+	AppendFloatArray(response, "pos", numVisibleAxes, [this, &ms](size_t axis) noexcept { return gCodes->GetUserCoordinate(ms, axis); }, 3);
 
 	// Machine coordinates
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this](size_t axis) noexcept { return move->LiveCoordinate(axis, gCodes->GetPrimaryMovementState().currentTool); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
 
 	// Send the speed and extruder override factors
 	response->catf(",\"sfactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));
