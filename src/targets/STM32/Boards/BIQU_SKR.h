@@ -266,7 +266,7 @@ constexpr PinEntry PinTable_BIQU_SKR_PRO_v1_1[] =
 };
 
 constexpr BoardDefaults biquskr_pro_1_1_Defaults = {
-    {0x768a39d6, 0x50da391},                    // Signatures
+    {0x768a39d6, 0x50da391, 0xa79a1917},        // Signatures
     SD_SPI1_A,                                  // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PB_5},                     //SPI0
