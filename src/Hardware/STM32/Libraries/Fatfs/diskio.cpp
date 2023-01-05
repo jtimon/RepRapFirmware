@@ -9,7 +9,7 @@
 
 
 
-
+#include "ff.h"
 #include "diskio.h"
 #include <stdio.h>
 #include <string.h>
@@ -51,26 +51,26 @@ float DiskioGetAndClearLongestWriteTime() noexcept
 
 
 /* drv - Physical drive nmuber (0..) */
-DSTATUS disk_initialize (BYTE drv) noexcept
+DSTATUS disk_initialize (BYTE pdrv) noexcept
 {
-	return (DSTATUS)_ffs[drv]->disk_initialize();
+	return (DSTATUS)_ffs[pdrv]->disk_initialize();
 }
 
 /* drv - Physical drive nmuber (0..) */
-DSTATUS disk_status (BYTE drv) noexcept
+DSTATUS disk_status (BYTE pdrv) noexcept
 {
-	return (DSTATUS)_ffs[drv]->disk_status();
+	return (DSTATUS)_ffs[pdrv]->disk_status();
 }
 
 /* drv - Physical drive nmuber (0..) */
 /* buff - Data buffer to store read data */
 /* sector - Sector address (LBA) */
 /* count - Number of sectors to read (1..255) */
-DRESULT disk_read (BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
+DRESULT disk_read (BYTE pdrv, BYTE* buff, LBA_t sector, UINT count) noexcept
 {
     if (reprap.Debug(moduleStorage))
     {
-        debugPrintf("Read %u %u %lu\n", drv, count, sector);
+        debugPrintf("Read %u %u %lu\n", pdrv, count, sector);
     }
     
     unsigned int retryNumber = 0;
@@ -78,7 +78,7 @@ DRESULT disk_read (BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
     for(;;)
     {
         uint32_t time = StepTimer::GetTimerTicks();
-        DRESULT res = _ffs[drv]->disk_read(buff, sector, count);
+        DRESULT res = _ffs[pdrv]->disk_read(buff, sector, count);
 		time = StepTimer::GetTimerTicks() - time;
 		if (time > longestReadTime)
 		{
@@ -90,7 +90,7 @@ DRESULT disk_read (BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
         if (retryNumber == MaxSdCardTries)
         {
             delay(retryDelay);
-            _ffs[drv]->disk_initialize();
+            _ffs[pdrv]->disk_initialize();
         }           
         if (retryNumber > MaxSdCardTries)
         {
@@ -116,11 +116,11 @@ DRESULT disk_read (BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 /* sector - Sector address (LBA) */
 /* count - Number of sectors to write (1..255) */
 
-DRESULT disk_write (BYTE drv, const BYTE *buff, DWORD sector, BYTE count) noexcept
+DRESULT disk_write (BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count) noexcept
 {
     if (reprap.Debug(moduleStorage))
     {
-        debugPrintf("Write %u %u %lu\n", drv, count, sector);
+        debugPrintf("Write %u %u %lu\n", pdrv, count, sector);
     }
     
     /* Write the data */
@@ -129,7 +129,7 @@ DRESULT disk_write (BYTE drv, const BYTE *buff, DWORD sector, BYTE count) noexce
     for(;;)
     {
         uint32_t time = StepTimer::GetTimerTicks();
-        DRESULT res = _ffs[drv]->disk_write(buff, sector, count);
+        DRESULT res = _ffs[pdrv]->disk_write(buff, sector, count);
 		time = StepTimer::GetTimerTicks() - time;
         if (time > longestWriteTime)
 		{
@@ -140,7 +140,7 @@ DRESULT disk_write (BYTE drv, const BYTE *buff, DWORD sector, BYTE count) noexce
         if (retryNumber == MaxSdCardTries)
         {
             delay(retryDelay);
-            _ffs[drv]->disk_initialize();
+            _ffs[pdrv]->disk_initialize();
         }           
         if (retryNumber > MaxSdCardTries)
         {
@@ -164,10 +164,10 @@ DRESULT disk_write (BYTE drv, const BYTE *buff, DWORD sector, BYTE count) noexce
 /* ctrl - Control code */
 /* buff - Buffer to send/receive control data */
 
-DRESULT disk_ioctl (BYTE drv, BYTE ctrl, void *buff) noexcept
+DRESULT disk_ioctl (BYTE pdrv, BYTE ctrl, void *buff) noexcept
 {
     //MutexLocker lock(Tasks::GetSpiMutex());
-    return _ffs[drv]->disk_ioctl(ctrl, buff);
+    return _ffs[pdrv]->disk_ioctl(ctrl, buff);
 }
 
 

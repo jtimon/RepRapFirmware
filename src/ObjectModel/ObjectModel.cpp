@@ -1245,18 +1245,23 @@ decrease(strlen(idString))	// recursion variant
 					ReadLocker lock(entry->lockPointer);
 					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
 				}
-				return val;
+
+				// Else we want the entire array. The caller may need the previous array index in order to iterate its elements, so store this in the upper 16 bits of 'param'.
+				ExpressionValue rslt = val;
+				rslt.param |= (uint32_t)context.GetLastIndex() << 8;
+				return rslt;
 			}
 			if (*idString != '^')
 			{
 				throw context.ConstructParseException("missing array index");
 			}
 
-			context.AddIndex();
 			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 			ReadLocker lock(entry->lockPointer);
+			const size_t numElements = entry->GetNumElements(this, context);			// must get this before we call context.AddIndex because it may depend on indices
+			context.AddIndex();
 
-			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= entry->GetNumElements(this, context))
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= numElements)
 			{
 				if (context.WantExists())
 				{
