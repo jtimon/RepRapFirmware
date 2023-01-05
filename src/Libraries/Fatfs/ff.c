@@ -619,6 +619,12 @@ static const BYTE DbcTbl[] = MKCVTBL(TBL_DC, FF_CODE_PAGE);
 # if SAME70
 extern uint8_t _nocache_ram_start;
 extern uint8_t _nocache_ram_end;
+#elif STM32H7
+extern uint8_t _nocache2_ram_start;
+extern uint8_t _nocache2_ram_end;
+#elif STM32F4
+extern uint8_t _sccmram;
+extern uint8_t _ccmramend;
 # endif
 
 //extern int debugPrintf(const char *, ...);
@@ -631,6 +637,19 @@ static _Bool isAligned(const BYTE *p)
 	{
 		return false;
 	}
+# elif STM32H7
+	// On the STM32H7 all transfers must be within non-cached AXA memory. We assume the whole buffer either is or isn't.
+	if (p < &_nocache2_ram_start || p >= &_nocache2_ram_end)
+	{
+		return false;
+	}
+# elif STM32F4
+	// On the STM32F4 we can not transfer data from CCMRAM.
+	if (p >= &_sccmram && p <= &_ccmramend)
+	{
+		return false;
+	}
+
 # endif
 
 # if FF_DISKIO_ALIGN <= 1

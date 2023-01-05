@@ -18,10 +18,6 @@
 /
 /----------------------------------------------------------------------------*/
 
-#if STM32
-#include "Hardware/STM32/Libraries/Fatfs/ff.h"
-#else
-
 #ifndef FF_DEFINED
 #define FF_DEFINED	80286	/* Revision ID */
 
@@ -174,7 +170,7 @@ typedef struct {
 	LBA_t	bitbase;		/* Allocation bitmap base sector */
 #endif
 	LBA_t	winsect;		/* Current sector appearing in the win[] */
-#if SAME70
+#if SAME70 || STM32H7
 	BYTE	*win;			// pointer to the sector buffer, which is in non-cached memory
 #else
 	BYTE	win[FF_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
@@ -446,4 +442,3 @@ void ff_mutex_give (int vol) noexcept;		/* Unlock sync object */
 #endif
 
 #endif /* FF_DEFINED */
-#endif

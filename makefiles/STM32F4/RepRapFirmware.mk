@@ -39,11 +39,17 @@ else ifeq ($(TMC51XX), true)
 	RRF_OBJ_SRC_CXX += $(RRF_SRC_BASE)/Movement/StepperDrivers/DriverMode.cpp
 endif
 
+# use Duet versions of FatFs files
+RRF_OBJ_SRC_C += $(RRF_SRC_BASE)/Libraries/Fatfs/ff.c
+RRF_OBJ_SRC_C += $(RRF_SRC_BASE)/Libraries/Fatfs/ffunicode.c
+
 RRF_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(RRF_OBJ_SRC_C)) $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(RRF_OBJ_SRC_CXX))
 
 
 RRF_INCLUDES = $(addprefix -I, $(RRF_SRC))
 RRF_INCLUDES += -I$(RRF_SRC_BASE)/Libraries/
+
+RRF_INCLUDES += -I$(RRF_SRC_BASE)/Libraries/Fatfs/
 
 #If building ESP8266 WIFI we only need to add the include from DuetWifiSocketServer as it has a file needed to compile RRF 
 ifeq ($(NETWORK), WIFI)

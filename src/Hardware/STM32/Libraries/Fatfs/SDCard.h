@@ -9,6 +9,7 @@
 
 
 #include "Core.h"
+#include "ff.h"
 #include "diskio.h" //fatfs
 
 
