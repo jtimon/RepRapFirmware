@@ -1,8 +1,12 @@
+Version 3.4.5_102
+=================
+* Duet3d V3.4.5 fixes
+* Added biquoctopus_x7/troodon_v2
+
 Version 3.4.5_101
 =================
 * Duet3d V3.4.5
 * Added new SKR pro signature
-* Added biquoctopus_x7/troodon_v2
 
 Version 3.4.4_104
 =================

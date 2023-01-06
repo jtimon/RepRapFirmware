@@ -339,6 +339,10 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			p.MessageF(mtype, "CCMRam static ram: %d dynamic ram: %d free ram %d\n", ccmStatic, ccmUsed, ccmFree);
 		}
 #endif
+
+		//DEBUG
+		//p.MessageF(mtype, "heap top %.08" PRIx32 ", limit %.08" PRIx32 "\n", (uint32_t)heapTop, (uint32_t)heapLimit);
+		//ENDDB
 	}	// end memory stats scope
 
 	const uint32_t timeSinceLastCall = TaskResetRunTimeCounter();
