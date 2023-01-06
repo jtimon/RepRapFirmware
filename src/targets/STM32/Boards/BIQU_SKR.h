@@ -874,5 +874,91 @@ constexpr BoardDefaults btt_octopuspro_Defaults = {
     PD_10, PB_12, SSP2,
 #endif
 };
+
+constexpr PinEntry PinTable_BIQU_OCTOPUS_X7[] =
+{
+    //Thermistors
+    {PF_3, "e0temp,th0"},
+    {PA_0, "bedtemp,tb"},
+
+    //Endstops
+    {PF_2, "xstop"},
+    {PC_15, "ystop"},
+    {PC_13, "zstop"},
+    {PC_14, "e0stop,e0det"},
+    {PF_4, "probe,PS1"},
+	{PG_7, "pro_sw,PS"},
+
+    //Heaters and Fans (Big and Small Mosfets}
+    {PD_12,  "bed" },
+    {PB_9,  "e0heat" },
+    {PB_8,  "fan0,fan" },
+    {PB_7,  "fan1" },
+    {PE_5,  "fan2" },
+	{PC_6,  "fan3" },
+	{PE_6,  "fan4" },
+
+    //EXP1
+    {PG_5, "BEEP"},
+    {PG_4, "BTNENC"},
+    {PG_3, "LCDEN"},
+    {PG_2, "LCDRS"},
+    {PD_15, "LCDD4"},
+    {PD_14, "LCDD5"},
+    {PD_13, "LCDD6"},
+    {PD_11, "LCDD7"},
+
+    //EXP2
+    {PB_14, "LCDMISO"},
+    {PB_13, "LCDSCK"},
+    {PD_10, "BTNEN1"},
+    {PB_12, "LCDSS"},
+    {PD_9, "BTNEN2"},
+    {PB_15, "LCDMOSI"},
+    {PD_8, "LCDCD"},
+	
+	//DIAGNOSTIC LED
+	{PC_7, "LED,STATUS"},
+	
+	//DIAG PIN
+	{PE_13, "diag4"},
+	{PF_9, "diag5"},
+	{PF_15, "diag6"},
+
+	//I2C
+    {PF_1, "SCL1"},
+    {PF_0, "SDA1"},
+
+};
+
+constexpr BoardDefaults biquoctopus_x7_Defaults = {
+    {0x5e29d842, },                    			// Signatures
+    SD_SDIO,                                  // SD Card access
+    {   //CLK, MISO, MOSI
+        {PA_5, PA_6, PA_7},                     //SPI0
+        {PB_13, PB_14, PB_15},                  //SPI1
+        {PB_3, PB_4, PB_5},                     //SPI2
+        {NoPin, NoPin, NoPin},                  //SPI3
+        {NoPin, NoPin, NoPin},                  //SPI4
+        {NoPin, NoPin, NoPin},                  //SPI5
+    },
+    7,                                          // Number of drivers
+    {PA_1, PC_1, PC_5, PE_10, PE_15, PF_12, PG_1},     //enablePins
+    {PA_3, PC_2, PB_0, PE_11, PB_10, PF_13, PE_7}, //stepPins
+    {PA_4, PC_3, PB_1, PE_12, PB_11, PF_14, PE_8},      //dirPins
+#if HAS_SMART_DRIVERS
+    {PA_2, PC_0, PC_4, PE_9, PE_14, PF_11, PG_0},      //uartPins
+    7,                                          // Smart drivers
+#endif
+    0,                                          //digiPot Factor
+#if HAS_VOLTAGE_MONITOR
+    NoPin,
+#endif
+    NoPin,
+#if HAS_SBC_INTERFACE
+    NoPin, NoPin, SSPNONE,
+#endif
+};
+
 #endif
 #endif
