@@ -3,6 +3,11 @@ Version 3.5beta1_102
 * Duet3D 3.5beta1
 * Removed LPC17xx support from source
 
+Version 3.4.5_102
+=================
+* Duet3d V3.4.5 fixes
+* Added biquoctopus_x7/troodon_v2
+
 Version 3.4.5_101
 =================
 * Duet3d V3.4.5
