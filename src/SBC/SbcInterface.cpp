@@ -1207,7 +1207,7 @@ void SbcInterface::InvalidateResources() noexcept
 			gb->MacroRequestSent();
 		}
 		gb->AbortFile(true, false);
-		gb->MessageAcknowledged(true, ExpressionValue());
+		gb->MessageAcknowledged(true, 0, ExpressionValue());
 	}
 
 	// Abort the print (if applicable)
