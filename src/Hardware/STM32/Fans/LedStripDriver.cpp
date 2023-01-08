@@ -239,7 +239,9 @@ bool LedStripDriver::MustStopMovement(GCodeBuffer& gb) noexcept
 	{
 		const uint32_t ledPortNumber = gb.Seen('K') ? gb.GetLimitedUIValue('K', MaxLedPorts) : currentPort;
 		const LedType lt = ledPortNumber >= 0 ? ledPorts[ledPortNumber]->ledType : DefaultLedType;
-		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang) & gb.SeenAny("RUBWPYSF");
+		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang)	// if we're bit banging
+				&& gb.SeenAny("RUBWPYS")													// and we are setting colours
+				&& (!gb.Seen('F') || gb.GetUIValue() == 0);									// and we are going to send data this time
 	}
 	catch (const GCodeException&)
 	{
