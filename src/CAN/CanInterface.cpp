@@ -134,8 +134,10 @@ constexpr CanDevice::Config Can0Config =
 
 static_assert(Can0Config.IsValid());
 
+#if !STM32
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
+#endif
 
 static CanDevice *can0dev = nullptr;
 
@@ -188,14 +190,14 @@ constexpr uint32_t CanClockIntervalMillis = 200;
 
 #if SUPPORT_SPICAN
 // CanSender management task
-constexpr size_t CanSenderTaskStackWords = 600;
-static Task<CanSenderTaskStackWords> canSenderTask;
+constexpr size_t CanSenderTaskStackWords = 500;
+static TASKMEM Task<CanSenderTaskStackWords> canSenderTask;
 
-constexpr size_t CanReceiverTaskStackWords = 600;
-static Task<CanReceiverTaskStackWords> canReceiverTask;
+constexpr size_t CanReceiverTaskStackWords = 500;
+static TASKMEM Task<CanReceiverTaskStackWords> canReceiverTask;
 
-constexpr size_t CanClockTaskStackWords = 600;			// used to be 300 but RD had a stack overflow
-static Task<CanSenderTaskStackWords> canClockTask;
+constexpr size_t CanClockTaskStackWords = 500;			// used to be 300 but RD had a stack overflow
+static TASKMEM Task<CanSenderTaskStackWords> canClockTask;
 #else
 // CanSender management task
 constexpr size_t CanSenderTaskStackWords = 400;
@@ -310,9 +312,10 @@ void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
 
 void CanInterface::Init() noexcept
 {
+#if !STM32
 	CanMessageBuffer::Init(NumCanBuffers);
+#endif
 	pendingMotionBuffers = nullptr;
-
 	transactionMutex.Create("CanTrans");
 
 #if SAME70
@@ -334,9 +337,14 @@ void CanInterface::Init() noexcept
 	// Initialise the CAN hardware
 	CanTiming timing;
 	timing.SetDefaults_1Mb();
-	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
-#if SUPPORT_SPICAN
+#if STM32 && SUPPORT_SPICAN
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, nullptr, timing, nullptr);
 	if (can0dev == nullptr) return;
+#else
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
+#endif
+#if STM32
+	CanMessageBuffer::Init(NumCanBuffers);
 #endif
 	InitReceiveFilters();
 	can0dev->Enable();

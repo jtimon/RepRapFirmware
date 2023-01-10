@@ -17,6 +17,9 @@
 #include <CanMessageBuffer.h>
 #include <General/NamedEnum.h>
 #include <Platform/UniqueId.h>
+#if STM32F4
+#include <Platform/Tasks.h>
+#endif
 
 NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running);
 
@@ -46,6 +49,12 @@ class ExpansionManager INHERIT_OBJECT_MODEL
 public:
 	ExpansionManager() noexcept;
 
+#if STM32F4
+	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
+	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+	void operator delete(void* ptr) noexcept {}
+	void operator delete(void* ptr, std::align_val_t align) noexcept {}
+#endif
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
 	const ExpansionBoardData *GetBoardDetails(uint8_t address) const noexcept;
 
