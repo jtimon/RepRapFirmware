@@ -7,9 +7,6 @@
  *  This replaces the atoi function newlib. We redefine it to avoid calling strtol, which needs a reent_struct.
  *  atoi is called by lwip.
  */
-#if STM32
-#include <cstdint> // FIXME GA temp fix to allow this to compile
-#endif
 #include <cstdlib>
 #include <General/SafeStrtod.h>
 

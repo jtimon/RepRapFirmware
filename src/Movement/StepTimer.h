@@ -137,7 +137,6 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 	return (uint16_t)GetTimerTicks();
 #elif STM32
 	return (uint16_t)__HAL_TIM_GET_COUNTER(STHandle);
-	return 0;
 #else
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 #endif

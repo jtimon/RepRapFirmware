@@ -15,7 +15,11 @@
 #include <General/FreelistManager.h>
 
 #if SUPPORT_TMC22xx && HAS_STALL_DETECT
-# include <TMC22xx.h>
+# if STM32
+#  include <TMC22xx.h>
+# else
+#  include <Movement/StepperDrivers/TMC22xx.h>
+# endif
 #endif
 
 class AxisDriversConfig;

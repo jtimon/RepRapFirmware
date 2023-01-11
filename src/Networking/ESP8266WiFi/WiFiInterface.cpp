@@ -645,7 +645,9 @@ void WiFiInterface::Start() noexcept
 	spiTxUnderruns = spiRxOverruns = 0;
 	reconnectCount = 0;
 	transferAlreadyPendingCount = readyTimeoutCount = responseTimeoutCount = 0;
+#if STM32
 	badHeaderCount = actualBadHeaderCount = 0;
+#endif
 
 	lastTickMillis = millis();
 	lastDataReadyPinState = 0;
@@ -989,7 +991,9 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	platform.MessageF(mtype, "= WiFi =\nNetwork state is %s\n", GetStateName());
 	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
+#if STM32
 	platform.MessageF(mtype, "Bad header: %u/%u\n", badHeaderCount, actualBadHeaderCount);
+#endif
 
 #if 0
 	// The underrun/overrun counters don't work at present
@@ -2026,6 +2030,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		{
 			debugPrintf("bad format version %02x\n", bufferIn->hdr.formatVersion);
 		}
+#if STM32
 		// For some reason I don't understand when using the ESP32 with DMA seems to result in a very
 		// occasaional packet with formatVersion == 0. We check for that here and allow it if a second
 		// header field has the correct value. 
@@ -2044,6 +2049,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 			actualBadHeaderCount++;
 			return ResponseBadReplyFormatVersion;
 		}
+#endif
 	}
 
 	if (   (bufferIn->hdr.state == WiFiState::autoReconnecting || bufferIn->hdr.state == WiFiState::reconnecting)

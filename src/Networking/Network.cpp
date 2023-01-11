@@ -92,7 +92,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 #  if HAS_WIFI_NETWORKING
 	interfaces[0] = new WiFiInterface(p);
 #  else
-	interfaces[0] = new RTOSPlusTCPEthernetInterface(p);
+	interfaces[0] = nullptr;
 #  endif
 # else
 #  error Unknown board

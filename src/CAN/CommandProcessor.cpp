@@ -45,10 +45,6 @@ constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for read
 char sbcFirmwareChunk[MaxFileChunkSize];
 #endif
 
-#if SUPPORT_REMOTE_COMMANDS
-# include "SoftwareReset.h"
-# include "Hardware/ExceptionHandlers.h"
-#endif
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)

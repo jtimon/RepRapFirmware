@@ -10,9 +10,6 @@
 
 #include "RepRapFirmware.h"
 #include "ObjectModel/ObjectModel.h"
-#ifdef LPC_DEBUG
-#include "Platform/MessageType.h"
-#endif
 
 class DataTransfer;
 class Deviation;
@@ -107,10 +104,6 @@ public:
 
 #if SUPPORT_PROBE_POINTS_FILE
 	void ClearProbePointsInvalid() noexcept { gridPointInvalid.ClearAll(); }
-#endif
-
-#ifdef LPC_DEBUG
-	void Diagnostics(MessageType mtype) noexcept;
 #endif
 
 private:
