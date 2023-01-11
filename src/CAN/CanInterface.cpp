@@ -797,7 +797,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 
 			if (reprap.Debug(moduleCan))
 			{
-				buf->DebugPrint("Rx1R:");
+				buf->DebugPrint("Rx1:");
 			}
 
 			const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
@@ -1313,7 +1313,6 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	return rslt;
 }
 
-#include <HardwareTimer.h>
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
 	Platform& p = reprap.GetPlatform();

@@ -854,7 +854,7 @@ void Platform::Init() noexcept
 	filteredAdcChannels[VrefFilterIndex] = LegacyAnalogIn::GetVREFAdcChannel();
 	filteredAdcChannels[CpuTempFilterIndex] = LegacyAnalogIn::GetTemperatureAdcChannel();
 	vRefCorrection = 1*VRefCorrectionScale;
-#else
+# else
 	filteredAdcChannels[CpuTempFilterIndex] =
 #if SAM4E || SAM4S || SAME70
 			LegacyAnalogIn::
@@ -1881,13 +1881,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 
 	reprap.Timing(mtype);
-#ifdef LPC_DEBUG
-	MessageF(mtype, "Step timer: target %" PRIu32 " count %" PRIu32 " delta %d late %d\n", STEP_TC->MR[0], STEP_TC->TC, (int)(STEP_TC->MR[0] - STEP_TC->TC), lateTimers);
-	MessageF(mtype, "USBSerial connected %d\n", (int)SERIAL_MAIN_DEVICE.IsConnected());
-	MessageF(mtype, "ADC not ready %" PRIu32 " ADC error threshold %" PRIu32 " ADC Init %" PRIu32 "\n", ADCNotReadyCnt, ADCErrorThreshold, ADCInitCnt);
-	ADCNotReadyCnt = 0;
-
-#endif
 
 #if CORE_USES_TINYUSB	//DEBUG
 	MessageF(mtype, "USB interrupts %" PRIu32 "\n", numUsbInterrupts);
@@ -1902,9 +1895,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 #ifdef LPC_DEBUG
 //    softwarePWMTimer.Diagnostics(mtype);
-#endif
-#ifdef LPC_DEBUG_HM
-	reprap.GetMove().AccessHeightMap().Diagnostics(mtype);
 #endif
 
 #ifdef SOFT_TIMER_DEBUG
@@ -2972,46 +2962,7 @@ void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 		{
 			SmartDrivers::SetCurrent(driver, current);
 		}
-#elif defined (DUET_06_085)
-		const uint16_t pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-		if (driver < 4)
-		{
-			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
-			mcpDuet.setVolatileWiper(potWipes[driver], pot);
-		}
-		else
-		{
-			if (board == BoardType::Duet_085)
-			{
-				// Extruder 0 is on DAC channel 0
-				if (driver == 4)
-				{
-					const float dacVoltage = max<float>(current * 0.008 * senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
-					const float dac = dacVoltage/stepperDacVoltageRange;
-					AnalogOut(DAC0, dac);
-				}
-				else
-				{
-					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
-					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
-				}
-			}
-			else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
-			{
-				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
-				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
-			}
-		}
-#elif defined(__ALLIGATOR__)
-		// Alligator SPI DAC current
-		if (driver < 4)  // Onboard DAC
-		{
-			dacAlligator.setChannel(3-driver, current * 0.102);
-		}
-		else // Piggy module DAC
-		{
-			dacPiggy.setChannel(7-driver, current * 0.102);
-		}
+
 #else
 		// otherwise we can't set the motor current
 #endif
@@ -3766,9 +3717,7 @@ GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(
 {
 #if STM32
 	ATX_POWER_STATE = true;
-# if STM32
 	IoPort::WriteDigital(StepperPowerEnablePin, true);
-# endif
 #endif
 	powerDownWhenFansStop = delayedPowerDown = false;				// cancel any pending power down
 
@@ -3844,10 +3793,8 @@ void Platform::AtxPowerOff() noexcept
 	}
 #endif
 #if STM32
-		ATX_POWER_STATE = false;
-# if STM32
-		IoPort::WriteDigital(StepperPowerEnablePin, false);
-# endif
+	ATX_POWER_STATE = false;
+	IoPort::WriteDigital(StepperPowerEnablePin, false);
 #endif
 
 	// The PS_ON pin on Duet 3 is shared with another pin, so only try to turn off ATX power if we know that power is being controlled
@@ -5525,8 +5472,8 @@ void Platform::Tick() noexcept
 	// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
 	if (tickState != 0)
 	{
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
-			currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
+		ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(adcFilters[currentFilterNumber]);		// cast away 'volatile'
+		currentFilter.ProcessReading(AnalogInReadChannel(filteredAdcChannels[currentFilterNumber]));
 
 		++currentFilterNumber;
 		if (currentFilterNumber == NumAdcFilters)

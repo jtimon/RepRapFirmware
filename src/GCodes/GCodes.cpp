@@ -110,7 +110,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)] = nullptr;
 #endif // SUPPORT_HTTP || HAS_SBC_INTERFACE
-# if SUPPORT_TELNET || HAS_SBC_INTERFACE
+#if SUPPORT_TELNET || HAS_SBC_INTERFACE
 	telnetInput = new NetworkGCodeInput();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 #else

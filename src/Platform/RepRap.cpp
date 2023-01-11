@@ -570,7 +570,7 @@ void RepRap::Init() noexcept
 	}
 #endif
 
-	active = true;										// must do this before we start the network or call Spin(), else the watchdog may time out
+	active = true;										// must do this after we initialise the watchdog but before we start the network or call Spin(), else the watchdog
 	delay(100);											// give the tick ISR time to collect voltage readings
 	platform->ResetVoltageMonitors();					// get rid of the spurious zero minimum voltage readings
 
@@ -2552,13 +2552,13 @@ void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexc
 		RunSdIap(iapParam);
 		return;
 	}
-#if SUPPORT_REMOTE_COMMANDS
+# if SUPPORT_REMOTE_COMMANDS
 	if (!strcmp(iapFilename, IAP_CAN_LOADER_FILE))
 	{
 		RunCanIap(iapParam);
 		return;
 	}
-#endif
+# endif
 #endif
 	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, iapFilename, OpenMode::read);
 	if (iapFile == nullptr)

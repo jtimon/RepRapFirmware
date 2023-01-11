@@ -317,10 +317,6 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 					++bodyIdx;
 					if (bodyIdx >= bodyLen)
 					{
-#ifdef LPC_DEBUG
-						if (respBuf[0] != 0)
-							debugPrintf("ESP8266 Loader error, error code %d\n", respBuf[1]);
-#endif
 						needBytes = 1;
 						pState = PacketState::end;
 					}
