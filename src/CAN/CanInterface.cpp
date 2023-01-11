@@ -139,7 +139,11 @@ static_assert(Can0Config.IsValid());
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 #endif
 
+#if SUPPORT_SPICAN
+CanDevice *can0dev = nullptr;
+#else
 static CanDevice *can0dev = nullptr;
+#endif
 
 static unsigned int txTimeouts[Can0Config.numTxBuffers + 1] = { 0 };
 static uint32_t lastCancelledId = 0;
@@ -330,6 +334,7 @@ void CanInterface::Init() noexcept
 	SetPinFunction(CanRxPin, CanPinsMode);
 	SetPinFunction(CanTxPin, CanPinsMode);
 #elif STM32
+	// pin initialisation is handled in CoreN2G
 #else
 # error Unsupported MCU
 #endif
@@ -337,14 +342,12 @@ void CanInterface::Init() noexcept
 	// Initialise the CAN hardware
 	CanTiming timing;
 	timing.SetDefaults_1Mb();
-#if STM32 && SUPPORT_SPICAN
+#if STM32
 	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, nullptr, timing, nullptr);
 	if (can0dev == nullptr) return;
+	CanMessageBuffer::Init(NumCanBuffers);
 #else
 	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
-#endif
-#if STM32
-	CanMessageBuffer::Init(NumCanBuffers);
 #endif
 	InitReceiveFilters();
 	can0dev->Enable();

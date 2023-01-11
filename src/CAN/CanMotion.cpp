@@ -41,6 +41,9 @@ namespace CanMotion
 	static volatile uint32_t hiccupToInsert = 0;
 	static volatile bool revertAll = false;
 	static volatile bool revertedAll = false;
+	#if SUPPORT_SPICAN
+	static bool canEnabled = false;
+	#endif
 	static volatile uint32_t whenRevertedAll;
 	static Mutex stopListMutex;
 	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
@@ -55,6 +58,9 @@ void CanMotion::Init() noexcept
 {
 	movementBufferList = nullptr;
 	stopListMutex.Create("stopList");
+#if SUPPORT_SPICAN
+	canEnabled = true;
+#endif
 }
 
 void CanMotion::FreeMovementBuffers() noexcept
@@ -74,6 +80,9 @@ void CanMotion::FreeMovementBuffers() noexcept
 // This is called by DDA::Prepare at the start of preparing a movement
 void CanMotion::StartMovement() noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	FreeMovementBuffers();					// there shouldn't be any movement buffers in the list, but free any that there may be
 
 	// Free up any stop list items left over from the previous move
@@ -186,6 +195,9 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
 #endif
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
@@ -205,6 +217,9 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 
 void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
@@ -219,6 +234,9 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
 uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return 0;
+#endif
 	uint32_t clocks = 0;
 	if (simulating || dda.GetState() == DDA::completed)
 	{
@@ -275,6 +293,9 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 
 bool CanMotion::CanPrepareMove() noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return true;
+#endif
 	return CanMessageBuffer::GetFreeBuffers() >= MaxCanBoards;
 }
 
@@ -282,6 +303,9 @@ bool CanMotion::CanPrepareMove() noexcept
 // The only urgent messages we may have currently are messages to stop drivers, or to tell them that all drivers have now been stopped and they need to revert to the requested stop position.
 CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return nullptr;
+#endif
 	if (!revertedAll)
 	{
 		MutexLocker lock(stopListMutex);					// make sure the list isn't being changed while we traverse it
@@ -347,6 +371,9 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 
 void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	hiccupToInsert += numClocks;
 	CanInterface::WakeAsyncSenderFromIsr();
 }
@@ -395,6 +422,9 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
 void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
 		InternalStopDriverWhenProvisional(driver);
@@ -415,6 +445,9 @@ void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcep
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
 void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	const Platform& p = reprap.GetPlatform();
 	if (axis < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -462,6 +495,9 @@ void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
 void CanMotion::StopAll(const DDA& dda) noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
 		// We still send the messages so that the drives get enabled, but we set the steps to zero
@@ -528,6 +564,9 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 // We must make sure that all boards have been told to adjust their stepper motor positions to the points at which we wanted them to stop.
 void CanMotion::FinishMoveUsingEndstops() noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return;
+#endif
 	if (!revertAll)
 	{
 		revertAll = true;
@@ -538,6 +577,9 @@ void CanMotion::FinishMoveUsingEndstops() noexcept
 // This is called by the main task when it is waiting for the move to complete, after checking that the DDA ring is empty and there is no current move
 bool CanMotion::FinishedReverting() noexcept
 {
+#if SUPPORT_SPICAN
+	if (canEnabled) return true;
+#endif
 	return !revertAll || (revertedAll && millis() - whenRevertedAll >= TotalDriverPositionRevertMillis);
 }
 
