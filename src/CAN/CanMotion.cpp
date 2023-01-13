@@ -81,7 +81,7 @@ void CanMotion::FreeMovementBuffers() noexcept
 void CanMotion::StartMovement() noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	FreeMovementBuffers();					// there shouldn't be any movement buffers in the list, but free any that there may be
 
@@ -196,7 +196,7 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 #endif
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
@@ -218,7 +218,7 @@ void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_
 void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
@@ -235,7 +235,7 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return 0;
+	if (!canEnabled) return 0;
 #endif
 	uint32_t clocks = 0;
 	if (simulating || dda.GetState() == DDA::completed)
@@ -294,7 +294,7 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 bool CanMotion::CanPrepareMove() noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return true;
+	if (!canEnabled) return true;
 #endif
 	return CanMessageBuffer::GetFreeBuffers() >= MaxCanBoards;
 }
@@ -304,7 +304,7 @@ bool CanMotion::CanPrepareMove() noexcept
 CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return nullptr;
+	if (!canEnabled) return nullptr;
 #endif
 	if (!revertedAll)
 	{
@@ -372,7 +372,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	hiccupToInsert += numClocks;
 	CanInterface::WakeAsyncSenderFromIsr();
@@ -423,7 +423,7 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
@@ -446,7 +446,7 @@ void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcep
 void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	const Platform& p = reprap.GetPlatform();
 	if (axis < reprap.GetGCodes().GetTotalAxes())
@@ -496,7 +496,7 @@ void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 void CanMotion::StopAll(const DDA& dda) noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
@@ -565,7 +565,7 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 void CanMotion::FinishMoveUsingEndstops() noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return;
+	if (!canEnabled) return;
 #endif
 	if (!revertAll)
 	{
@@ -578,7 +578,7 @@ void CanMotion::FinishMoveUsingEndstops() noexcept
 bool CanMotion::FinishedReverting() noexcept
 {
 #if SUPPORT_SPICAN
-	if (canEnabled) return true;
+	if (!canEnabled) return true;
 #endif
 	return !revertAll || (revertedAll && millis() - whenRevertedAll >= TotalDriverPositionRevertMillis);
 }
