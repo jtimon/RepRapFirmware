@@ -990,7 +990,7 @@ void Tmc22xxDriverState::UpdateCurrent() noexcept
 	const uint32_t iRunCsBits = constrain<uint32_t>((unsigned int)(idealIRunCs + 0.2), 1, 32) - 1;
 	const float idealIHoldCs = idealIRunCs * standstillCurrentFraction * (1.0/256.0);
 	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
-	if (reprap.Debug(moduleDriver))
+	if (reprap.Debug(Module::Driver))
 		debugPrintf("TMC current set I %d IH %d csBits 0x%x 0x%x vsense 0x%x\n", (int)motorCurrent, (int)idealIHoldCs, (unsigned)iRunCsBits, (unsigned)iHoldCsBits, (unsigned)vsense);
 
 	UpdateRegister(WriteIholdIrun,

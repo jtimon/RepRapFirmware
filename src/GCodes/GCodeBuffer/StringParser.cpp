@@ -26,7 +26,7 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), indentToSkipTo(NoIndentSkip), eofStringCounter(0),
-	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), crcRequired(false), binaryWriting(false)
+	  hasCommandNumber(false), commandLetter('Q'), lastChar(0), checksumRequired(false), crcRequired(false), binaryWriting(false)
 {
 	StartNewFile();
 	Init();
@@ -75,6 +75,14 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 // is the number of leading white space characters..
 bool StringParser::Put(char c) noexcept
 {
+	// If this character is LF and the previous one was CR, throw the LF away so that we don't increment the line number twice
+	const char prevChar = lastChar;
+	lastChar = c;
+	if (c == '\n' && prevChar == '\r')
+	{
+		return false;
+	}
+
 	if (c != 0)
 	{
 		++commandLength;
@@ -324,7 +332,7 @@ bool StringParser::LineFinished() noexcept
 			missingChecksum = ((checksumRequired || crcRequired) && gb.LatestMachineState().GetPrevious() == nullptr);
 		}
 
-		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
 		{
 			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 		}
@@ -709,12 +717,16 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	// Skip the "var." or "global." prefix
 	SkipWhiteSpace();
 	const bool isGlobal = StringStartsWith(gb.buffer + readPointer, "global.");
+
+#if SUPPORT_ASYNC_MOVES
+	if (isGlobal && !gb.Executing()) return;
+#endif
+
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
 											? (readPointer += strlen("global."), reprap.GetGlobalVariablesForWriting())
 											: (StringStartsWith(gb.buffer + readPointer, "var."))
 											  	? (readPointer += strlen("var."), WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables()))
 												: throw ConstructParseException("expected a global or local variable");
-
 	// Get the identifier
 	char c = gb.buffer[readPointer];
 	if (!isalpha(c))
@@ -784,10 +796,15 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 
 void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (!gb.Executing()) return;
+#endif
+
 	SkipWhiteSpace();
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileData outputFile;
+	bool appendNewline = true;
 #endif
 
 	if (gb.buffer[readPointer] == '>')
@@ -800,6 +817,11 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		{
 			openMode = OpenMode::append;
 			++readPointer;
+			if (gb.buffer[readPointer] == '>')
+			{
+				appendNewline = false;
+				++readPointer;
+			}
 		}
 		else
 		{
@@ -847,7 +869,10 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (outputFile.IsLive())
 	{
-		reply.cat('\n');
+		if (appendNewline)
+		{
+			reply.cat('\n');
+		}
 		const bool ok = outputFile.Write(reply.c_str());
 		outputFile.Close();
 		reply.Clear();

@@ -1,24 +1,24 @@
 #include "RepRap.h"
 
-#include "Movement/Move.h"
-#include "Movement/StepTimer.h"
-#include "FilamentMonitors/FilamentMonitor.h"
-#include "GCodes/GCodes.h"
-#include "Heating/Heat.h"
-#include "Heating/Sensors/TemperatureSensor.h"
-#include "Networking/Network.h"
+#include <Movement/Move.h>
+#include <Movement/StepTimer.h>
+#include <FilamentMonitors/FilamentMonitor.h>
+#include <GCodes/GCodes.h>
+#include <Heating/Heat.h>
+#include <Heating/Sensors/TemperatureSensor.h>
+#include <Networking/Network.h>
 #if SUPPORT_HTTP
-# include "Networking/HttpResponder.h"
+# include <Networking/HttpResponder.h>
 #endif
 #include "Platform.h"
-#include "Scanner.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <PrintMonitor/PrintMonitor.h>
-#include "Tools/Tool.h"
-#include "Tools/Filament.h"
-#include "Endstops/ZProbe.h"
+#include <Tools/Tool.h>
+#include <Tools/Filament.h>
+#include <Endstops/ZProbe.h>
 #include "Tasks.h"
 #include <Cache.h>
-#include "Fans/FansManager.h"
+#include <Fans/FansManager.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Accelerometers/Accelerometers.h>
@@ -29,13 +29,13 @@
 #endif
 
 #if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
+# include <Movement/StepperDrivers/TMC2660.h>
 #endif
 #if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
+# include <Movement/StepperDrivers/TMC22xx.h>
 #endif
 #if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
+# include <Movement/StepperDrivers/TMC51xx.h>
 #endif
 
 #if SUPPORT_IOBITS
@@ -43,14 +43,14 @@
 #endif
 
 #if SUPPORT_DIRECT_LCD
-# include "Display/Display.h"
+# include <Display/Display.h>
 #endif
 
 #if HAS_SBC_INTERFACE
-# include "SBC/SbcInterface.h"
 # if STM32
 #  include "STM32/BoardConfig.h"
 # endif
+# include <SBC/SbcInterface.h>
 #endif
 
 #ifdef DUET3_ATE
@@ -267,9 +267,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	// Note, 'network' is needed even if there is no networking, because it contains the machine name
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
-#if SUPPORT_SCANNER
-	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
-#endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 5),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
@@ -357,6 +354,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "thisActive",
+#if SUPPORT_ASYNC_MOVES
+								OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, context.GetGCodeBuffer()->Executing()), ObjectModelEntryFlags::none },
+#else
+								OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, true),	ObjectModelEntryFlags::verbose },
+#endif
 	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::verbose },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((context.GetStartMillis()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
@@ -382,9 +385,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_NETWORKING
 	{ "reply",					OBJECT_MODEL_FUNC_NOSELF((int32_t)HttpResponder::GetReplySeq()),		ObjectModelEntryFlags::live },
 #endif
-#if SUPPORT_SCANNER
-	{ "scanner",				OBJECT_MODEL_FUNC((int32_t)self->scannerSeq),							ObjectModelEntryFlags::live },
-#endif
 	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
@@ -403,17 +403,16 @@ ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const n
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	6,																						// number of sub-tables
-	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),		// root
+	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
 #else
 	0,																						// directories
 #endif
 	25,																						// limits
-	20 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	21 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	12 + HAS_NETWORKING + SUPPORT_SCANNER +
-	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
+	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -431,7 +430,7 @@ RepRap::RepRap() noexcept
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
+	  spinningModule(Module::none), stopped(false), active(false), processingConfig(true)
 #if HAS_SBC_INTERFACE
 	  , usingSbcInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
 														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
@@ -483,9 +482,6 @@ void RepRap::Init() noexcept
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 	fansManager = new FansManager;
 
-#if SUPPORT_SCANNER
-	scanner = new Scanner(*platform);
-#endif
 #if SUPPORT_IOBITS
 	portControl = new PortControl();
 #endif
@@ -514,9 +510,6 @@ void RepRap::Init() noexcept
 	fansManager->Init();
 	printMonitor->Init();
 	FilamentMonitor::InitStatic();
-#if SUPPORT_SCANNER
-	scanner->Init();
-#endif
 #if SUPPORT_IOBITS
 	portControl->Init();
 #endif
@@ -720,9 +713,6 @@ void RepRap::Exit() noexcept
 	heat->Exit();
 	move->Exit();
 	gCodes->Exit();
-#if SUPPORT_SCANNER
-	scanner->Exit();
-#endif
 #if SUPPORT_IOBITS
 	portControl->Exit();
 #endif
@@ -746,30 +736,24 @@ void RepRap::Spin() noexcept
 	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	ticksInSpinState = 0;
-	spinningModule = modulePlatform;
+	spinningModule = Module::Platform;
 	platform->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleGcodes;
+	spinningModule = Module::Gcodes;
 	gCodes->Spin();
 
-#if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
 	ticksInSpinState = 0;
-	spinningModule = moduleScanner;
-	scanner->Spin();
-#endif
-
-	ticksInSpinState = 0;
-	spinningModule = modulePrintMonitor;
+	spinningModule = Module::PrintMonitor;
 	printMonitor->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleFilamentSensors;
+	spinningModule = Module::FilamentSensors;
 	FilamentMonitor::Spin();
 
 #if SUPPORT_DIRECT_LCD
 	ticksInSpinState = 0;
-	spinningModule = moduleDisplay;
+	spinningModule = Module::Display;
 	display->Spin();
 #endif
 
@@ -778,13 +762,13 @@ void RepRap::Spin() noexcept
 	if (!UsingSbcInterface())
 	{
 		ticksInSpinState = 0;
-		spinningModule = moduleSbcInterface;
+		spinningModule = Module::SbcInterface;
 		sbcInterface->Spin();
 	}
 #endif
 
 	ticksInSpinState = 0;
-	spinningModule = noModule;
+	spinningModule = Module::none;
 
 	// Check if we need to send diagnostics
 	if (diagnosticsDestination != MessageType::NoDestinationMessage)
@@ -1029,9 +1013,9 @@ void RepRap::EmergencyStop() noexcept
 
 void RepRap::SetDebug(Module m, uint32_t flags) noexcept
 {
-	if (m < numModules)
+	if (m.ToBaseType() < NumRealModules)
 	{
-		debugMaps[m].SetFromRaw(flags);
+		debugMaps[m.ToBaseType()].SetFromRaw(flags);
 	}
 }
 
@@ -1046,20 +1030,20 @@ void RepRap::ClearDebug() noexcept
 void RepRap::PrintDebug(MessageType mt) noexcept
 {
 	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
-	for (size_t i = 0; i < numModules; i++)
+	for (size_t i = 0; i < NumRealModules; i++)
 	{
 		if (debugMaps[i].IsNonEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", GetModuleName(i), i, debugMaps[i].GetRaw());
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", Module(i).ToString(), i, debugMaps[i].GetRaw());
 		}
 	}
 
 	platform->Message((MessageType)(mt | PushFlag), "\nDebugging disabled for modules:");
-	for (size_t i = 0; i < numModules; i++)
+	for (size_t i = 0; i < NumRealModules; i++)
 	{
 		if (debugMaps[i].IsEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", Module(i).ToString(), i);
 		}
 	}
 	platform->Message(mt, "\n");
@@ -1361,15 +1345,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 	// Time since last reset
 	response->catf(",\"time\":%.1f", (double)(millis64()/1000u));
-
-#if SUPPORT_SCANNER
-	// Scanner
-	if (scanner->IsEnabled())
-	{
-		response->catf(",\"scanner\":{\"status\":\"%c\"", scanner->GetStatusCharacter());
-		response->catf(",\"progress\":%.1f}", (double)(scanner->GetProgress() * 100.0));
-	}
-#endif
 
 	// Spindles
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
@@ -2242,7 +2217,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 // Helper functions to write JSON arrays
 // Append float array using the specified number of decimal places
-void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept
+void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2261,7 +2236,7 @@ void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numVal
 	buf->cat(']');
 }
 
-void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<int(size_t)> func) noexcept
+void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2279,7 +2254,7 @@ void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValue
 	buf->cat(']');
 }
 
-void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<const char *(size_t)> func) noexcept
+void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept
 {
 	if (name != nullptr)
 	{

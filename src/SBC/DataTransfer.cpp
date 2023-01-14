@@ -741,7 +741,7 @@ void DataTransfer::ExchangeData() noexcept
 
 void DataTransfer::RestartTransfer(bool ownRequest) noexcept
 {
-	if (reprap.Debug(moduleSbcInterface))
+	if (reprap.Debug(Module::SbcInterface))
 	{
 		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Sbc request\n");
 	}
@@ -811,7 +811,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			if (headerResponse == TransferResponse::BadResponse)
 			{
 				// SBC received a bad response code. We must have been happy if we got here, else RRF would have complained
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Retrying data response exchange\n");
 				}
@@ -825,7 +825,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 #if STM32
 				HeaderCRCErrors++;
 #endif
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Bad header CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcHeader, checksum);
 				}
@@ -901,7 +901,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 #if STM32
 				DataCRCErrors++;
 #endif
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Bad data CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcData, checksum);
 				}
@@ -955,7 +955,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			else
 			{
 				// Retry failed, reset the connection
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Data response retry failed (sent %08" PRIx32 ", got %08" PRIx32 ")\n", txResponse, rxResponse);
 				}

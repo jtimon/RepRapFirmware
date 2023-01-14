@@ -495,6 +495,11 @@ public:
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
 
+	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
+	void UpdateBacklashSteps() noexcept;
+	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
+	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
+
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
 	inline bool IsAxisLinear(size_t axis) const noexcept { return linearAxes.IsBitSet(axis); }
@@ -705,12 +710,12 @@ private:
 	float GetCpuTemperature() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc, function_ref<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
-	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref<void(DriverId) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
+	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
 #else
-	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
+	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -790,6 +795,15 @@ private:
 #if 0	// shortcut axes not implemented yet
 	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
 #endif
+
+	// Backlash compensation user configuration
+	float backlashMm[MaxAxes];								// amount of backlash in mm for each axis motor
+	uint32_t backlashCorrectionDistanceFactor;				// what multiple of the backlash we apply the correction over
+
+	// Backlash compensation system variables
+	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
+	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
+	AxesBitmap lastDirections;								// each bit is set if the corresponding axes motor last moved backwards
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients

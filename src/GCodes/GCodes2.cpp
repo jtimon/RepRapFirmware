@@ -17,7 +17,6 @@
 #endif
 #include <Movement/Move.h>
 #include <Networking/Network.h>
-#include <Platform/Scanner.h>
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/RepRap.h>
 #include <Tools/Tool.h>
@@ -649,7 +648,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// Stopping a job because of a command in the file
 #if SUPPORT_ASYNC_MOVES
-					if (!DoSync(gb))
+					if (!DoSync(gb) || &gb == File2GCode())
 					{
 						return false;
 					}
@@ -659,11 +658,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 #endif
-					if (&gb == FileGCode())
+					isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
+					StopPrint(StopPrintReason::normalCompletion);
+
+#if SUPPORT_ASYNC_MOVES && HAS_SBC_INTERFACE
+					if (reprap.UsingSbcInterface())
 					{
-						isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
-						StopPrint(StopPrintReason::normalCompletion);
+						// SBC requires a final response for M0/M1/M2 on File2
+						HandleReply(*File2GCode(), GCodeResult::ok, "");
 					}
+#endif
 				}
 				else if (pauseState == PauseState::paused)
 				{
@@ -1487,6 +1491,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+					if (seen)
+					{
+						platform.UpdateBacklashSteps();
+					}
+
 					if (gb.Seen(extrudeLetter))
 					{
 						if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
@@ -1776,7 +1785,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					bool seen = false;
 					uint32_t flags = 0;
-					Module module = Module::noModule;
+					Module module = Module::none;
 					if (gb.Seen('S'))
 					{
 						flags = gb.GetUIValue();
@@ -1793,12 +1802,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('P'))
 					{
-						module = static_cast<Module>(gb.GetLimitedUIValue('P', Module::numModules));
+						module = static_cast<Module>(gb.GetLimitedUIValue('P', NumRealModules));
 						seen = true;
 					}
 					if (seen)
 					{
-						if (module != Module::noModule)
+						if (module != Module::none)
 						{
 							reprap.SetDebug(module, flags);
 							reprap.PrintDebug(gb.GetResponseMessageType());
@@ -2832,6 +2841,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+					if (seen)
+					{
+						platform.UpdateBacklashSteps();
+					}
+
 					if (gb.Seen(extrudeLetter))
 					{
 						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -3012,6 +3026,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 #endif
+
+			case 425: // Backlash compensation
+				result = platform.ConfigureBacklashCompensation(gb, reply);
+				break;
 
 			case 450: // Report printer mode
 				reply.printf("PrinterMode:%s", GetMachineModeString());
@@ -4188,149 +4206,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_SCANNER
-			case 750: // Enable 3D scanner extension
-				reprap.GetScanner().Enable();
-				break;
-
-			case 751: // Register 3D scanner extension over USB
-				if (&gb == UsbGCode())
-				{
-					if (reprap.GetScanner().IsEnabled())
-					{
-						reprap.GetScanner().Register();
-					}
-					else
-					{
-						reply.copy("Scanner extension is not enabled");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Invalid source");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 752: // Start 3D scan
-				{
-					gb.MustSee('P');
-					String<MaxFilenameLength> file;
-					gb.GetPossiblyQuotedString(file.GetRef());
-					gb.MustSee('S');
-					const int range = gb.GetIValue();
-					if (reprap.GetScanner().IsEnabled())
-					{
-						if (reprap.GetScanner().IsRegistered())
-						{
-							const int resolution = gb.Seen('R') ? gb.GetIValue() : 100;
-							const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
-							result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), range, resolution, mode));
-						}
-						else
-						{
-							reply.copy("Scanner is not registered");
-							result = GCodeResult::error;
-						}
-					}
-					else
-					{
-						reply.copy("Scanner extension is not enabled");
-						result = GCodeResult::error;
-					}
-				}
-				break;
-
-			case 753: // Cancel current 3D scanner action
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().Cancel());
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 754: // Calibrate scanner
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
-						result = GetGCodeResultFromFinished(reprap.GetScanner().Calibrate(mode));
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 755: // Set alignment mode for 3D scanner
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						const bool on = (gb.Seen('P') && gb.GetIValue() > 0);
-						result = GetGCodeResultFromFinished(reprap.GetScanner().SetAlignment(on));
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 756: // Shutdown 3D scanner
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().Shutdown());
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-#else
-			case 750:
-			case 751:
-			case 752:
-			case 753:
-			case 754:
-			case 755:
-			case 756:
+#if 0
+			case 750:	// was: Enable 3D scanner extension
+			case 751:	// was: Register 3D scanner extension over USB
+			case 752:	// was: Start 3D scan
+			case 753:	// was: Cancel current 3D scanner action
+			case 754:	// was: Calibrate scanner
+			case 755:	// was: Set alignment mode for 3D scanner
+			case 756:	// was: Shutdown 3D scanner
 				reply.copy("Scanner support not built-in");
 				result = GCodeResult::error;
 				break;
