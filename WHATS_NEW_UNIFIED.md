@@ -1,3 +1,9 @@
+Version 3.4.5+_102
+==================
+* Duet3d 3.4.5+ fixes
+* Added Fly Super8 pro H723 and Fly Super5 H723
+* Updated pins Fly Gemini V2 and Fly E3 V2
+
 Version 3.4.5_102
 =================
 * Duet3d V3.4.5 fixes

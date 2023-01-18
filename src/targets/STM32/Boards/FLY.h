@@ -65,7 +65,11 @@ constexpr PinEntry PinTable_FLY_SUPER5[] =
 };
 
 constexpr BoardDefaults fly_super5_Defaults = {
-    {0x2fe7ccfb},                   // Signatures
+# if STM32H743xx
+    {0x32757276, 0x2fe7ccfb},                   // Signatures
+# elif STM32H723xx
+    {0x69632a35},                               // Signatures
+# endif
     SD_SDIO,                                    // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
@@ -168,7 +172,11 @@ constexpr PinEntry PinTable_FLY_SUPER8H7[] =
 };
 
 constexpr BoardDefaults fly_super8h7_Defaults = {
+# if STM32H743xx
     {0x32757276},                               // Signatures
+# elif STM32H723xx
+    {0x69632a35},                               // Signatures
+#endif
     SD_SDIO,                                    // SD Card access
     {   //CLK, MISO, MOSI
         {PA_5, PA_6, PA_7},                     //SPI0
@@ -932,7 +940,6 @@ constexpr BoardDefaults fly_gemini_v1_1_Defaults = {
 #endif
 };
 
-
 constexpr PinEntry PinTable_FLY_GEMINI_V2_0[] =
 {
     //Thermistors
@@ -950,7 +957,7 @@ constexpr PinEntry PinTable_FLY_GEMINI_V2_0[] =
     // Porbe
     {PA_1, "probe"},
 
-    //Heaters and Fans (Big and Small Mosfets}
+    //Heaters and Fans (Big and Small Mosfets)
     {PA_2,  "bed,hbed" },
     {PA_0,  "e0heat,he0" },
     {PC_6,  "fan0,fan" },
@@ -964,11 +971,13 @@ constexpr PinEntry PinTable_FLY_GEMINI_V2_0[] =
     {PA_8, "LCDD5"},
     {PB_6, "BTNENC"},
     {PA_13, "LCDEN"},
+    {PA_9, "LCDD4"},
+
     
     //EXP2
     {PC_10, "LCDCD"},
-    {PA_14, "BTNEN2"},
-    {PA_15, "BTNEN1"},
+    {PA_14, "BTNEN1"},
+    {PA_15, "BTNEN2"},
     {PB_14, "LCDMISO"},
     {PB_13, "LCDSCK"},
     {PB_12, "LCDSS"},
@@ -1038,7 +1047,7 @@ constexpr PinEntry PinTable_FLY_E3_V2[] =
     //EXP1
     {PD_10,  "BEEP"  },    {PA_9,   "TX1,BTNENC" },
     {PA_8,   "LCDEN" },    {PA_10,  "RX1,LCDRS"  },
-    {PE_14,  "LCDD4" },    {PE_15,  "LCDD5"      },
+    {PE_14,  "LCDD5" },    {PE_15,  "LCDD4"      },
     {PA_14,  "LCDD6" },    {PA_13,  "LCDD7"      },
     
     
@@ -1046,7 +1055,7 @@ constexpr PinEntry PinTable_FLY_E3_V2[] =
     {PA_6,   "LCDMISO"},     {PA_5,  "LCDSCK"  },
     {PB_11,  "BTNEN2" },     {PA_4,  "LCDSS"   },
     {PB_10,  "BTNEN1" },     {PA_7,  "LCDMOSI" },
-    {PE_13,  "TFCD"   },
+    {PE_13,  "TFCD,LCDCD"   },
 
 
     //SD
