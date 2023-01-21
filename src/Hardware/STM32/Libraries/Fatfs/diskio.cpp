@@ -68,7 +68,7 @@ DSTATUS disk_status (BYTE pdrv) noexcept
 /* count - Number of sectors to read (1..255) */
 DRESULT disk_read (BYTE pdrv, BYTE* buff, LBA_t sector, UINT count) noexcept
 {
-    if (reprap.Debug(moduleStorage))
+    if (reprap.Debug(Module::Storage))
     {
         debugPrintf("Read %u %u %lu\n", pdrv, count, sector);
     }
@@ -118,7 +118,7 @@ DRESULT disk_read (BYTE pdrv, BYTE* buff, LBA_t sector, UINT count) noexcept
 
 DRESULT disk_write (BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count) noexcept
 {
-    if (reprap.Debug(moduleStorage))
+    if (reprap.Debug(Module::Storage))
     {
         debugPrintf("Write %u %u %lu\n", pdrv, count, sector);
     }

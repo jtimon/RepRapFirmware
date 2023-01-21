@@ -824,7 +824,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 }
 
 // Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
-GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
 {
 	if (can0dev == nullptr)
 	{
@@ -853,7 +853,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				break;
 			}
 
-			if (reprap.Debug(moduleCan))
+			if (reprap.Debug(Module::Can))
 			{
 				buf->DebugPrint("Rx1:");
 			}
@@ -964,7 +964,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 	{
 		if (can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
 		{
-			if (reprap.Debug(moduleCan))
+			if (reprap.Debug(Module::Can))
 			{
 				buf.DebugPrint("Rx0:");
 			}

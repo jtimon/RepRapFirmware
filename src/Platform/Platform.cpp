@@ -31,7 +31,7 @@
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
 #include "Heap.h"
-#include "Scanner.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Event.h"
 #include <Version.h>
 #include "Logger.h"
@@ -301,8 +301,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 
 	// 3. move.axes[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
+	{ "backlash",			OBJECT_MODEL_FUNC(self->backlashMm[context.GetLastIndex()], 3),													ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
@@ -387,10 +388,10 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 2: vIn
 #endif
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
-	19,																		// section 3: move.axes[]
+	20,																		// section 3: move.axes[]
 	15,																		// section 4: move.extruders[]
 #else
-	20,																		// section 3: move.axes[]
+	21,																		// section 3: move.axes[]
 	16,																		// section 4: move.extruders[]
 #endif
 	3,																		// section 5: move.extruders[].nonlinear
@@ -615,7 +616,13 @@ void Platform::Init() noexcept
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+
+		backlashMm[axis] = 0.0;
+		backlashSteps[axis] = 0;
+		backlashStepsDue[axis] = 0;
 	}
+
+	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
@@ -690,6 +697,14 @@ void Platform::Init() noexcept
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3) && !defined(DUET3MINI)
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
+#endif
+
+		brakeOffDelays[driver] = 0;
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
+
+#if SUPPORT_BRAKE_PWM
+		currentBrakePwm[driver] = 0.0;
+		brakeVoltages[driver] = FullyOnBrakeVoltage;
 #endif
 	}
 
@@ -1288,6 +1303,29 @@ void Platform::Spin() noexcept
 # endif
 			}
 
+			// Brake control
+			if (brakeOffTimers[nextDriveToPoll].CheckAndStop(brakeOffDelays[nextDriveToPoll]))
+			{
+				DisengageBrake(nextDriveToPoll);
+			}
+			if (motorOffTimers[nextDriveToPoll].CheckAndStop(motorOffDelays[nextDriveToPoll]))
+			{
+				InternalDisableDriver(nextDriveToPoll);
+			}
+
+# if SUPPORT_BRAKE_PWM
+			// If the brake solenoid is activated, adjust the PWM if necessary
+			const float voltsVin = AdcReadingToPowerVoltage(currentVin);
+			if (currentBrakePwm[nextDriveToPoll] != 0.0 && voltsVin > 10.0)
+			{
+				const float newBrakePwm = min<float>(brakeVoltages[nextDriveToPoll]/voltsVin, 1.0);
+				if (fabsf(newBrakePwm - currentBrakePwm[nextDriveToPoll] >= 0.05))
+				{
+					brakePorts[nextDriveToPoll].WriteAnalog(newBrakePwm);
+					currentBrakePwm[nextDriveToPoll] = newBrakePwm;
+				}
+			}
+# endif
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == NumDirectDrivers)
@@ -2249,7 +2287,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				if (nval != sqrtf(val))
 				{
 					ok3 = false;
-					if (reprap.Debug(modulePlatform))
+					if (reprap.Debug(Module::Platform))
 					{
 						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
 					}
@@ -2334,9 +2372,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		MessageF(MessageType::GenericMessage,
 					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
 					"\nFansManager %08" PRIx32 "-%08" PRIx32
-#if SUPPORT_SCANNER
-					"\nScanner %08" PRIx32 "-%08" PRIx32
-#endif
 #if SUPPORT_IOBITS
 					"\nPortControl %08" PRIx32 "-%08" PRIx32
 #endif
@@ -2349,9 +2384,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
-#if SUPPORT_SCANNER
-					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
-#endif
 #if SUPPORT_IOBITS
 					, reinterpret_cast<uint32_t>(&reprap.GetPortControl()), reinterpret_cast<uint32_t>(&reprap.GetPortControl()) + sizeof(PortControl) - 1
 #endif
@@ -2529,7 +2561,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 #if SUPPORT_CAN_EXPANSION
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)> localFunc, function_ref<void(DriverId)> remoteFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2563,7 +2595,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 #else
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)> localFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2618,6 +2650,8 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+		motorOffTimers[driver].Stop();
+
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		if (driver < numSmartDrivers && !driversPowered)
 		{
@@ -2647,7 +2681,17 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		}
 #endif
-		brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+		if (brakePorts[driver].IsValid() && !brakePorts[driver].ReadDigital())
+		{
+			if (brakeOffDelays[driver] != 0)
+			{
+				brakeOffTimers[driver].Start();
+			}
+			else
+			{
+				DisengageBrake(driver);
+			}
+		}
 	}
 }
 
@@ -2656,24 +2700,37 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
-		brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
-#if defined(DUET3) && HAS_SMART_DRIVERS
-		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
-#elif HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
+		brakeOffTimers[driver].Stop();
+		EngageBrake(driver);
+		if (motorOffDelays[driver] != 0 && brakePorts[driver].IsValid() && brakePorts[driver].ReadDigital())
 		{
-			SmartDrivers::EnableDrive(driver, false);
+			motorOffTimers[driver].Start();
 		}
-# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
 		else
 		{
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+			InternalDisableDriver(driver);
 		}
+	}
+}
+
+void Platform::InternalDisableDriver(size_t driver) noexcept
+{
+#if defined(DUET3) && HAS_SMART_DRIVERS
+	SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+	if (driver < numSmartDrivers)
+	{
+		SmartDrivers::EnableDrive(driver, false);
+	}
+# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
+	else
+	{
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	}
 # endif
 #else
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
-	}
 }
 
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
@@ -2739,6 +2796,25 @@ void Platform::DisableAllDrivers() noexcept
 	}
 }
 
+void Platform::EngageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	currentBrakePwm[driver] = 0.0;
+#endif
+	brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
+}
+
+void Platform::DisengageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	// Set the PWM to deliver the requested voltage regardless of the VIN voltage
+	currentBrakePwm[driver] = min<float>(brakeVoltages[driver]/AdcReadingToPowerVoltage(max<uint16_t>(currentVin, 1)), 1.0);
+	brakePorts[driver].WriteAnalog(currentBrakePwm[driver]);
+#else
+	brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+#endif
+}
+
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
 void Platform::SetDriversIdle() noexcept
@@ -2776,6 +2852,15 @@ void Platform::SetDriversIdle() noexcept
 // Configure the brake port for a driver
 GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
 {
+# if !SUPPORT_BRAKE_PWM
+	if (gb.Seen('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
 	bool seen = false;
 	if (gb.Seen('C'))
 	{
@@ -2784,21 +2869,36 @@ GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef&
 		{
 			return GCodeResult::error;
 		}
-		delayAfterBrakeOn[driver] = DefaultDelayAfterBrakeOn;
+# if SUPPORT_BRAKE_PWM
+		brakePorts[driver].SetFrequency(BrakePwmFrequency);
+# endif
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
 	}
+
 	uint32_t val;
-	if (gb.TryGetLimitedUIValue('S', val, seen, 100))
+	if (gb.TryGetLimitedUIValue('S', val, seen, 1000))
 	{
-		delayAfterBrakeOn[driver] = val;
+		seen = true;
+		motorOffDelays[driver] = val;
 	}
+
+# if SUPPORT_BRAKE_PWM
+	gb.TryGetNonNegativeFValue('V', brakeVoltages[driver], seen);
+# endif
 
 	if (!seen)
 	{
 		reply.printf("Driver %u uses brake port ", driver);
 		brakePorts[driver].AppendPinName(reply);
-#if 0	// don't print this bit until we have implemented it!
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[driver] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[driver]);
+		}
+# endif
+# if 0	// don't print this bit until we have implemented it!
 		reply.catf(" and %ums delay after turning the brake on", delayAfterBrakeOn[driver]);
-#endif
+# endif
 	}
 	return GCodeResult::ok;
 }
@@ -3253,11 +3353,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
 {
-	if (   !SERIAL_MAIN_DEVICE.IsConnected()
-#if SUPPORT_SCANNER
-		|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
-#endif
-	   )
+	if (!SERIAL_MAIN_DEVICE.IsConnected())
 	{
 		// If the serial USB line is not open, discard the message right away
 		OutputBuffer::ReleaseAll(buffer);
@@ -3409,27 +3505,23 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 	{
 		// Message that is to be sent via the USB line (non-blocking)
 		MutexLocker lock(usbMutex);
-#if SUPPORT_SCANNER
-		if (!reprap.GetScanner().IsRegistered() || reprap.GetScanner().DoingGCodes())
-#endif
+
+		// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+		OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
+		if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 		{
-			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-			OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
-			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+			if (OutputBuffer::Allocate(usbOutputBuffer))
 			{
-				if (OutputBuffer::Allocate(usbOutputBuffer))
+				if (usbOutput.Push(usbOutputBuffer))
 				{
-					if (usbOutput.Push(usbOutputBuffer))
-					{
-						usbOutputBuffer->cat(message);
-					}
-					// else the message buffer has been released, so discard the message
+					usbOutputBuffer->cat(message);
 				}
+				// else the message buffer has been released, so discard the message
 			}
-			else
-			{
-				usbOutputBuffer->cat(message);		// append the message
-			}
+		}
+		else
+		{
+			usbOutputBuffer->cat(message);		// append the message
 		}
 	}
 }
@@ -4724,6 +4816,88 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 	}
 }
 
+// Process M425
+GCodeResult Platform::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t i = 0; i < totalAxes; ++i)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
+		{
+			seen = true;
+			backlashMm[i] = gb.GetNonNegativeFValue();
+		}
+	}
+
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		backlashCorrectionDistanceFactor = gb.GetLimitedUIValue('S', 1, 101);
+	}
+
+	if (seen)
+	{
+		UpdateBacklashSteps();
+		reprap.MoveUpdated();
+	}
+	else
+	{
+		reply.copy("Backlash correction (mm)");
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			reply.catf(" %c: %.3f", reprap.GetGCodes().GetAxisLetters()[i], (double)backlashMm[i]);
+		}
+		reply.catf(", correction distance multiplier %" PRIu32, backlashCorrectionDistanceFactor);
+	}
+	return GCodeResult::ok;
+}
+
+// Update the backlash correction in steps. Called when the configured backlash distance or steps/mm is changed.
+void Platform::UpdateBacklashSteps() noexcept
+{
+	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+	{
+		backlashSteps[i] = backlashMm[i] * reprap.GetPlatform().DriveStepsPerUnit(i);
+	}
+}
+
+// Given the number of microsteps that an axis has been asked to move, return the number that it should actually move
+int32_t Platform::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+{
+	// If this drive has changed direction, update the backlash correction steps due
+	const bool backwards = (delta < 0);
+	int32_t& stepsDue = backlashStepsDue[drive];
+	if (backwards != lastDirections.IsBitSet(drive))
+	{
+		lastDirections.InvertBit(drive);		// Direction has reversed
+		int32_t temp = (int32_t)backlashSteps[drive];
+		if (backwards)
+		{
+			temp = -temp;
+		}
+		stepsDue += temp;
+	}
+
+	// Apply some or all of the compensation steps due
+	if (stepsDue != 0)
+	{
+		if (labs(stepsDue) * backlashCorrectionDistanceFactor <= labs(delta))		// avoid a division if we can
+		{
+			delta += stepsDue;
+			stepsDue = 0;
+		}
+		else
+		{
+			const int32_t maxAllowedSteps = (int32_t)max<uint32_t>((uint32_t)labs(delta)/backlashCorrectionDistanceFactor, 1u);
+			const int32_t stepsToDo = (stepsDue < 0) ? max<int32_t>(stepsDue, -maxAllowedSteps) : min<int32_t>(stepsDue, maxAllowedSteps);
+			stepsDue -= stepsToDo;
+			delta += stepsToDo;
+		}
+	}
+	return delta;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 void Platform::HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept
@@ -5268,17 +5442,50 @@ GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const S
 		return GCodeResult::error;
 	}
 
+# if !SUPPORT_BRAKE_PWM
+	if (parser.HasParameter('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
+	bool seen = false;
 	if (parser.HasParameter('C'))
 	{
+		seen = true;
 		String<StringLength20> portName;
 		parser.GetStringParam('C', portName.GetRef());
-		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
 		//TODO use the following instead when we track the enable state of each driver individually
-		//return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1));
+		//if (!brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1)) ...
+		if (brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+# if SUPPORT_BRAKE_PWM
+		brakePorts[drive].SetFrequency(BrakePwmFrequency);
+# endif
 	}
 
-	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
-	brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+	if (parser.GetFloatParam('V', brakeVoltages[drive]))
+	{
+		seen = true;
+	}
+# endif
+
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
+		brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[drive] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[drive]);
+		}
+# endif
+	}
 	return GCodeResult::ok;
 }
 

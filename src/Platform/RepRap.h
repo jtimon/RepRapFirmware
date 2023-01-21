@@ -55,8 +55,8 @@ public:
 	void DeferredDiagnostics(MessageType mtype) noexcept { diagnosticsDestination = mtype; }
 	void Timing(MessageType mtype) noexcept;
 
-	bool Debug(Module module) const noexcept { return debugMaps[module].IsNonEmpty(); }
-	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m]; }
+	bool Debug(Module module) const noexcept { return debugMaps[module.ToBaseType()].IsNonEmpty(); }
+	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m.ToBaseType()]; }
 	void SetDebug(Module m, uint32_t flags) noexcept;
 	void ClearDebug() noexcept;
 	void PrintDebug(MessageType mt) noexcept;
@@ -73,9 +73,6 @@ public:
 	Heat& GetHeat() const noexcept { return *heat; }
 	GCodes& GetGCodes() const noexcept { return *gCodes; }
 	Network& GetNetwork() const noexcept { return *network; }
-#if SUPPORT_SCANNER
-	Scanner& GetScanner() const noexcept { return *scanner; }
-#endif
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
@@ -174,9 +171,9 @@ protected:
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
-	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<int(size_t)> func) noexcept;
-	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<const char *(size_t)> func) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
@@ -191,9 +188,6 @@ private:
 	Move* move;
 	Heat* heat;
 	GCodes* gCodes;
-#if SUPPORT_SCANNER
-	Scanner* scanner;
-#endif
  	PrintMonitor* printMonitor;
  	FansManager* fansManager;
 
@@ -230,7 +224,7 @@ private:
 	volatile DeferredCommand deferredCommand;
 #endif
 
-	DebugFlags debugMaps[Module::numModules];
+	DebugFlags debugMaps[NumRealModules];
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;

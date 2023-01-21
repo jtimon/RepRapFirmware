@@ -754,7 +754,7 @@ void Tmc51xxDriverState::UpdateCurrent() noexcept
 														? standstillCurrentFraction
 															: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
 	const uint32_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
-	if (reprap.Debug(moduleDriver))
+	if (reprap.Debug(Module::Driver))
 		debugPrintf("5160 motor current %d max %f msc %f IRun %d gs %d iHold %d\n", (int)motorCurrent, (double)maxCurrent, (double)(maxCurrent * 0.707), (int)iRun, (int)gs, (int)iHold);
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
@@ -1019,7 +1019,7 @@ if (regVal & TMC51xx_RR_S2G)
 		previousRegIndexRequested -= (NumReadRegisters + 1);
 		if (writeRegisters[previousRegIndexRequested] != regVal)
 		{
-			if (reprap.Debug(moduleDriver))
+			if (reprap.Debug(Module::Driver))
 				debugPrintf("TMC5160: Write error driver %d register index %d expected %x got %x\n", driverNumber, previousRegIndexRequested, (unsigned)writeRegisters[previousRegIndexRequested], (unsigned)regVal); 
 			numWriteErrors++;
 			// retry the write
@@ -1080,7 +1080,7 @@ DriversState Tmc51xxDriverState::SetupDriver(bool reset) noexcept
 	// check for errors
 	if (numWriteErrors > NumWriteRegisters)
 	{
-		if (reprap.Debug(moduleDriver))
+		if (reprap.Debug(Module::Driver))
 			debugPrintf("TMC5160: Too many write errors drive %d error cnt %d driver disabled\n", driverNumber, numWriteErrors);
 		// Too many write errors, probably means no driver or config error
 		lastValidDriveStatus = accumulatedDriveStatus = 0;

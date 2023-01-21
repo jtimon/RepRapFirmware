@@ -55,6 +55,7 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 
 #include <CoreIO.h>
 #include <Devices.h>
+#include <General/NamedEnum.h>
 
 // The following are needed by many other files, so include them here
 #include <Platform/MessageType.h>
@@ -258,32 +259,14 @@ struct DriverId
 
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
-enum Module : uint8_t
-{
-	modulePlatform = 0,
-	moduleNetwork = 1,
-	moduleWebserver = 2,
-	moduleGcodes = 3,
-	moduleMove = 4,
-	moduleHeat = 5,
-	moduleDda = 6,
-	moduleRoland = 7,
-	moduleScanner = 8,
-	modulePrintMonitor = 9,
-	moduleStorage = 10,
-	modulePortControl = 11,
-	moduleDuetExpansion = 12,
-	moduleFilamentSensors = 13,
-	moduleWiFi = 14,
-	moduleDisplay = 15,
-	moduleSbcInterface = 16,
-	moduleCan = 17,
-	moduleDriver = 18,
-	numModules = 19,				// make this one greater than the last real module number
-	noModule = numModules
-};
+NamedEnum(Module, uint8_t,
+			Platform, Network, Webserver, Gcodes, Move, Heat, Dda, unused1 /* was Roland */,
+			unused2 /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
+			SbcInterface, Can, Driver,
+			none					// make this one last so that it is the number of real modules, one greater than the last real module number
+		 );
 
-const char *_ecv_array GetModuleName(uint8_t module) noexcept;
+constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
@@ -295,7 +278,6 @@ class Kinematics;
 class Heat;
 class TemperatureSensor;
 class Tool;
-class Roland;
 class Scanner;
 class PrintMonitor;
 class RepRap;

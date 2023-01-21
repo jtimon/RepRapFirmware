@@ -334,12 +334,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 		if (drive < numVisibleAxes)
 		{
-
-			int32_t delta;
 			if (doMotorMapping)
 			{
 				endCoordinates[drive] = nextMove.coords[drive];
-				delta = endPoint[drive] - positionNow[drive];
 				const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
 				directionVector[drive] = positionDelta;
 				if (positionDelta != 0.0)
@@ -362,7 +359,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			{
 				// Raw motor move on a visible axis
 				endPoint[drive] = Move::MotorMovementToSteps(drive, nextMove.coords[drive]);
-				delta = endPoint[drive] - positionNow[drive];
+				const int32_t delta = endPoint[drive] - positionNow[drive];
 				directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
 				if (delta != 0)
 				{
@@ -845,7 +842,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 				}
 
 				// Check for sensible values, print them if they look dubious
-				if (reprap.Debug(moduleDda) && (reprap.Debug(moduleMove) || pdm->totalSteps > 1000000))
+				if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
 				{
 					DebugPrintAll("rem");
 				}
@@ -873,7 +870,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		return false;
 	}
 
-	if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))	// temp show the prepared DDA if debug enabled for both modules
+	if (reprap.Debug(Module::Dda) && reprap.Debug(Module::Move))	// temp show the prepared DDA if debug enabled for both modules
 	{
 		DebugPrintAll("rem");
 	}
@@ -1039,7 +1036,7 @@ pre(state == provisional)
 				if (laDDA->beforePrepare.targetNextSpeed < laDDA->endSpeed * 0.99)
 				{
 					ring.RecordLookaheadError();
-					if (reprap.Debug(moduleMove))
+					if (reprap.Debug(Module::Move))
 					{
 						debugPrintf("DDA.cpp(%d) tn=%f ", __LINE__, (double)laDDA->beforePrepare.targetNextSpeed);
 						laDDA->DebugPrint("la");
@@ -1172,7 +1169,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 				{
 					// The acceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
-					if (reprap.Debug(moduleMove))
+					if (reprap.Debug(Module::Move))
 					{
 						debugPrintf("DDA.cpp(%d) na=%f", __LINE__, (double)newAcceleration);
 						DebugPrint("rm");
@@ -1190,7 +1187,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 				{
 					// The deceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
-					if (reprap.Debug(moduleMove))
+					if (reprap.Debug(Module::Move))
 					{
 						debugPrintf("DDA.cpp(%d) nd=%f", __LINE__, (double)newDeceleration);
 						DebugPrint("rm");
@@ -1397,7 +1394,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							{
 								pdm->directionChanged = false;
 								// Check for sensible values, print them if they look dubious
-								if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+								if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 								{
 									DebugPrintAll("pr_err1");
 								}
@@ -1437,7 +1434,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					{
 						pdm->directionChanged = false;
 						// Check for sensible values, print them if they look dubious
-						if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+						if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 						{
 							DebugPrintAll("pr_err2");
 						}
@@ -1491,6 +1488,8 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						}
 					}
 
+					delta = platform.ApplyBacklashCompensation(drive, delta);
+
 					if (   platform.GetDriversBitmap(drive) != 0				// if any of the drives is local
 #if SUPPORT_CAN_EXPANSION
 						|| flags.checkEndstops									// if checking endstops or a Z probe, create a DM even if there are no local drives involved
@@ -1504,7 +1503,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						{
 							pdm->directionChanged = false;
 							// Check for sensible values, print them if they look dubious
-							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+							if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 							{
 								DebugPrintAll("pr_err3");
 							}
@@ -1589,7 +1588,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						if (pdm->PrepareExtruder(*this, params))
 						{
 							pdm->directionChanged = false;
-							if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+							if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 							{
 								DebugPrintAll("pr_err4");
 							}
@@ -1639,7 +1638,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		}
 #endif
 
-		if (reprap.Debug(moduleMove) && (reprap.Debug(moduleDda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
+		if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrintAll("pr");
 		}

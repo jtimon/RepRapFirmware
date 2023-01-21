@@ -264,7 +264,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 		}
 		reply.catf(" L:%d H:%d", adcLowOffset, adcHighOffset);
 
-		if (reprap.Debug(moduleHeat) && adcFilterChannel >= 0)
+		if (reprap.Debug(Module::Heat) && adcFilterChannel >= 0)
 		{
 #if HAS_VREF_MONITOR
 			reply.catf(", Vref %" PRIu32 " Vssa %" PRIu32 " Th %" PRIu32,
@@ -275,7 +275,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 			reply.catf(", Th %" PRIu32, reprap.GetPlatform().GetAdcFilter(adcFilterChannel).GetSum());
 #endif
 		}
-		if (reprap.Debug(moduleHeat))
+		if (reprap.Debug(Module::Heat))
 		{
 			bool valid;
 			reply.catf(", Raw %" PRIu32, GetRawReading(valid));
