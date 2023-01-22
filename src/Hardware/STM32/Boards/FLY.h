@@ -1077,7 +1077,7 @@ constexpr BoardDefaults fly_e3_v2_Defaults = {
         {PB_13, PB_14, PB_15},                  //SPI1 Wifi module
         {PB_3, PB_4, PB_5},                     //SPI2 MOT
         {PD_12, PD_13, PD_11},                  //SPI3 MAX31855 MAX31865
-        {NoPin, NoPin, NoPin},                  //SPI4 used for single wire ender displays
+        {PE_15, NoPin, PA_13},                  //SPI4 used for single wire ender displays
         {NoPin, NoPin, NoPin},                  //SPI5
     },
     5,                                            // Number of drivers
