@@ -648,7 +648,12 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 
 bool PwmPort::SupportsPwm() const noexcept
 {
+#if STM32
+	// All STM32 pins can use PWM (either hardware or software).
+	return IsValid();
+#else
 	return IsValid() && (((uint8_t)PinTable[logicalPin].GetCapability() & (uint8_t)PinCapability::pwm) != 0);
+#endif
 }
 
 // End
