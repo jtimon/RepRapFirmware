@@ -646,4 +646,9 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 	}
 }
 
+bool PwmPort::SupportsPwm() const noexcept
+{
+	return IsValid() && (((uint8_t)PinTable[logicalPin].GetCapability() & (uint8_t)PinCapability::pwm) != 0);
+}
+
 // End
