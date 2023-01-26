@@ -115,6 +115,9 @@ void HangprinterKinematics::Init() noexcept
 	targetForce_Newton = DefaultTargetForce_Newton;
 	ARRAY_INIT(torqueConstants, DefaultTorqueConstants);
 
+	// Debug:
+	alwaysReachable = false;
+
 	Recalc();
 }
 
@@ -428,6 +431,10 @@ static bool isInsideTetrahedron(float const point[3], float const tetrahedron[4]
 
 bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
+	if (alwaysReachable) {
+		return true;
+	}
+
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
 	return isInsideTetrahedron(coords, anchors);
 }

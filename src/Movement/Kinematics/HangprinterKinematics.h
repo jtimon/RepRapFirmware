@@ -77,6 +77,10 @@ private:
 	                                      { 0.0, 0.0, 0.0},
 	                                      { 0.0, 0.0, 0.0}};
 
+	// Debug attributes:
+
+	bool alwaysReachable; // IsReachable() always returns true
+
 	// Line buildup compensation configurables
 
 	/* The real defaults are in the Init() function, since we sometimes need to reset
