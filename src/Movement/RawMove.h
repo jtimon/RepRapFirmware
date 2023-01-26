@@ -41,10 +41,10 @@ struct RawMove
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-# if !defined(DUET3) && !defined(DUET3MINI)
+# if !defined(DUET3) && !defined(DUET3MINI) && !STM32
 	uint16_t padding;												// pad to make the length a multiple of 4 bytes
 # endif
-#elif defined(DUET3) || defined(DUET3MINI)
+#elif defined(DUET3) || defined(DUET3MINI) || STM32
 	uint16_t padding;												// pad to make the length a multiple of 4 bytes
 #endif
 
