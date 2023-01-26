@@ -2182,13 +2182,21 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 #endif
 
-		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
+		// Only limit the positions of axes that have been mentioned explicitly.
+		// This avoids at least two problems:
+		// 1. When supporting multiple motion systems, if a M208 axis limit was changed and an axis coordinate was outside that limit,
+		//    but we don't own the axis, then if we move that axis there will be a problem when SaveOwnAxisCoordinates is called
+		//    because the new coordinate won't be saved.
+		// 2. If a linear axis is being limited, but the move is for a rotational axis that is already in the correct position,
+		//    then the code in DDA::InitStandardMove will throw it away because neither linearAxesMoving nor rotationalAxesMoving will be set.
+		//    This was an actual problem on my tool changer.
+		AxesBitmap axesToLimit = axesVirtuallyHomed & axesMentioned;
 		if (doingManualBedProbe)
 		{
-			effectiveAxesHomed.ClearBit(Z_AXIS);							// if doing a manual Z probe, don't limit the Z movement
+			axesToLimit.ClearBit(Z_AXIS);							// if doing a manual Z probe, don't limit the Z movement
 		}
 
-		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, effectiveAxesHomed, ms.isCoordinated, limitAxes);
+		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, ms.isCoordinated, limitAxes);
 		switch (lp)
 		{
 		case LimitPositionResult::adjusted:
@@ -2214,7 +2222,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			   )
 			{
 				// It's a coordinated travel move on a 3D printer or laser cutter, so see whether an uncoordinated move will work
-				const LimitPositionResult lp2 = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, effectiveAxesHomed, false, limitAxes);
+				const LimitPositionResult lp2 = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, false, limitAxes);
 				if (lp2 == LimitPositionResult::ok)
 				{
 					ms.isCoordinated = false;								// change it to an uncoordinated move
@@ -4988,7 +4996,14 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 	{
 		if (reprap.Debug(Module::Move))
 		{
-			debugPrintf("Failed to allocate axes %07" PRIx32 " to MS %u letters %08" PRIx32 "\n", (int32_t)badAxes.GetRaw(), ms.GetMsNumber(), axLetters.GetRaw());
+			debugPrintf("Failed to allocate axes %07" PRIx32 " to MS %u letters %08"
+#if defined(DUET3)
+				PRIx64
+#else
+				PRIx32
+#endif
+				"\n",
+				(uint32_t)badAxes.GetRaw(), ms.GetMsNumber(), axLetters.GetRaw());
 		}
 		gb.ThrowGCodeException("Axis %c is already used by a different motion system", (unsigned int)axisLetters[badAxes.LowestSetBit()]);
 	}
