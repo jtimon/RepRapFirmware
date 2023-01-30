@@ -1,3 +1,7 @@
+Version 3.4.5+_103
+==================
+* Updated pins Fly E3 V2
+
 Version 3.4.5+_102
 ==================
 * Duet3d 3.4.5+ fixes
