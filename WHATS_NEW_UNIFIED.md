@@ -3,6 +3,10 @@ Version 3.5beta1_102
 * Duet3D 3.5beta1
 * Removed LPC17xx support from source
 
+Version 3.4.5+_103
+==================
+* Updated pins Fly E3 V2
+
 Version 3.4.5+_102
 ==================
 * Duet3d 3.4.5+ fixes
