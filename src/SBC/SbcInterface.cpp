@@ -564,7 +564,7 @@ void SbcInterface::ExchangeData() noexcept
 							if (OutputBuffer::Allocate(json))
 							{
 								ObjectExplorationContext context;
-								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal,  "");
+								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal, "");
 								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
 							}
 							else
@@ -719,9 +719,55 @@ void SbcInterface::ExchangeData() noexcept
 			}
 			WriteLockedPointer<VariableSet> vset = (isGlobal) ? reprap.GetGlobalVariablesForWriting() : WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
 
+			// Make a copy of the variable name excluding prefix so that we can terminate the name at the first '[' if necessary
+			String<MaxVariableNameLength> shortVarName;
+			shortVarName.copy(varName.c_str() + strlen(isGlobal ? "global." : "var."));
+
+			// Check for index expressions after the variable name. DSF will have stripped out any spaces except for those within index expressions.
+			uint32_t indices[MaxArrayIndices];
+			size_t numIndices = 0;
+			if (!createVariable)
+			{
+				const char* indexStart = strchr(shortVarName.c_str(), '[');
+				if (indexStart != nullptr)
+				{
+					const size_t firstIndexOffset = indexStart - shortVarName.c_str();
+					bool hadError = false;
+					do
+					{
+						if (numIndices == MaxArrayIndices)
+						{
+							expression.printf("too many array indices in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
+						const uint32_t indexExpr = indexParser.ParseUnsigned();
+						indexStart = indexParser.GetEndptr();
+						if (*indexStart != ']')
+						{
+							expression.printf("missing ']' in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						indices[numIndices++] = indexExpr;
+						++indexStart;								// skip the ']'
+					} while (*indexStart == '[');
+
+					if (hadError)
+					{
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+						break;
+					}
+
+					shortVarName[firstIndexOffset] = 0;					// terminate the short variable name at the first '['
+				}
+			}
+
 			// Check if the variable is valid
-			const char *shortVarName = varName.c_str() + strlen(isGlobal ? "global." : "var.");
-			Variable * const v = vset->Lookup(shortVarName);
+			Variable * const v = vset->Lookup(shortVarName.c_str());
 			if (createVariable && v != nullptr)
 			{
 				// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
@@ -746,14 +792,38 @@ void SbcInterface::ExchangeData() noexcept
 				if (v == nullptr)
 				{
 					// DSF doesn't provide indent values but instructs RRF to delete local variables when the current block ends
-					vset->InsertNew(shortVarName, ev, 0);
+					vset->InsertNew(shortVarName.c_str(), ev, 0);
 				}
-				else
+				else if (numIndices == 0)
 				{
 					v->Assign(ev);
 				}
+				else
+				{
+					v->AssignIndexed(ev, numIndices, indices);
+				}
 
-				transfer.WriteSetVariableResult(varName.c_str(), ev);
+				if (ev.GetType() == TypeCode::HeapArray)
+				{
+					// Write heap arrays as JSON
+					OutputBuffer *json;
+					if (OutputBuffer::Allocate(json))
+					{
+						ObjectExplorationContext context;
+						ReportHeapArrayAsJson(json, context, nullptr, ev.ahVal, "");
+						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
+				}
+				else
+				{
+					// Write plain result
+					packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), ev);
+				}
+
 				if (isGlobal)
 				{
 					reprap.GlobalUpdated();
