@@ -665,7 +665,11 @@ void WiFiInterface::Stop() noexcept
 		digitalWrite(SamTfrReadyPin, false);		// tell the ESP we can't receive
 
 #if !WIFI_USES_ESP32
+#if STM32
+		pinMode(EspResetPin, OUTPUT_LOW);
+#else
 		digitalWrite(EspResetPin, false);			// put the ESP back into reset
+#endif
 #endif
 		digitalWrite(EspEnablePin, false);
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin

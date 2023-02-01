@@ -145,6 +145,8 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
+	void SaveConfigError(const char *filename, unsigned int lineNumber, const char *errorMessage) noexcept;
+
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
 	void FansUpdated() noexcept { ++fansSeq; }
@@ -190,6 +192,11 @@ private:
 	GCodes* gCodes;
  	PrintMonitor* printMonitor;
  	FansManager* fansManager;
+
+ 	// Recording the first error message encountered in config.g
+ 	AutoStringHandle configErrorFilename;
+ 	unsigned int configErrorLine;
+ 	AutoStringHandle configErrorMessage;
 
 #if SUPPORT_IOBITS
  	PortControl *portControl;
