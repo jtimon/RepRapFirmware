@@ -253,7 +253,7 @@ constexpr unsigned int StateSubTableNumber = 3;		// section number of 'state' in
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	// 0. MachineModel root
+	// 0. root
 	{ "boards",					OBJECT_MODEL_FUNC_ARRAY(0),												ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
@@ -274,7 +274,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "tools",					OBJECT_MODEL_FUNC_ARRAY(4),												ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC_ARRAY(5),												ObjectModelEntryFlags::none },
 
-	// 1. MachineModel.directories
+	// 1. directories
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "firmware",				OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_DIRECTORY),							ObjectModelEntryFlags::verbose },
@@ -286,7 +286,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
 #endif
 
-	// 2. MachineModel.limits
+	// 2. limits
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxes),								ObjectModelEntryFlags::verbose },
 	{ "axesPlusExtruders",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxesPlusExtruders),				ObjectModelEntryFlags::verbose },
 	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxBedHeaters),						ObjectModelEntryFlags::verbose },
@@ -325,7 +325,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbeProgramBytes",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbeProgramBytes),				ObjectModelEntryFlags::verbose },
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 
-	// 3. MachineModel.state (see declaration of StateSubTableNumber above)
+	// 3. state (see declaration of StateSubTableNumber above)
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
@@ -353,6 +353,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
+	{ "startupError",			OBJECT_MODEL_FUNC_IF(!self->configErrorMessage.IsNull(), self, 6),		ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisActive",
 #if SUPPORT_ASYNC_MOVES
@@ -364,11 +365,11 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((context.GetStartMillis()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
-	// 4. MachineModel.state.beep
+	// 4. state.beep
 	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
 
-	// 5. MachineModel.seqs
+	// 5. seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
@@ -393,6 +394,11 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volChanges",				OBJECT_MODEL_FUNC_ARRAY(8),												ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 #endif
+
+	// 6. state.startupError
+	{ "file",					OBJECT_MODEL_FUNC(self->configErrorFilename.IncreaseRefCount()),		ObjectModelEntryFlags::none },
+	{ "line",					OBJECT_MODEL_FUNC((int32_t)self->configErrorLine),						ObjectModelEntryFlags::none },
+	{ "message",				OBJECT_MODEL_FUNC(self->configErrorMessage.IncreaseRefCount()),			ObjectModelEntryFlags::none },
 };
 
 ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const noexcept /*override*/
@@ -402,7 +408,7 @@ ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const n
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
-	6,																						// number of sub-tables
+	7,																						// number of sub-tables
 	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
@@ -410,9 +416,10 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																						// directories
 #endif
 	25,																						// limits
-	21 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	22 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
+	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),	// seqs
+	3																						// state.configErr
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -918,6 +925,14 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 	// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.
 	OutputBuffer::Diagnostics(mtype);
+
+	// If there was an error running config.g, print it
+	if (!configErrorMessage.IsNull())
+	{
+		auto msg  = configErrorMessage.Get();
+		auto fname = configErrorFilename.Get();
+		platform->MessageF(mtype, "Error in %s line %u while starting up: %s\n", fname.Ptr(), configErrorLine, msg.Ptr());
+	}
 
 	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
@@ -2806,6 +2821,18 @@ uint32_t RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const
 void RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title) noexcept
 {
 	(void)SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
+}
+
+// Save the first error message generated while running config.g
+void RepRap::SaveConfigError(const char *filename, unsigned int lineNumber, const char *errorMessage) noexcept
+{
+	if (configErrorMessage.IsNull())
+	{
+		configErrorLine = lineNumber;
+		configErrorFilename.Assign(filename);
+		configErrorMessage.Assign(errorMessage);
+		StateUpdated();
+	}
 }
 
 #if SUPPORT_DIRECT_LCD
