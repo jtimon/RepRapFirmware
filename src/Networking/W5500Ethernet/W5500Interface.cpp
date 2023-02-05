@@ -75,7 +75,7 @@ void W5500Interface::Init() noexcept
 	macAddress = platform.GetDefaultMacAddress();
 }
 
-GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
+GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -120,13 +120,13 @@ bool W5500Interface::IsProtocolEnabled(NetworkProtocol protocol) noexcept
 	return (protocol < NumProtocols) ? protocolEnabled[protocol] : false;
 }
 
-GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept
+GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
 	if (protocol < NumProtocols)
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (GetState() == NetworkState::active)
+		if (shutdown && GetState() == NetworkState::active)
 		{
 			ResetSockets();
 		}
