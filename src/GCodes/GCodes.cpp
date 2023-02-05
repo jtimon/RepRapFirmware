@@ -2134,7 +2134,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			}
 			return false;
 		}
-		else if (axesMentioned.IsNonEmpty())									// don't count G1 Fxxx as a travel move
+		else if (axesMentioned.IsNonEmpty())								// don't count G1 Fxxx as a travel move
 		{
 			ms.DoneMoveSincePrintingResumed();
 		}
@@ -2157,7 +2157,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 	else if (axesMentioned.IsEmpty())
 	{
-		ms.totalSegments = 1;													// it's an extruder only move
+		ms.totalSegments = 1;												// it's an extruder only move
 	}
 	else
 	{
@@ -2172,9 +2172,16 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		else
 #endif
 		{
-			ToolOffsetTransform(ms, axesMentioned);
+			ToolOffsetTransform(ms, axesMentioned);							// apply tool offset, baby stepping, Z hop and axis scaling
 		}
-																				// apply tool offset, baby stepping, Z hop and axis scaling
+
+#if SUPPORT_KEEPOUT_ZONES
+		if (keepoutZone.DoesLineIntrude(ms.initialCoords, ms.coords))
+		{
+			gb.ThrowGCodeException("straight move would enter keepout zone");
+		}
+#endif
+
 #if SUPPORT_ASYNC_MOVES
 		if (!collisionChecker.UpdatePositions(ms.coords, axesHomed))
 		{
@@ -2193,7 +2200,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		AxesBitmap axesToLimit = axesVirtuallyHomed & axesMentioned;
 		if (doingManualBedProbe)
 		{
-			axesToLimit.ClearBit(Z_AXIS);							// if doing a manual Z probe, don't limit the Z movement
+			axesToLimit.ClearBit(Z_AXIS);									// if doing a manual Z probe, don't limit the Z movement
 		}
 
 		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, ms.isCoordinated, limitAxes);
@@ -2335,47 +2342,47 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 	// Get the axis parameters
-	float newAxisPos[2];
+	float newAxis0Pos, newAxis1Pos;
 	if (gb.Seen(axisLetters[axis0]))
 	{
-		newAxisPos[0] = gb.GetDistance();
+		newAxis0Pos = gb.GetDistance();
 		if (gb.LatestMachineState().axesRelative)
 		{
-			newAxisPos[0] += ms.initialUserC0;
+			newAxis0Pos += ms.initialUserC0;
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[0] += ms.GetCurrentToolOffset(axis0);
+			newAxis0Pos += ms.GetCurrentToolOffset(axis0);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
-			newAxisPos[0] += GetWorkplaceOffset(gb, axis0);
+			newAxis0Pos += GetWorkplaceOffset(gb, axis0);
 		}
 	}
 	else
 	{
-		newAxisPos[0] = ms.initialUserC0;
+		newAxis0Pos = ms.initialUserC0;
 	}
 
 	if (gb.Seen(axisLetters[axis1]))
 	{
-		newAxisPos[1] = gb.GetDistance();
+		newAxis1Pos = gb.GetDistance();
 		if (gb.LatestMachineState().axesRelative)
 		{
-			newAxisPos[1] += ms.initialUserC1;
+			newAxis1Pos += ms.initialUserC1;
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[1] += ms.GetCurrentToolOffset(axis1);
+			newAxis1Pos += ms.GetCurrentToolOffset(axis1);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
-			newAxisPos[1] += GetWorkplaceOffset(gb, axis1);
+			newAxis1Pos += GetWorkplaceOffset(gb, axis1);
 		}
 	}
 	else
 	{
-		newAxisPos[1] = ms.initialUserC1;
+		newAxis1Pos = ms.initialUserC1;
 	}
 
 	float iParam, jParam;
@@ -2385,8 +2392,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		const float rParam = gb.GetDistance();
 
 		// Get the XY coordinates of the midpoints between the start and end points X and Y distances between start and end points
-		const float deltaAxis0 = newAxisPos[0] - ms.initialUserC0;
-		const float deltaAxis1 = newAxisPos[1] - ms.initialUserC1;
+		const float deltaAxis0 = newAxis0Pos - ms.initialUserC0;
+		const float deltaAxis1 = newAxis1Pos - ms.initialUserC1;
 
 		const float dSquared = fsquare(deltaAxis0) + fsquare(deltaAxis1);	// square of the distance between start and end points
 
@@ -2456,12 +2463,12 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	float userArcCentre[2] = { ms.initialUserC0 + iParam, ms.initialUserC1 + jParam };
 
 	// Set the new user position
-	ms.currentUserPosition[axis0] = newAxisPos[0];
-	ms.currentUserPosition[axis1] = newAxisPos[1];
+	ms.currentUserPosition[axis0] = newAxis0Pos;
+	ms.currentUserPosition[axis1] = newAxis1Pos;
 
 	// CNC machines usually do a full circle if the initial and final XY coordinates are the same.
 	// Usually this is because X and Y were not given, but repeating the coordinates is permitted.
-	const bool wholeCircle = (ms.initialUserC0 == ms.currentUserPosition[axis0] && ms.initialUserC1 == ms.currentUserPosition[axis1]);
+	const bool wholeCircle = (ms.initialUserC0 == newAxis0Pos && ms.initialUserC1 == newAxis1Pos);
 
 	// Get any additional axes
 	AxesBitmap axesMentioned;
@@ -2516,10 +2523,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		gb.ThrowGCodeException("G2/G3: insufficient axes homed");
 	}
 
-	// Compute the initial and final angles. Do this before we possible rotate the coordinates of the arc centre.
-	float finalTheta = atan2(ms.currentUserPosition[axis1] - userArcCentre[1], ms.currentUserPosition[axis0] - userArcCentre[0]);
+	// Compute the initial and final angles. Do this before we possibly rotate the coordinates of the arc centre.
+	float finalTheta = atan2f(ms.currentUserPosition[axis1] - userArcCentre[1], ms.currentUserPosition[axis0] - userArcCentre[0]);
 	ms.arcRadius = fastSqrtf(iParam * iParam + jParam * jParam);
-	ms.arcCurrentAngle = atan2(-jParam, -iParam);
+	ms.arcCurrentAngle = atan2f(-jParam, -iParam);
 
 	// Transform to machine coordinates and check that it is within limits
 
@@ -2580,6 +2587,13 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 	}
 
+#if SUPPORT_KEEPOUT_ZONES
+	if (keepoutZone.DoesArcIntrude(ms.initialCoords, ms.coords, ms.arcCurrentAngle, finalTheta, ms.arcCentre, ms.arcRadius, axis0Mapping, axis1Mapping, clockwise, wholeCircle))
+	{
+		gb.ThrowGCodeException("arc move would enter keepout zone");
+	}
+#endif
+
 	LoadExtrusionAndFeedrateFromGCode(gb, ms, true);
 
 	if (ms.IsFirstMoveSincePrintingResumed())
@@ -2621,9 +2635,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 			ms.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
-# if SUPPORT_IOBITS
+#endif
+#if SUPPORT_LASER && SUPPORT_IOBITS
 	else
-# endif
 #endif
 #if SUPPORT_IOBITS
 	{

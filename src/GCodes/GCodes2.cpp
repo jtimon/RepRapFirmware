@@ -12,11 +12,13 @@
 #include "GCodeException.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
+
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
 #endif
+
 #include <Movement/Move.h>
-#include <Networking/Network.h>
+
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/RepRap.h>
 #include <Tools/Tool.h>
@@ -30,6 +32,14 @@
 
 #if SUPPORT_IOBITS
 # include <Platform/PortControl.h>
+#endif
+
+#if HAS_NETWORKING
+# include <Networking/Network.h>
+#endif
+
+#if SUPPORT_MQTT
+# include <Networking/MQTT/MqttClient.h>
 #endif
 
 #if HAS_WIFI_NETWORKING
@@ -632,7 +642,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
-			&& code != 36 && code != 201 && code != 569 && code != 587	// these are the only M-codes we implement that can have fractional parts
+			&& code != 36 && code != 201 && code != 569 && code != 586 && code != 587 // these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -2035,6 +2045,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							type = Aux2Message;
 							break;
 #endif
+
+						case 6:		// MQTT
+							type = MqttMessage;
+							break;
 						default:
 							reply.printf("Invalid message type: %" PRIi32, param);
 							result = GCodeResult::error;
@@ -2072,8 +2086,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (result != GCodeResult::error)
 					{
-						// Append newline and send the message to the destinations
-						message.cat('\n');
+						// Append newline and send the message to the destinations,
+						// except for MqttMessage
+						if (type != MqttMessage)
+						{
+							message.cat('\n');
+						}
 						platform.Message(type, message.c_str());
 					}
 				}
@@ -3238,6 +3256,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
+#if HAS_NETWORKING
 			case 540: // Set/report MAC address
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
@@ -3255,6 +3274,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+#endif
 
 			case 550: // Set/report machine name
 #if HAS_SBC_INTERFACE
@@ -3290,6 +3310,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
+#if HAS_NETWORKING
 			case 552: // Enable/Disable network and/or Set/Get IP address
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
@@ -3369,6 +3390,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+#endif
 
 			case 555: // Set/report firmware type to emulate
 				if (gb.Seen('P'))
@@ -3767,60 +3789,92 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = ProbeTool(gb, reply);
 				break;
 
+#if HAS_NETWORKING
 			case 586: // Configure network protocols
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
 					const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
-
-					bool seen = false;
-#if SUPPORT_HTTP
-					if (gb.Seen('C'))
+					switch (gb.GetCommandFraction())
 					{
-						String<StringLength20> corsSite;
-						gb.GetQuotedString(corsSite.GetRef(), true);
-						reprap.GetNetwork().SetCorsSite(corsSite.c_str());
-						seen = true;
-					}
-#endif
-
-					if (gb.Seen('P'))
-					{
-						const unsigned int protocol = gb.GetUIValue();
-						if (gb.Seen('S'))
-						{
-							const bool enable = (gb.GetIValue() == 1);
-							if (enable)
+						case -1:
 							{
-								const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
-								const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
-								result = reprap.GetNetwork().EnableProtocol(interface, protocol, port, secure, reply);
+								bool seen = false;
+# if SUPPORT_HTTP
+								if (gb.Seen('C'))
+								{
+									String<StringLength20> corsSite;
+									gb.GetQuotedString(corsSite.GetRef(), true);
+									reprap.GetNetwork().SetCorsSite(corsSite.c_str());
+									seen = true;
+								}
+# endif
+
+								if (gb.Seen('P'))
+								{
+									const unsigned int protocol = gb.GetUIValue();
+									if (gb.Seen('S'))
+									{
+										const bool enable = (gb.GetIValue() == 1);
+										if (enable)
+										{
+											const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
+											const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
+
+											IPAddress ip;
+
+											if (protocol == MqttProtocol)
+											{
+												gb.MustSee('H');
+												{
+													gb.GetIPAddress(ip);
+												}
+											}
+
+											result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
+																						ip.GetV4LittleEndian(), secure, reply);
+										}
+										else
+										{
+											result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
+										}
+										seen = true;
+									}
+								}
+
+								if (!seen)
+								{
+# if SUPPORT_HTTP
+									if (reprap.GetNetwork().GetCorsSite() != nullptr)
+									{
+										reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
+									}
+									else
+									{
+										reply.copy("CORS disabled");
+									}
+# endif
+									// Default to reporting current protocols if P or S parameter missing
+									result = reprap.GetNetwork().ReportProtocols(interface, reply);
+								}
 							}
-							else
-							{
-								result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
-							}
-							seen = true;
-						}
+							break;
+
+						case MqttProtocol:
+# if SUPPORT_MQTT
+							result = MqttClient::Configure(gb, reply);
+# else
+							reply.copy("MQTT protocol not supported by this firmware");
+							result = GCodeResult::error;
+# endif
+							break;
+
+						default:
+							break;
 					}
 
-
-					if (!seen)
-					{
-#if SUPPORT_HTTP
-						if (reprap.GetNetwork().GetCorsSite() != nullptr)
-						{
-							reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
-						}
-						else
-						{
-							reply.copy("CORS disabled");
-						}
-#endif
-						// Default to reporting current protocols if P or S parameter missing
-						result = reprap.GetNetwork().ReportProtocols(interface, reply);
-					}
 				}
 				break;
+#endif
 
 #if HAS_WIFI_NETWORKING
 			case 587:	// Add WiFi network or list remembered networks
