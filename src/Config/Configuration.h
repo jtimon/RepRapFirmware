@@ -31,15 +31,15 @@ constexpr unsigned int NumMovementSystems = 1;
 
 // Axes
 constexpr float DefaultAxisMaxFeedrate = 100.0;			// mm/sec
-constexpr float DefaultZMaxFeedrate = 5.0;
-constexpr float DefaultEMaxFeedrate = 20.0;
+constexpr float DefaultZMaxFeedrate = 20.0;
+constexpr float DefaultEMaxFeedrate = 100.0;
 
-constexpr float DefaultAxisAcceleration = 500.0;		// mm/sec^2
-constexpr float DefaultZAcceleration = 20.0;
-constexpr float DefaultEAcceleration = 250.0;
+constexpr float DefaultAxisAcceleration = 1000.0;		// mm/sec^2
+constexpr float DefaultZAcceleration = 200.0;
+constexpr float DefaultEAcceleration = 500.0;
 
 constexpr float DefaultAxisDriveStepsPerUnit = 80.0;	// steps/mm
-constexpr float DefaultZDriveStepsPerUnit = 4000.0;
+constexpr float DefaultZDriveStepsPerUnit = 800.0;
 constexpr float DefaultEDriveStepsPerUnit = 420.0;
 
 constexpr float DefaultAxisInstantDv = 15.0;			// mm/sec
@@ -262,7 +262,11 @@ constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is
 constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
 
 // File handling
+#if defined(DUET3) || defined(DUET3MINI) || STM32
+constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+#else
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+#endif
 
 constexpr size_t FILE_BUFFER_SIZE = 128;
 

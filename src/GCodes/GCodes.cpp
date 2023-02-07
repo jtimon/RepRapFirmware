@@ -3745,6 +3745,10 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 		else if (rslt == GCodeResult::error)
 		{
 			type = AddError(type);
+			if (reprap.IsProcessingConfig())
+			{
+				reprap.SaveConfigError((gb.LatestMachineState().GetPrevious() == nullptr) ? "config.g" : "macro", gb.GetLineNumber(), reply);
+			}
 		}
 
 		platform.Message(type, reply);
