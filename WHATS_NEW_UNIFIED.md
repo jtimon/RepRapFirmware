@@ -1,3 +1,7 @@
+Version 3.5beta2_101
+====================
+* Duet3d 3.5beta2
+
 Version 3.5beta1_102
 ====================
 * Duet3D 3.5beta1

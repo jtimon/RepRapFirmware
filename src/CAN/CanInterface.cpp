@@ -977,7 +977,7 @@ pre(driver.IsRemote())
 	{
 	case -1:
 	case 0:
-		if (gb.SeenAny("RS"))
+		if (gb.SeenAny("DRSV"))
 		{
 			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
@@ -991,7 +991,7 @@ pre(driver.IsRemote())
 		}
 
 	case 1:
-		if (gb.SeenAny("STERID"))
+		if (gb.SeenAny("CDEHIRST"))
 		{
 			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
@@ -1049,6 +1049,10 @@ pre(driver.IsRemote())
 		else
 		{
 			// First call, so send the tuning command
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
 			CanMessageGenericConstructor cons(M569Point6Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
@@ -1074,7 +1078,8 @@ pre(driver.IsRemote())
 #if DUAL_CAN
 	case 8:			// read axis force via secondary CAN
 		{
-			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
+			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
+			{
 				return HangprinterKinematics::ReadODrive3AxisForce(driver, reply);
 			}
 			return GCodeResult::errorNotSupported;
@@ -1389,7 +1394,10 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	CheckCanAddress(oldAddress, gb);
+	if (oldAddress != 0)							// we must allow address 0 but CheckCanAddress doesn't allow it
+	{
+		CheckCanAddress(oldAddress, gb);
+	}
 
 	// Get the new timing details, if provided
 	CanTiming timing;
