@@ -122,9 +122,10 @@
     #define HAS_WIFI_NETWORKING          1
     #define HAS_MASS_STORAGE             1
     #define SUPPORT_TELNET               0
+    #define SUPPORT_MQTT			     1
+    #define SUPPORT_FTP                  1
     #define SUPPORT_ACCELEROMETERS       1
     #define HAS_WRITER_TASK              1
-    #define SUPPORT_FTP                  1
     #define BOARD_NAME                   WIFI_BOARD_NAME
     #define BOARD_SHORT_NAME             WIFI_BOARD_SHORT_NAME
     #define IAP_FIRMWARE_FILE            WIFI_IAP_FIRMWARE_FILE
