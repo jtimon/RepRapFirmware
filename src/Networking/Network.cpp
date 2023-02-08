@@ -54,6 +54,7 @@
 #if SUPPORT_MULTICAST_DISCOVERY
 # include "MulticastDiscovery/MulticastResponder.h"
 #endif
+constexpr uint32_t MaxHighPrioritySpinTime = 500/StepClocksToMillis;	
 
 constexpr size_t NetworkStackWords = 600;				// needs to be enough to support rr_model
 
@@ -569,6 +570,7 @@ bool Network::IsWiFiInterface(unsigned int interface) const noexcept
 // Main spin loop
 void Network::Spin() noexcept
 {
+	uint32_t highPriorityTime = 0;
 	for (;;)
 	{
 		const uint32_t lastTime = StepTimer::GetTimerTicks();
@@ -615,11 +617,12 @@ void Network::Spin() noexcept
 		{
 			slowLoop = dt;
 		}
-
-		if (!doneSomething)
+		highPriorityTime += dt;
+		if (!doneSomething || highPriorityTime > MaxHighPrioritySpinTime)
 		{
 			TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority);		// restore normal priority
 			RTOSIface::Yield();
+			highPriorityTime = 0;
 		}
 	}
 }
