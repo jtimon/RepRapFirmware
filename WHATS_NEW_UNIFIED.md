@@ -1,6 +1,12 @@
 Version 3.5beta2_102
 ====================
 * Duet3d 3.5beta2
+* Enable MQTT support (requires ESP firmware >= V2.1b3)
+* STM32F4: Add support for MCP2518FD SP CAN-FD interfaces
+* SYM32F4: Improved SPI1 support (allow interrupt operation)
+* Increase open files to 20
+* Ensure ESP32 modules are fully disabled by M552 s-1
+
 
 Version 3.5beta1_102
 ====================
