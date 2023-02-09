@@ -557,8 +557,10 @@ void Platform::Init() noexcept
 #endif
 
 #if STM32
+#if HAS_WIFI_NETWORKING
 	pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module
 	pinMode(EspEnablePin, OUTPUT_LOW);
+#endif
 	// Setup default PS_ON port based on board.txt config
     if (ATX_POWER_PIN != NoPin)
     {
