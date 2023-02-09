@@ -1049,7 +1049,7 @@ pre(driver.IsRemote())
 		}
 
 	case 1:
-		if (gb.SeenAny("CDEHIRST"))
+		if (gb.SeenAny("CDEHIRSTV"))
 		{
 			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
