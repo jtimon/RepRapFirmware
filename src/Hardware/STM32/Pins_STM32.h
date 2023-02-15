@@ -300,6 +300,7 @@ extern SSPChannel TempSensorSSPChannel;
 #if SUPPORT_SPICAN
     extern Pin CanCsPin;
     extern SSPChannel CanSpiChannel;
+    extern uint32_t CanSpiFrequency;
 #endif
 
 // Power control

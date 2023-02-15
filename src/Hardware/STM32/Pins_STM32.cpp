@@ -148,6 +148,7 @@ Pin SPIPins[NumSPIDevices][NumSPIPins];                 //GPIO pins for hardware
 #if SUPPORT_SPICAN
     Pin CanCsPin = NoPin;
     SSPChannel CanSpiChannel;
+    uint32_t CanSpiFrequency = 15000000;             //default to 15MHz
 #endif
 
 #if SUPPORT_LED_STRIPS

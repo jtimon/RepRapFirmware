@@ -157,6 +157,7 @@ static const boardConfigEntry_t boardConfigs[]=
 #if SUPPORT_SPICAN
     {"can.spiChannel", &CanSpiChannel, nullptr, cvUint8Type},
     {"can.csPin", &CanCsPin, nullptr, cvPinType},
+    {"can.spiFrequencyHz", &CanSpiFrequency, nullptr, cvUint32Type},
 #endif
 };
 
