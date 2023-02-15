@@ -1101,6 +1101,14 @@ void Platform::Spin() noexcept
 	// Blink the LED at about 2Hz.
 	digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
 #endif
+#if SUPPORT_SPICAN
+	// with SPICAN the can device may not be present, in which case we handle the LED here
+	if (!CanInterface::IsCanEnabled())
+	{
+		// Blink the LED at about 2Hz.
+		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
+	}
+#endif
 
 #if SUPPORT_CAN_EXPANSION
 	// Turn off the ACT LED if it is time to do so

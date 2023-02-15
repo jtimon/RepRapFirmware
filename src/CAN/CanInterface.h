@@ -31,6 +31,9 @@ namespace CanInterface
 	void Init() noexcept;
 	void Shutdown() noexcept;
 	inline CanAddress GetCurrentMasterAddress() noexcept { return CanId::MasterAddress; }		// currently fixed, but might change in future
+#if SUPPORT_SPICAN
+	bool IsCanEnabled() noexcept;
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;

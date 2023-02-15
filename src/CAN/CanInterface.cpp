@@ -388,6 +388,13 @@ void CanInterface::Shutdown() noexcept
 	}
 }
 
+#if SUPPORT_SPICAN
+bool CanInterface::IsCanEnabled() noexcept
+{
+	return can0dev != nullptr;
+}
+#endif
+
 CanAddress CanInterface::GetCanAddress() noexcept
 {
 	return myAddress;
