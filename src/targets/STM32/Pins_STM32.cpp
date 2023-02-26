@@ -37,7 +37,7 @@ constexpr BoardEntry LPC_Boards[] =
     {{"biquskr_rrf_e3_1.1"},      PinTable_BTT_RRF_E3_v1_1,    ARRAY_SIZE(PinTable_BTT_RRF_E3_v1_1),    btt_rrf_e3_1_1_Defaults},
     {{"biquskr_2"}, PinTable_BTT_SKR_2, ARRAY_SIZE(PinTable_BTT_SKR_2), btt_skr_2_Defaults},
     {{"biqoctopus_1.1", "biquoctopus_1.1"}, PinTable_BTT_OCTOPUS, ARRAY_SIZE(PinTable_BTT_OCTOPUS), btt_octopus_Defaults},
-    {{"biqoctopuspro_1.0", "biqoctopuspro_1.0"}, PinTable_BTT_OCTOPUSPRO, ARRAY_SIZE(PinTable_BTT_OCTOPUSPRO), btt_octopuspro_Defaults},
+    {{"biqoctopuspro_1.0", "biquoctopuspro_1.0"}, PinTable_BTT_OCTOPUSPRO, ARRAY_SIZE(PinTable_BTT_OCTOPUSPRO), btt_octopuspro_Defaults},
     {{"biquoctopus_x7", "troodon_v2"}, PinTable_BIQU_OCTOPUS_X7, ARRAY_SIZE(PinTable_BIQU_OCTOPUS_X7), biquoctopus_x7_Defaults},
     {{"fysetc_spider"}, PinTable_FYSETC_SPIDER, ARRAY_SIZE(PinTable_FYSETC_SPIDER), fysetc_spider_Defaults},
     {{"fysetc_spider_king407"}, PinTable_FYSETC_SPIDER_KING407, ARRAY_SIZE(PinTable_FYSETC_SPIDER_KING407), fysetc_spider_king407_Defaults},
