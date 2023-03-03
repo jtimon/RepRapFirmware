@@ -427,14 +427,19 @@ bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap ax
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
 	bool reachable = true;
+	bool last_middle = true; // TODO make configurable
+	unsigned discount_last = 0;
 
-	// Check all the planes defined by triangle sides in the pyramid
-	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - 1; ++i) {
-		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], anchors[HANGPRINTER_AXES - 1], anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
+	if (last_middle) {
+		// Check all the planes defined by triangle sides in the pyramid
+		for (size_t i = 0; reachable && i < HANGPRINTER_AXES - 1; ++i) {
+			reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], anchors[HANGPRINTER_AXES - 1], anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
+		}
+		discount_last = 1;
 	}
 
 	// For each side of the base, check the plane formed by side and another point bellow them in z.
-	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - 1; ++i) {
+	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - discount_last; ++i) {
 		float const lower_point[3] = {anchors[i][0], anchors[i][1], anchors[i][2] - 1};
 		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], lower_point, anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
 	}
