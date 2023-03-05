@@ -427,7 +427,7 @@ bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap ax
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
 	bool reachable = true;
-	bool last_middle = true; // TODO make configurable
+	bool last_middle = false; // TODO make configurable
 	unsigned discount_last = 0;
 
 	if (last_middle) {
