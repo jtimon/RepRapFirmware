@@ -1,3 +1,8 @@
+Version 3.4.5+_104
+==================
+* Fixed crash when using laser mode
+* Fixed H723 based boards not showing input voltage correctly
+
 Version 3.4.5+_103
 ==================
 * Updated pins Fly E3 V2
