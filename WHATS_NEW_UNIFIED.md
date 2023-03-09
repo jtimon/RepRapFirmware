@@ -1,3 +1,9 @@
+Version 3.5beta2_105
+====================
+* Fixed crash when using laser mode
+* Fixed H723 based boards not showing input voltage correctly
+* Fixed display not beeping
+
 Version 3.5beta2_102
 ====================
 * Duet3d 3.5beta2
@@ -12,6 +18,11 @@ Version 3.5beta1_102
 ====================
 * Duet3D 3.5beta1
 * Removed LPC17xx support from source
+
+Version 3.4.5+_104
+==================
+* Fixed crash when using laser mode
+* Fixed H723 based boards not showing input voltage correctly
 
 Version 3.4.5+_103
 ==================

@@ -304,7 +304,11 @@ private:
 	bool useTaper;										// True to taper off the compensation
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
+#if STM32
+	static constexpr size_t LaserTaskStackWords = 120;	// stack size in dwords for the laser and IOBits task
+#else
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task
+#endif
 	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
 #endif
 
