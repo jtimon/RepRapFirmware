@@ -20,7 +20,7 @@
 namespace LedStripDriver
 {
 	constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
-	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2400000;		// must be between about 2MHz and about 4MHz
+	constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;		// must be between about 2MHz and about 4MHz
 
 	constexpr size_t ChunkBufferSize = 180;								// the size of our buffer NeoPixels use 3 bytes per pixel
 	enum class LedType : unsigned int
@@ -66,7 +66,7 @@ namespace LedStripDriver
 #elif SUPPORT_BITBANG_NEOPIXEL
 	constexpr auto DefaultLedType = LedType::neopixelRGBBitBang;
 #endif
-	constexpr int32_t DefaultPixelTimings[] = {350, 800, 1250, 250};
+	constexpr int32_t DefaultPixelTimings[] = {350, 801, 1250, 250};
 
 	static unsigned int numAlreadyInBuffer = 0;							// number of pixels already store in the buffer (NeoPixel only)
 	static uint8_t *chunkBuffer = nullptr;								// buffer for sending data to LEDs
