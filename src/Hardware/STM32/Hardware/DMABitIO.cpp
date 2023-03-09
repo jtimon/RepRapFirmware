@@ -223,7 +223,7 @@ static void DmaInterrupt(DMA_HandleTypeDef *_hdma)
         pinMode(SUPin, INPUT_PULLUP);
         SUDma.Init.Direction = DMA_PERIPH_TO_MEMORY;
         HAL_DMA_Start_IT(&SUDma, (uint32_t)SUPinReadPtr, (uint32_t)SUDmaBits, sizeof(SUDmaBits)/sizeof(uint32_t));
-    	SUTimer.setOverflow(SUPeriod - 1, TICK_FORMAT);
+    	SUTimer.setOverflow(SUPeriod, TICK_FORMAT);
         SUTimer.setCount(0, TICK_FORMAT);
         SUState = SUStates::reading;
         SUTimer.resume();
@@ -274,7 +274,7 @@ static void DmaStart()
     SUDma.Init.Mode = DMA_NORMAL;
     HAL_DMA_RegisterCallback(&SUDma, HAL_DMA_XFER_HALFCPLT_CB_ID, nullptr);
     HAL_DMA_Start_IT(&SUDma, (uint32_t)SUDmaBits, (uint32_t)SUPinSetClrPtr, SUBitCnt);
-    SUTimer.setOverflow(SUPeriod*SU_OVERSAMPLE - 1, TICK_FORMAT);
+    SUTimer.setOverflow(SUPeriod*SU_OVERSAMPLE, TICK_FORMAT);
     SUTimer.setCount(0, TICK_FORMAT);
     SUState = SUStates::writing;
     SUTimer.resume();
@@ -408,7 +408,7 @@ bool NeopixelDMAWrite(Pin pin, uint32_t freq, uint8_t *bits, uint32_t cnt, uint3
     HAL_DMA_RegisterCallback(&SUDma, HAL_DMA_XFER_HALFCPLT_CB_ID, DmaInterrupt);
     SUWaitingTask = TaskBase::GetCallerTaskHandle();
     HAL_DMA_Start_IT(&SUDma, (uint32_t)SUDmaBits, (uint32_t)SUPinSetClrPtr, NEO_BYTES_PER_BUFF*NEO_WORDS_PER_BYTE*2);
-    SUTimer.setOverflow(period - 1, TICK_FORMAT);
+    SUTimer.setOverflow(period, TICK_FORMAT);
     SUTimer.setCount(0, TICK_FORMAT);
     SUTimer.resume();    
     TaskBase::Take(timeout);
