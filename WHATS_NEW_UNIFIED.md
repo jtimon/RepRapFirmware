@@ -3,6 +3,7 @@ Version 3.5beta2_105
 * Fixed crash when using laser mode
 * Fixed H723 based boards not showing input voltage correctly
 * Fixed display not beeping
+* Adjusted default hardware Neopixel timing to match Duet boards
 
 Version 3.5beta2_102
 ====================
