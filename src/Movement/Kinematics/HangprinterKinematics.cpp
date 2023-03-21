@@ -18,10 +18,11 @@
 #include <General/Portability.h>
 
 constexpr size_t DefaultNumAnchors = 4;
-constexpr float DefaultAnchors[5][3] = {{    0.0, -2000.0, -100.0},
+constexpr float DefaultAnchors[6][3] = {{    0.0, -2000.0, -100.0},
                                         { 2000.0,  1000.0, -100.0},
                                         {-2000.0,  1000.0, -100.0},
                                         {    0.0,     0.0, 3000.0},
+                                        {    0.0,     0.0,    0.0},
                                         {    0.0,     0.0,    0.0}};
 constexpr float DefaultPrintRadius = 1500.0;
 
@@ -86,17 +87,17 @@ void HangprinterKinematics::Init() noexcept
 	 * In practice you might want to compensate a bit more or a bit less */
 	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[HANGPRINTER_MAX_ANCHORS] = { 75.0, 75.0, 75.0, 75.0, 75.0}; // HP4 default
+	constexpr float DefaultSpoolRadii[HANGPRINTER_MAX_ANCHORS] = { 75.0, 75.0, 75.0, 75.0, 75.0, 75.0}; // HP4 default
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[HANGPRINTER_MAX_ANCHORS] = { 2, 2, 2, 2, 4}; // HP4 default
-	constexpr uint32_t DefaultLinesPerSpool[HANGPRINTER_MAX_ANCHORS] = { 1, 1, 1, 1, 1}; // HP4 default
-	constexpr uint32_t DefaultMotorGearTeeth[HANGPRINTER_MAX_ANCHORS] = {  20,  20,  20,  20,  20}; // HP4 default
-	constexpr uint32_t DefaultSpoolGearTeeth[HANGPRINTER_MAX_ANCHORS] = { 255, 255, 255, 255, 255}; // HP4 default
-	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_ANCHORS] = { 25, 25, 25, 25, 25};
+	constexpr uint32_t DefaultMechanicalAdvantage[HANGPRINTER_MAX_ANCHORS] = { 2, 2, 2, 2, 2, 4}; // HP4 default
+	constexpr uint32_t DefaultLinesPerSpool[HANGPRINTER_MAX_ANCHORS] = { 1, 1, 1, 1, 1, 1}; // HP4 default
+	constexpr uint32_t DefaultMotorGearTeeth[HANGPRINTER_MAX_ANCHORS] = {  20,  20,  20,  20,  20,  20}; // HP4 default
+	constexpr uint32_t DefaultSpoolGearTeeth[HANGPRINTER_MAX_ANCHORS] = { 255, 255, 255, 255, 255, 255}; // HP4 default
+	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_ANCHORS] = { 25, 25, 25, 25, 25, 25};
 	constexpr float DefaultMoverWeight_kg = 0.0F;          // Zero disables flex compensation feature.
 	constexpr float DefaultSpringKPerUnitLength = 20000.0F; // Garda 1.1 is somewhere in the range [20000, 100000]
 	constexpr float DefaultMinPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	constexpr float DefaultMaxPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 70.0F, 70.0F, 70.0F, 70.0F, 70.0F };
+	constexpr float DefaultMaxPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 70.0F, 70.0F, 70.0F, 70.0F, 70.0F, 70.0F };
 	constexpr float DefaultGuyWireLengths[HANGPRINTER_MAX_ANCHORS] = { -1.0F }; // If one of these are negative they will be calculated in Recalc() instead
 	constexpr float DefaultTargetForce_Newton = 20.0F; // 20 chosen quite arbitrarily
 	constexpr float DefaultTorqueConstants[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
@@ -876,8 +877,8 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
-	static CanAddress seenDrives[HANGPRINTER_MAX_ANCHORS] = { 0, 0, 0, 0, 0 };
-	static float referencePositions[HANGPRINTER_MAX_ANCHORS] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+	static CanAddress seenDrives[HANGPRINTER_MAX_ANCHORS] = { 0, 0, 0, 0, 0, 0 };
+	static float referencePositions[HANGPRINTER_MAX_ANCHORS] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 	static size_t numSeenDrives = 0;
 	size_t thisDriveIdx = 0;
 
